@@ -1,0 +1,2 @@
+# Esta carpeta existe para que Git conserve el directorio /uploads.
+# Los archivos subidos (cuando STORAGE_PROVIDER=local) se guardan aquí.

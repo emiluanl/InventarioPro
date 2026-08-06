@@ -1,0 +1,6 @@
+# =============================================================================
+# Prisma - migraciones generadas
+# Cada migración aplicada por `prisma migrate dev` aparece como una carpeta
+# con un timestamp y un archivo `migration.sql` dentro.
+# Este archivo NO debe editarse manualmente.
+# =============================================================================

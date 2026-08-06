@@ -1,0 +1,16 @@
+# =============================================================================
+# Caddyfile - reverse proxy con HTTPS automático
+# =============================================================================
+# Ajusta los dominios a los tuyos reales.
+
+# Frontend
+{$FRONTEND_DOMAIN:inventariopro.example.com} {
+    reverse_proxy frontend:3000
+    encode gzip zstd
+}
+
+# Backend API (subdominio)
+{$API_DOMAIN:api.inventariopro.example.com} {
+    reverse_proxy backend:3001
+    encode gzip zstd
+}

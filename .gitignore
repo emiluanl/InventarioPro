@@ -1,0 +1,31 @@
+# Dependencias (cada subproyecto tiene su propio node_modules)
+node_modules/
+
+# Builds
+backend/dist/
+frontend/.next/
+frontend/out/
+
+# Entorno (NUNCA subir)
+.env
+.env.local
+.env.*.local
+
+# Archivos subidos localmente (cuando STORAGE_PROVIDER=local)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Logs
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# TypeScript build info
+*.tsbuildinfo

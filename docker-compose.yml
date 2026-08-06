@@ -1,0 +1,92 @@
+version: '3.9'
+
+# =============================================================================
+# InventarioPro - Entorno de desarrollo local
+# Levanta: PostgreSQL, Redis, backend (NestJS) y frontend (Next.js).
+# Uso: docker compose up --build
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: inventariopro-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: inventariopro
+      POSTGRES_PASSWORD: inventariopro
+      POSTGRES_DB: inventariopro
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U inventariopro']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: inventariopro-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: inventariopro-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      API_PREFIX: api
+      CORS_ORIGIN: http://localhost:3000
+      DATABASE_URL: postgresql://inventariopro:inventariopro@postgres:5432/inventariopro?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_ACCESS_SECRET: dev-access-secret-change-me
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_SECRET: dev-refresh-secret-change-me
+      JWT_REFRESH_TTL: 7d
+      STORAGE_PROVIDER: local
+      LOCAL_UPLOAD_DIR: /app/uploads
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-replace-me}
+      MINIMAX_API_BASE: https://api.MiniMax.com/v1
+      MINIMAX_MODEL: MiniMax-M3
+      MINIMAX_TIMEOUT_MS: 10000
+    ports:
+      - '3001:3001'
+    volumes:
+      - backend_uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: inventariopro-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
+    ports:
+      - '3000:3000'
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_uploads:

@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsQueryDto, SortBy, SortOrder } from './dto/products-query.dto';
+import { buildProductsCsv, formatCsvDate, parseProductsCsv, type CsvRow } from './csv';
 import {
   calculateOwnershipDuration,
   formatOwnership,
@@ -40,6 +41,18 @@ export interface PaginatedResponse<T> {
   };
 }
 
+export interface CsvImportRowError {
+  row: number; // nº de línea del archivo (1 = cabecera, por eso la primera fila es la 2)
+  message: string;
+}
+
+export interface CsvImportResult {
+  imported: number;
+  skipped: number;
+  errors: CsvImportRowError[];
+  created_categories: string[];
+}
+
 @Injectable()
 export class ProductsService {
   private readonly logger = new Logger(ProductsService.name);
@@ -50,45 +63,9 @@ export class ProductsService {
   // LIST - paginado, filtrable, buscable, ordenable
   // ===========================================================================
   async list(userId: string, query: ProductsQueryDto): Promise<PaginatedResponse<ProductResponse>> {
-    const {
-      page,
-      per_page,
-      search,
-      category_id,
-      estado,
-      tipo_compra,
-      warranty_status,
-      fecha_desde,
-      fecha_hasta,
-      sort_by,
-      sort_order,
-    } = query;
+    const { page, per_page, warranty_status, sort_by, sort_order } = query;
 
-    const where: Prisma.ProductWhereInput = {
-      user_id: userId,
-      deleted_at: null,
-    };
-
-    if (category_id) where.categoria_id = category_id;
-    if (estado) where.estado = estado;
-    if (tipo_compra) where.tipo_compra = tipo_compra;
-
-    if (fecha_desde || fecha_hasta) {
-      where.fecha_compra = {};
-      if (fecha_desde) where.fecha_compra.gte = new Date(fecha_desde);
-      if (fecha_hasta) where.fecha_compra.lte = new Date(fecha_hasta);
-    }
-
-    if (search) {
-      // Búsqueda case-insensitive en nombre, marca, modelo y descripción.
-      where.OR = [
-        { nombre: { contains: search, mode: 'insensitive' } },
-        { marca: { contains: search, mode: 'insensitive' } },
-        { modelo: { contains: search, mode: 'insensitive' } },
-        { descripcion: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
+    const where = this.buildListWhere(userId, query);
     const orderBy: Prisma.ProductOrderByWithRelationInput = this.buildOrderBy(sort_by, sort_order);
 
     const skip = (page - 1) * per_page;
@@ -267,8 +244,319 @@ export class ProductsService {
   }
 
   // ===========================================================================
+  // EXPORT CSV
+  // ===========================================================================
+  /**
+   * Genera el CSV con TODOS los productos del usuario (respetando los mismos
+   * filtros del listado, sin paginación). El archivo resultante puede
+   * re-importarse tal cual.
+   */
+  async exportCsv(
+    userId: string,
+    query: ProductsQueryDto,
+  ): Promise<{ filename: string; content: string }> {
+    const where = this.buildListWhere(userId, query);
+
+    const products = await this.prisma.product.findMany({
+      where,
+      orderBy: this.buildOrderBy(query.sort_by, query.sort_order),
+      include: { categoria: { select: { nombre: true } } },
+    });
+
+    let rows: CsvRow[] = products.map((p) => ({
+      nombre: p.nombre,
+      categoria: p.categoria?.nombre ?? '',
+      marca: p.marca ?? '',
+      modelo: p.modelo ?? '',
+      descripcion: p.descripcion ?? '',
+      fecha_compra: formatCsvDate(p.fecha_compra),
+      lugar_compra: p.lugar_compra ?? '',
+      tipo_compra: p.tipo_compra,
+      precio: p.precio.toString(),
+      moneda: p.moneda,
+      metodo_pago: p.metodo_pago ?? '',
+      numero_serie: p.numero_serie ?? '',
+      duracion_garantia_meses: p.duracion_garantia_meses?.toString() ?? '',
+      fecha_vencimiento_garantia: p.fecha_vencimiento_garantia
+        ? formatCsvDate(p.fecha_vencimiento_garantia)
+        : '',
+      estado: p.estado,
+      notas: p.notas ?? '',
+      tags: p.tags ?? '',
+    }));
+
+    // El filtro de warranty_status se aplica post-query (igual que en list).
+    if (query.warranty_status) {
+      rows = rows.filter((row) => {
+        if (!row.fecha_vencimiento_garantia) return false;
+        const status = getWarrantyStatus(new Date(`${row.fecha_vencimiento_garantia}T00:00:00Z`));
+        return status === query.warranty_status;
+      });
+    }
+
+    const date = formatCsvDate(new Date());
+    return {
+      filename: `inventariopro-productos-${date}.csv`,
+      content: buildProductsCsv(rows),
+    };
+  }
+
+  // ===========================================================================
+  // IMPORT CSV
+  // ===========================================================================
+  /**
+   * Importa productos desde un CSV. Valida fila a fila: las válidas se crean y
+   * las inválidas se reportan con su número de línea (no se aborta todo el
+   * archivo). Las categorías por nombre se resuelven (case-insensitive); si no
+   * existen se crean como categorías personalizadas del usuario.
+   */
+  async importCsv(userId: string, csvContent: string): Promise<CsvImportResult> {
+    const rows = parseProductsCsv(csvContent);
+    if (rows.length === 0) {
+      throw new BadRequestException('El CSV está vacío o solo contiene la cabecera.');
+    }
+
+    const imported: string[] = [];
+    const errors: CsvImportRowError[] = [];
+    const createdCategories: string[] = [];
+    const categoryCache = new Map<string, string | null>();
+
+    for (let i = 0; i < rows.length; i++) {
+      const rowNumber = i + 2; // +1 por el índice, +1 por la cabecera
+      try {
+        const data = this.validateCsvRow(rows[i]);
+        const categoriaId = data.categoria
+          ? await this.resolveCategoria(userId, data.categoria, categoryCache, createdCategories)
+          : null;
+
+        // Auto-calcular vencimiento de garantía (misma regla que create).
+        let fechaVencimiento: Date | null = data.fechaVencimientoGarantia
+          ? new Date(data.fechaVencimientoGarantia)
+          : null;
+        if (!fechaVencimiento && data.duracionGarantiaMeses && data.fechaCompra) {
+          fechaVencimiento = new Date(data.fechaCompra);
+          fechaVencimiento.setMonth(fechaVencimiento.getMonth() + data.duracionGarantiaMeses);
+        }
+
+        const product = await this.prisma.product.create({
+          data: {
+            user_id: userId,
+            nombre: data.nombre,
+            categoria_id: categoriaId,
+            marca: data.marca,
+            modelo: data.modelo,
+            descripcion: data.descripcion,
+            fecha_compra: data.fechaCompra,
+            lugar_compra: data.lugarCompra,
+            tipo_compra: data.tipoCompra,
+            precio: new Prisma.Decimal(data.precio),
+            moneda: data.moneda,
+            metodo_pago: data.metodoPago,
+            numero_serie: data.numeroSerie,
+            duracion_garantia_meses: data.duracionGarantiaMeses,
+            fecha_vencimiento_garantia: fechaVencimiento,
+            estado: data.estado,
+            notas: data.notas,
+            tags: data.tags,
+          },
+        });
+        imported.push(product.id);
+      } catch (err) {
+        errors.push({
+          row: rowNumber,
+          message: err instanceof Error ? err.message : 'Fila inválida.',
+        });
+      }
+    }
+
+    if (imported.length > 0) {
+      this.logger.log(`Import CSV: ${imported.length} productos para usuario ${userId}`);
+    }
+    return {
+      imported: imported.length,
+      skipped: errors.length,
+      errors,
+      created_categories: createdCategories,
+    };
+  }
+
+  // ===========================================================================
   // HELPERS
   // ===========================================================================
+  /** Construye el where del listado (filtros + búsqueda), compartido por list y export. */
+  private buildListWhere(userId: string, query: ProductsQueryDto): Prisma.ProductWhereInput {
+    const { search, category_id, estado, tipo_compra, fecha_desde, fecha_hasta } = query;
+
+    const where: Prisma.ProductWhereInput = {
+      user_id: userId,
+      deleted_at: null,
+    };
+
+    if (category_id) where.categoria_id = category_id;
+    if (estado) where.estado = estado;
+    if (tipo_compra) where.tipo_compra = tipo_compra;
+
+    if (fecha_desde || fecha_hasta) {
+      where.fecha_compra = {};
+      if (fecha_desde) where.fecha_compra.gte = new Date(fecha_desde);
+      if (fecha_hasta) where.fecha_compra.lte = new Date(fecha_hasta);
+    }
+
+    if (search) {
+      // Búsqueda case-insensitive en nombre, marca, modelo y descripción.
+      where.OR = [
+        { nombre: { contains: search, mode: 'insensitive' } },
+        { marca: { contains: search, mode: 'insensitive' } },
+        { modelo: { contains: search, mode: 'insensitive' } },
+        { descripcion: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    return where;
+  }
+
+  /**
+   * Valida una fila del CSV y devuelve los valores normalizados, o lanza un
+   * error con el mensaje para la fila.
+   */
+  private validateCsvRow(row: CsvRow): {
+    nombre: string;
+    categoria: string | null;
+    marca: string | null;
+    modelo: string | null;
+    descripcion: string | null;
+    fechaCompra: Date;
+    lugarCompra: string | null;
+    tipoCompra: PurchaseType;
+    precio: string;
+    moneda: string;
+    metodoPago: string | null;
+    numeroSerie: string | null;
+    duracionGarantiaMeses: number | null;
+    fechaVencimientoGarantia: string | null;
+    estado: ProductStatus;
+    notas: string | null;
+    tags: string | null;
+  } {
+    const get = (key: string): string => (row[key] ?? '').trim();
+
+    const nombre = get('nombre');
+    if (!nombre) throw new BadRequestException('Falta el nombre.');
+    if (nombre.length > 200) throw new BadRequestException('El nombre supera 200 caracteres.');
+
+    const categoria = get('categoria') || null;
+    const marca = get('marca') || null;
+    const modelo = get('modelo') || null;
+    const descripcion = get('descripcion') || null;
+    const lugarCompra = get('lugar_compra') || null;
+    const metodoPago = get('metodo_pago') || null;
+    const numeroSerie = get('numero_serie') || null;
+    const notas = get('notas') || null;
+    const tags = get('tags') || null;
+
+    // Fecha de compra (YYYY-MM-DD o ISO completo).
+    const fechaCompraRaw = get('fecha_compra');
+    const fechaCompra = this.parseDate(fechaCompraRaw, 'fecha_compra');
+
+    const tipoCompraRaw = get('tipo_compra').toUpperCase();
+    if (tipoCompraRaw !== PurchaseType.FISICO && tipoCompraRaw !== PurchaseType.ONLINE) {
+      throw new BadRequestException('tipo_compra debe ser FISICO u ONLINE.');
+    }
+
+    const precioRaw = get('precio').replace(',', '.');
+    const precio = Number(precioRaw);
+    if (!precioRaw || Number.isNaN(precio) || precio < 0) {
+      throw new BadRequestException('precio debe ser un número mayor o igual que 0.');
+    }
+
+    const moneda = (get('moneda') || 'USD').toUpperCase();
+    if (!/^[A-Z]{3}$/.test(moneda)) {
+      throw new BadRequestException('moneda debe ser un código ISO 4217 de 3 letras.');
+    }
+
+    const duracionRaw = get('duracion_garantia_meses');
+    let duracionGarantiaMeses: number | null = null;
+    if (duracionRaw) {
+      duracionGarantiaMeses = Number(duracionRaw);
+      if (!Number.isInteger(duracionGarantiaMeses) || duracionGarantiaMeses <= 0) {
+        throw new BadRequestException('duracion_garantia_meses debe ser un entero positivo.');
+      }
+    }
+
+    const fechaVencimientoRaw = get('fecha_vencimiento_garantia');
+    const fechaVencimientoGarantia = fechaVencimientoRaw
+      ? this.parseDate(fechaVencimientoRaw, 'fecha_vencimiento_garantia').toISOString()
+      : null;
+
+    const estadoRaw = (get('estado') || ProductStatus.NUEVO).toUpperCase() as ProductStatus;
+    const estados = Object.values(ProductStatus);
+    if (!estados.includes(estadoRaw)) {
+      throw new BadRequestException(`estado debe ser uno de: ${estados.join(', ')}.`);
+    }
+
+    return {
+      nombre,
+      categoria,
+      marca,
+      modelo,
+      descripcion,
+      fechaCompra,
+      lugarCompra,
+      tipoCompra: tipoCompraRaw as PurchaseType,
+      precio: precio.toFixed(2),
+      moneda,
+      metodoPago,
+      numeroSerie,
+      duracionGarantiaMeses,
+      fechaVencimientoGarantia,
+      estado: estadoRaw,
+      notas,
+      tags,
+    };
+  }
+
+  /** Parsea YYYY-MM-DD (o ISO completo) a Date, o lanza error de fila. */
+  private parseDate(value: string, field: string): Date {
+    if (!/^\d{4}-\d{2}-\d{2}([T ].*)?$/.test(value)) {
+      throw new BadRequestException(`${field} debe tener formato YYYY-MM-DD.`);
+    }
+    const date = new Date(value.length === 10 ? `${value}T00:00:00Z` : value);
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException(`${field} no es una fecha válida.`);
+    }
+    return date;
+  }
+
+  /** Resuelve la categoría por nombre; la crea si no existe (cache por import). */
+  private async resolveCategoria(
+    userId: string,
+    nombre: string,
+    cache: Map<string, string | null>,
+    createdCategories: string[],
+  ): Promise<string | null> {
+    const key = nombre.toLowerCase();
+    if (cache.has(key)) return cache.get(key) ?? null;
+
+    const existing = await this.prisma.category.findFirst({
+      where: {
+        nombre: { equals: nombre, mode: 'insensitive' },
+        OR: [{ user_id: userId }, { user_id: null }],
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      cache.set(key, existing.id);
+      return existing.id;
+    }
+
+    const created = await this.prisma.category.create({
+      data: { nombre, user_id: userId },
+    });
+    createdCategories.push(created.nombre);
+    cache.set(key, created.id);
+    return created.id;
+  }
+
   private async assertOwned(userId: string, productId: string): Promise<void> {
     const exists = await this.prisma.product.findFirst({
       where: { id: productId, user_id: userId, deleted_at: null },

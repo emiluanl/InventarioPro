@@ -120,15 +120,54 @@ curl -I https://app.inventariopro.com
 
 ## 7. Backups
 
-Configura backups automáticos de Postgres. Un ejemplo simple con cron:
+El stack incluye un **contenedor de backups automático** (`backup/`): un cron
+dentro de Docker ejecuta `pg_dump` en formato custom comprimido (`-Fc`) y
+aplica retención. Se levanta solo con `up -d` (no necesita configuración
+adicional) y escribe los dumps en `./backups` del host:
 
 ```bash
-# /etc/cron.d/inventariopro-backup
-0 3 * * * cd /opt/inventariopro && \
-  docker compose -f docker-compose.prod.yml exec -T postgres \
-  pg_dump -U $POSTGRES_USER $POSTGRES_DB > /backups/db-$(date +\%Y\%m\%d).sql && \
-  find /backups -name 'db-*.sql' -mtime +30 -delete
+# Por defecto: 03:00 diario (UTC o la TZ configurada), retención 14 días.
+# Sobrescribible desde .env.prod:
+#   BACKUP_SCHEDULE="0 3 * * *"
+#   BACKUP_KEEP_DAYS=14
+#   TZ=America/Argentina/Buenos_Aires
+
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 ```
+
+### Verificar que funciona
+
+```bash
+# Ejecutar un backup inmediato (además del cron)
+docker compose -f docker-compose.prod.yml exec backup /usr/local/bin/backup
+
+# Comprobar los dumps generados
+ls -lh backups/
+
+# Ver los logs del cron
+docker compose -f docker-compose.prod.yml logs -f backup
+```
+
+### Restaurar
+
+```bash
+# Listar el contenido de un dump (verifica que no está corrupto)
+docker compose -f docker-compose.prod.yml exec backup \
+  pg_restore --list /backups/inventariopro-YYYYMMDD-HHMMSS.dump | head
+
+# Restaurar (--clean: deja la BD en el estado exacto del dump)
+docker compose -f docker-compose.prod.yml exec backup \
+  /usr/local/bin/restore /backups/inventariopro-YYYYMMDD-HHMMSS.dump
+```
+
+> ⚠️ `restore` usa `--clean --if-exists`: **reemplaza** el contenido actual de la
+> base de datos por el del dump. Hazlo solo si estás seguro de querer volver a
+> ese estado (p. ej. tras un desastre o un error de migración).
+
+### Copiar los dumps fuera del servidor
+
+Los dumps viven en `./backups` del host. Configura una copia remota (rclone,
+rsync, un bucket S3) para que un fallo del servidor no pierda los backups:
 
 ## 8. Monitoreo
 

@@ -12,6 +12,9 @@ frontend/out/
 .env.prod
 .env.*.local
 
+# Dumps de backup (volumen ./backups del compose de producción)
+backups/
+
 # Estado local de la herramienta de edición
 .freebuff/
 

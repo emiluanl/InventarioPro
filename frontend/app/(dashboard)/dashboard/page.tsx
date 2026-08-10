@@ -8,6 +8,7 @@ import { useProducts, useDeleteProduct } from '@/hooks/use-products';
 import { ProductCard } from '@/components/products/product-card';
 import { FilterBar } from '@/components/products/filter-bar';
 import { EmptyState } from '@/components/products/empty-state';
+import { CsvActions } from '@/components/products/csv-actions';
 import type { Product, ProductsFilters } from '@/lib/types';
 import { formatCurrency } from '@/lib/format';
 
@@ -53,17 +54,22 @@ function DashboardInner(): JSX.Element {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Mis productos</h1>
-        {data && data.items.length > 0 && (
-          <p className="text-sm text-gray-600">
-            {data.pagination.total} producto{data.pagination.total === 1 ? '' : 's'} ·{' '}
-            <span className="font-medium">
-              {formatCurrency(totalValue.toFixed(2), 'USD')}
-            </span>{' '}
-            en total
-          </p>
-        )}
+      <header className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold text-gray-900">Mis productos</h1>
+          {data && data.items.length > 0 && (
+            <p className="text-sm text-gray-600">
+              {data.pagination.total} producto{data.pagination.total === 1 ? '' : 's'} ·{' '}
+              <span className="font-medium">
+                {formatCurrency(totalValue.toFixed(2), 'USD')}
+              </span>{' '}
+              en total
+            </p>
+          )}
+        </div>
+        <div className="flex items-center justify-end">
+          <CsvActions />
+        </div>
       </header>
 
       <FilterBar view={view} onViewChange={setView} />

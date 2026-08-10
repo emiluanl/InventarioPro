@@ -162,7 +162,7 @@ Guía paso a paso en [`DEPLOYMENT.md`](./DEPLOYMENT.md). Incluye:
 - Comando `docker compose -f docker-compose.prod.yml up -d --build`
 - Migración con `prisma migrate deploy`
 - HTTPS automático con Caddy (Let's Encrypt)
-- Backups automáticos vía cron
+- Backups automáticos de Postgres (contenedor con cron + pg_dump + retención, ver [DEPLOYMENT.md §7](./DEPLOYMENT.md))
 - Estimación de costos (~$15–20/mes para uso personal bajo)
 - Troubleshooting
 
@@ -171,7 +171,7 @@ Guía paso a paso en [`DEPLOYMENT.md`](./DEPLOYMENT.md). Incluye:
 | Recurso | Endpoints |
 |---|---|
 | **Auth** | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/forgot-password`, `/auth/reset-password`, `/auth/verify-email`, `/auth/resend-verification`, `GET /auth/me` |
-| **Products** | `GET /products`, `GET /products/:id`, `POST /products`, `PUT /products/:id`, `DELETE /products/:id` |
+| **Products** | `GET /products`, `GET /products/:id`, `POST /products`, `PUT /products/:id`, `DELETE /products/:id` · **CSV**: `GET /products/export`, `POST /products/import` |
 | **Attachments** | `GET /products/:productId/attachments`, `POST /products/:productId/attachments`, `DELETE /products/:productId/attachments/:id` |
 | **Categories** | `GET /categories`, `POST /categories`, `PUT /categories/:id`, `DELETE /categories/:id` |
 | **Chat** | `POST /chat/message`, `GET /chat/conversations`, `GET /chat/conversations/:id/messages` |
@@ -180,6 +180,21 @@ Guía paso a paso en [`DEPLOYMENT.md`](./DEPLOYMENT.md). Incluye:
 | **Reports** | `GET /reports/spending?year=YYYY` (gasto por categoría, mes y moneda) |
 
 Todos los endpoints están bajo `/api` (configurable). Documentación detallada en cada módulo: [`backend/src/auth/README.md`](./backend/src/auth/README.md), [`backend/src/products/README.md`](./backend/src/products/README.md), [`backend/src/chat/README.md`](./backend/src/chat/README.md).
+
+### 📦 Importar / Exportar CSV
+
+Desde el dashboard (`Exportar CSV` / `Importar CSV`) puedes mover tu inventario
+entre apps o hacer una carga inicial masiva. El export respeta los filtros
+activos; el import valida fila a fila (las inválidas se reportan con su nº de
+línea sin abortar el resto) y **crea las categorías por nombre** que no existan.
+
+Columnas (UTF-8, primera fila = cabecera): `nombre`, `categoria`, `marca`,
+`modelo`, `descripcion`, `fecha_compra` (YYYY-MM-DD), `lugar_compra`,
+`tipo_compra` (FISICO/ONLINE), `precio`, `moneda` (ISO 4217), `metodo_pago`,
+`numero_serie`, `duracion_garantia_meses`, `fecha_vencimiento_garantia`,
+`estado`, `notas`, `tags`. Si falta `fecha_vencimiento_garantia` pero hay
+`duracion_garantia_meses`, el vencimiento se calcula desde `fecha_compra`.
+Un archivo exportado se puede re-importar tal cual.
 
 ## 🤖 Asistente IA — qué puede hacer
 

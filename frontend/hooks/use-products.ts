@@ -140,3 +140,67 @@ export function useCategories() {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+export interface CsvImportResult {
+  imported: number;
+  skipped: number;
+  errors: Array<{ row: number; message: string }>;
+  created_categories: string[];
+}
+
+/** Descarga el inventario en CSV (GET /products/export → blob → download). */
+export function useExportProducts(): UseMutationResult<
+  { filename: string },
+  Error,
+  void
+> {
+  return useMutation<{ filename: string }, Error, void>({
+    mutationFn: async () => {
+      try {
+        const res = await api.get('/products/export', { responseType: 'blob' });
+        const disposition = res.headers['content-disposition'] as string | undefined;
+        const match = disposition?.match(/filename="?([^"]+)"?/);
+        const filename = match?.[1] ?? 'inventariopro-productos.csv';
+
+        const url = URL.createObjectURL(res.data as Blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        return { filename };
+      } catch (err) {
+        throw new Error(extractErrorMessage(err));
+      }
+    },
+  });
+}
+
+/** Sube un CSV para importar productos (multipart) e invalida el listado. */
+export function useImportProducts(): UseMutationResult<
+  CsvImportResult,
+  Error,
+  File
+> {
+  const qc = useQueryClient();
+  return useMutation<CsvImportResult, Error, File>({
+    mutationFn: async (file) => {
+      try {
+        const form = new FormData();
+        form.append('file', file, file.name);
+        const { data } = await api.post<CsvImportResult>('/products/import', form, {
+          // 'multipart/form-data' sin boundary: el navegador añade el límite.
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return data;
+      } catch (err) {
+        throw new Error(extractErrorMessage(err));
+      }
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
+    },
+  });
+}

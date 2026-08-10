@@ -7,6 +7,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_PIPE, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
+import { THROTTLER_CONFIG } from './common/throttler.config';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './common/redis.module';
 import { StorageModule } from './common/storage.module';
@@ -28,16 +29,7 @@ import { HealthController } from './common/health.controller';
       isGlobal: true,
       cache: true,
     }),
-    ThrottlerModule.forRoot([
-      // ÚNICO throttler global. En @nestjs/throttler v6 TODOS los throttlers del
-      // módulo se evalúan en TODAS las rutas (verificado empíricamente: un
-      // nombre extra limita también /health), así que los límites por endpoint
-      // se configuran con @Throttle({ default: {...} }) por ruta, que
-      // sobreescribe estos valores. v6 genera un bucket por endpoint usando
-      // la clave sha256(Clase+Handler+Nombre+IP), así que cada ruta es
-      // independiente aunque comparta el nombre 'default'.
-      { name: 'default', limit: 100, ttl: 60 * 1000 },
-    ]),
+    ThrottlerModule.forRoot(THROTTLER_CONFIG),
     PrismaModule,
     RedisModule,
     StorageModule,

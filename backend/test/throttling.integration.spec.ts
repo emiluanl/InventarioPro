@@ -21,62 +21,9 @@ import request from 'supertest';
 
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';
 
 jest.setTimeout(60000);
-
-interface MockPrisma {
-  $connect: jest.Mock;
-  $disconnect: jest.Mock;
-  user: {
-    findUnique: jest.Mock;
-    findFirst: jest.Mock;
-    create: jest.Mock;
-    update: jest.Mock;
-    updateMany: jest.Mock;
-  };
-  category: { upsert: jest.Mock };
-  refreshToken: {
-    create: jest.Mock;
-    findUnique: jest.Mock;
-    update: jest.Mock;
-    updateMany: jest.Mock;
-  };
-  chatConversation: {
-    findFirst: jest.Mock;
-    create: jest.Mock;
-    update: jest.Mock;
-    findMany: jest.Mock;
-  };
-  chatMessage: { findMany: jest.Mock; create: jest.Mock };
-}
-
-function buildPrismaMock(): MockPrisma {
-  return {
-    $connect: jest.fn(),
-    $disconnect: jest.fn(),
-    user: {
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      updateMany: jest.fn(),
-    },
-    category: { upsert: jest.fn() },
-    refreshToken: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn(),
-      updateMany: jest.fn(),
-    },
-    chatConversation: {
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      findMany: jest.fn(),
-    },
-    chatMessage: { findMany: jest.fn(), create: jest.fn() },
-  };
-}
 
 describe('Rate limiting por endpoint (integración)', () => {
   let app: INestApplication;

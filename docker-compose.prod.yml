@@ -78,6 +78,10 @@ services:
       MINIMAX_API_BASE: ${MINIMAX_API_BASE:-https://api.MiniMax.com/v1}
       MINIMAX_MODEL: ${MINIMAX_MODEL:-MiniMax-M3}
       MINIMAX_TIMEOUT_MS: ${MINIMAX_TIMEOUT_MS:-10000}
+      # Web Push (VAPID): sin claves el push queda deshabilitado (no rompe el deploy).
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@inventariopro.example.com}
     expose:
       - '3001'
     healthcheck:

@@ -19,6 +19,7 @@ import { ProductsModule } from './products/products.module';
 import { ChatModule } from './chat/chat.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReportsModule } from './reports/reports.module';
+import { PushModule } from './push/push.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { GlobalValidationPipe } from './common/pipes/global-validation.pipe';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -43,6 +44,7 @@ import { HealthController } from './common/health.controller';
     ChatModule,
     NotificationsModule,
     ReportsModule,
+    PushModule,
   ],
   controllers: [HealthController],
   providers: [

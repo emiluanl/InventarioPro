@@ -176,6 +176,7 @@ Guía paso a paso en [`DEPLOYMENT.md`](./DEPLOYMENT.md). Incluye:
 | **Categories** | `GET /categories`, `POST /categories`, `PUT /categories/:id`, `DELETE /categories/:id` |
 | **Chat** | `POST /chat/message`, `GET /chat/conversations`, `GET /chat/conversations/:id/messages` |
 | **Notifications** | `GET /notifications`, `GET /notifications/unread-count`, `PATCH /notifications/:id/read`, `POST /notifications/read-all` |
+| **Push** | `GET /push/vapid-public-key`, `POST /push/subscribe`, `POST /push/unsubscribe` (Web Push + VAPID) |
 | **Reports** | `GET /reports/spending?year=YYYY` (gasto por categoría, mes y moneda) |
 
 Todos los endpoints están bajo `/api` (configurable). Documentación detallada en cada módulo: [`backend/src/auth/README.md`](./backend/src/auth/README.md), [`backend/src/products/README.md`](./backend/src/products/README.md), [`backend/src/chat/README.md`](./backend/src/chat/README.md).

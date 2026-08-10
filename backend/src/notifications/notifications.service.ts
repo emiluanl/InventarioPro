@@ -22,6 +22,7 @@ import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/com
 import { NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
 import { getWarrantyStatus } from '../common/lib/time-ownership';
 
 const WARRANTY_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // cada 6 horas
@@ -40,7 +41,10 @@ export interface NotificationResponse {
 export class NotificationsService implements OnModuleInit {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly push: PushService,
+  ) {}
 
   onModuleInit(): void {
     // Al arrancar: recupera avisos atrasados (p. ej. tras un deploy).
@@ -138,19 +142,40 @@ export class NotificationsService implements OnModuleInit {
       });
       if (existing) continue;
 
-      await this.prisma.notification.create({
+      const notification = await this.prisma.notification.create({
         data: {
           user_id: product.user_id,
           tipo,
-          mensaje: this.buildMessage(product.nombre, product.fecha_vencimiento_garantia!, now, status),
+          mensaje: this.buildMessage(
+            product.nombre,
+            product.fecha_vencimiento_garantia!,
+            now,
+            status,
+          ),
           product_id: product.id,
         },
       });
       created += 1;
+
+      // Aviso push fuera de la app (si el usuario tiene suscripciones activas
+      // y VAPID configurado). Un fallo del push no debe romper el job.
+      try {
+        await this.push.sendWarrantyPush(product.user_id, {
+          tipo,
+          mensaje: notification.mensaje,
+          product_id: notification.product_id,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `Push de garantía falló para ${product.user_id}: ${(err as Error).message}`,
+        );
+      }
     }
 
     if (created > 0) {
-      this.logger.log(`Notificaciones de garantía creadas: ${created} (revisados ${products.length})`);
+      this.logger.log(
+        `Notificaciones de garantía creadas: ${created} (revisados ${products.length})`,
+      );
     }
     return { created, checked: products.length };
   }

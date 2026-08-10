@@ -94,6 +94,7 @@ model User {
   categories        Category[]
   conversations     ChatConversation[]
   notifications     Notification[]
+  push_subscriptions PushSubscription[]
 
   @@index([email])
   @@map("users")
@@ -282,4 +283,31 @@ model Notification {
   @@index([user_id, created_at])
   @@index([product_id])
   @@map("notifications")
+}
+
+// =============================================================================
+// WEB PUSH (suscripciones del navegador para notificaciones fuera de la app)
+// =============================================================================
+// Cada fila es una suscripción Push del usuario (endpoint + claves del
+// navegador). El job de garantías envía notificaciones a todas las
+// suscripciones activas del usuario. Si el push service devuelve 404/410
+// (suscripción expirada) la fila se elimina.
+
+model PushSubscription {
+  id         String   @id @default(cuid())
+  user_id    String   @map("user_id")
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  // URL del push service (FCM/Web Push). Único para evitar duplicados.
+  endpoint   String   @unique
+  // Claves del navegador (base64url): p256dh (clave pública ECDH) y auth.
+  p256dh     String
+  auth       String
+
+  user_agent String?  @map("user_agent")
+  created_at DateTime @default(now()) @map("created_at")
+  updated_at DateTime @updatedAt @map("updated_at")
+
+  @@index([user_id])
+  @@map("push_subscriptions")
 }

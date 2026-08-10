@@ -71,7 +71,21 @@ MINIMAX_API_KEY=tu-clave-MiniMax
 MINIMAX_API_BASE=https://api.MiniMax.com/v1
 MINIMAX_MODEL=MiniMax-M3
 MINIMAX_TIMEOUT_MS=10000
+
+# Web Push (notificaciones fuera de la app) - opcional
+# Genera las claves una sola vez con:
+#   npx web-push generate-vapid-keys --json
+# Sin ellas el push queda deshabilitado (el resto de la app funciona igual).
+VAPID_PUBLIC_KEY=tu-clave-publica-vapid
+VAPID_PRIVATE_KEY=tu-clave-privada-vapid
+VAPID_SUBJECT=mailto:admin@inventariopro.com
 ```
+
+> **Web Push**: los avisos de garantías por vencer/vencidas llegan al navegador
+> incluso con la app cerrada. El servicio worker (`frontend/public/sw.js`) los
+> muestra y abre el producto al hacer clic. Los avisos requieren HTTPS
+> (el que ya da Caddy); en localhost funcionan también.
+> Si una suscripción expira (404/410 del push service), se elimina sola.
 
 ## 4. Levantar los servicios
 

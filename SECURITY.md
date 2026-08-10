@@ -107,6 +107,22 @@ InventarioPro está diseñado siguiendo el principio de **mínimo privilegio** y
 - En producción: Supabase Storage con URLs firmadas por 1 año.
 - El `STORAGE_PROVIDER` es configurable; el código no hardcodea credenciales.
 
+### 2.11 Web Push (notificaciones fuera de la app)
+
+- **VAPID por defecto sin claves**: sin `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/
+  `VAPID_SUBJECT` el PushService queda deshabilitado y no envía nada
+  (no rompe el resto de la app).
+- **Claves en el servidor**: la clave privada VAPID vive solo en el backend
+  (variable de entorno); el navegador recibe únicamente la pública.
+- **Payload cifrado end-to-end**: web-push cifra el contenido con la clave
+  pública del navegador (aes128gcm); el push service solo ve bytes.
+- **Suscriones por usuario**: la tabla `push_subscriptions` se filtra siempre
+  por `user_id`; unsubscribe solo borra suscripciones del usuario autenticado.
+- **Limpieza automática**: los endpoints que devuelven 404/410 (suscripción
+  expirada o revocada) se eliminan solos de la BD.
+- **El SW nunca cachea `/auth/`** y la clave pública VAPID es pública por
+  diseño (no es un secreto).
+
 ## 3. Verificación de secretos
 
 Comando que usamos para validar:

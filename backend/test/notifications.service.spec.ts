@@ -14,17 +14,23 @@ import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';
 
 const DAY = 86_400_000;
 
-function serviceWith(prisma: MockPrisma): NotificationsService {
-  return new NotificationsService(prisma as never);
+const pushMock = () => ({
+  sendWarrantyPush: jest.fn().mockResolvedValue({ sent: 1, failed: 0, removed: 0 }),
+});
+
+function serviceWith(prisma: MockPrisma, push = pushMock()): NotificationsService {
+  return new NotificationsService(prisma as never, push as never);
 }
 
 describe('NotificationsService', () => {
   let prisma: MockPrisma;
   let service: NotificationsService;
+  let push: ReturnType<typeof pushMock>;
 
   beforeEach(() => {
     prisma = buildPrismaMock();
-    service = serviceWith(prisma);
+    push = pushMock();
+    service = serviceWith(prisma, push);
   });
 
   // ===========================================================================
@@ -129,7 +135,12 @@ describe('NotificationsService', () => {
     beforeEach(() => {
       prisma.product.findMany.mockResolvedValue(products as never);
       prisma.notification.findFirst.mockResolvedValue(null);
-      prisma.notification.create.mockResolvedValue({ id: 'n1' } as never);
+      // El create devuelve la notificación creada (el service usa su mensaje
+      // y product_id para el push).
+      prisma.notification.create.mockImplementation(async ({ data }: any) => ({
+        id: 'n1',
+        ...data,
+      }));
     });
 
     it('crea GARANTIA_POR_VENCER y GARANTIA_VENCIDA, y omite vigentes/sin garantía', async () => {
@@ -153,6 +164,31 @@ describe('NotificationsService', () => {
           product_id: 'p2',
         },
       });
+    });
+
+    it('envía push por cada aviso nuevo, con el tipo y el producto', async () => {
+      await service.checkWarranties(now);
+
+      expect(push.sendWarrantyPush).toHaveBeenCalledTimes(2);
+      expect(push.sendWarrantyPush).toHaveBeenCalledWith('u1', {
+        tipo: NotificationType.GARANTIA_POR_VENCER,
+        mensaje: 'La garantía de «Laptop» vence en 7 días.',
+        product_id: 'p1',
+      });
+      expect(push.sendWarrantyPush).toHaveBeenCalledWith('u2', {
+        tipo: NotificationType.GARANTIA_VENCIDA,
+        mensaje: 'La garantía de «Cafetera» venció hace 3 días.',
+        product_id: 'p2',
+      });
+    });
+
+    it('no envía push para los avisos deduplicados', async () => {
+      prisma.notification.findFirst.mockResolvedValue({ id: 'existing' } as never);
+
+      await service.checkWarranties(now);
+
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(push.sendWarrantyPush).not.toHaveBeenCalled();
     });
 
     it('usa el singular para 1 día', async () => {
@@ -194,6 +230,16 @@ describe('NotificationsService', () => {
       const result = await service.checkWarranties(now);
       expect(result).toEqual({ created: 0, checked: 0 });
       expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(push.sendWarrantyPush).not.toHaveBeenCalled();
+    });
+
+    it('el job sobrevive si el push falla', async () => {
+      push.sendWarrantyPush.mockRejectedValue(new Error('red caída'));
+
+      const result = await service.checkWarranties(now);
+
+      expect(result.created).toBe(2);
+      expect(prisma.notification.create).toHaveBeenCalledTimes(2);
     });
   });
 });

@@ -39,6 +39,11 @@ export interface MockPrisma {
     update: jest.Mock;
     updateMany: jest.Mock;
   };
+  pushSubscription: {
+    upsert: jest.Mock;
+    findMany: jest.Mock;
+    deleteMany: jest.Mock;
+  };
 }
 
 export function buildPrismaMock(): MockPrisma {
@@ -74,6 +79,11 @@ export function buildPrismaMock(): MockPrisma {
       create: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
+    },
+    pushSubscription: {
+      upsert: jest.fn(),
+      findMany: jest.fn(),
+      deleteMany: jest.fn(),
     },
   };
 }

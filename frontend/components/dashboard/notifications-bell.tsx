@@ -9,6 +9,7 @@ import {
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
 } from '@/hooks/use-notifications';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { NOTIFICATION_TYPE_LABELS } from '@/lib/notification-types';
 import { formatRelativeTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -20,6 +21,7 @@ export function NotificationsBell(): JSX.Element {
   const { data: unreadCount = 0 } = useUnreadCount();
   const markRead = useMarkNotificationRead();
   const markAll = useMarkAllNotificationsRead();
+  const push = usePushNotifications();
 
   const onOpenNotification = (id: string, productId: string | null): void => {
     if (productId) {
@@ -101,6 +103,41 @@ export function NotificationsBell(): JSX.Element {
                 </li>
               ))}
             </ul>
+
+            {/* Toggle de notificaciones push (avisos fuera de la app). */}
+            <footer className="border-t border-gray-100 bg-gray-50/60 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-800">Avisos fuera de la app</p>
+                  <p className="text-xs text-gray-500">Garantías por vencer o vencidas</p>
+                </div>
+                {push.supported ? (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={push.enabled}
+                    aria-label="Activar notificaciones push"
+                    disabled={push.loading || !push.configured}
+                    onClick={() => void push.toggle()}
+                    className={cn(
+                      'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition',
+                      push.enabled ? 'bg-accent-600' : 'bg-gray-300',
+                      (push.loading || !push.configured) && 'cursor-not-allowed opacity-50',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'inline-block h-4 w-4 transform rounded-full bg-white shadow transition',
+                        push.enabled ? 'translate-x-4' : 'translate-x-0.5',
+                      )}
+                    />
+                  </button>
+                ) : (
+                  <span className="text-xs text-gray-400">No soportado</span>
+                )}
+              </div>
+              {push.error && <p className="mt-1.5 text-xs text-red-600">{push.error}</p>}
+            </footer>
           </div>
         </>
       )}

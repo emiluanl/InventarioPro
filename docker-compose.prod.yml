@@ -81,7 +81,7 @@ services:
     expose:
       - '3001'
     healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://localhost:3001/api/auth/me']
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -91,6 +91,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # NEXT_PUBLIC_API_URL es build-time: Next.js la inlinea en el bundle del
+      # cliente, así que debe llegar al stage de build (no solo al runtime).
+      args:
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:?required}
     container_name: inventariopro-frontend
     restart: always
     depends_on:
@@ -100,7 +104,7 @@ services:
     ports:
       - '3000:3000'
     healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000']
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -111,6 +115,12 @@ services:
     image: caddy:2-alpine
     container_name: inventariopro-caddy
     restart: always
+    # El Caddyfile usa {$FRONTEND_DOMAIN} / {$API_DOMAIN}: deben llegar como
+    # variables de entorno al contenedor de Caddy, si no usa los defaults
+    # inventariopro.example.com y no sirve los dominios reales.
+    environment:
+      FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:-inventariopro.example.com}
+      API_DOMAIN: ${API_DOMAIN:-api.inventariopro.example.com}
     ports:
       - '80:80'
       - '443:443'

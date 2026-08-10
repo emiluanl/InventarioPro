@@ -3,11 +3,14 @@
 # =============================================================================
 
 # ---- Build stage ----
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 WORKDIR /app
 
+# openssl es necesario para que Prisma detecte el engine correcto al generar.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
-COPY tsconfig.json nest-cli.json ./
+COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 RUN npm ci
 
 COPY src ./src
@@ -16,10 +19,13 @@ RUN npx prisma generate
 RUN npm run build && npm prune --omit=dev
 
 # ---- Runtime stage ----
-FROM node:20-alpine AS runtime
+FROM node:20-slim AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production
+
+# openssl en runtime: los engines de Prisma hacen dlopen de libssl en caliente.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Copiamos solo lo necesario
 COPY --from=builder /app/node_modules ./node_modules
@@ -28,15 +34,19 @@ COPY --from=builder /app/prisma ./prisma
 COPY package.json ./
 
 # Usuario no-root
-RUN addgroup -S app && adduser -S app -G app
+RUN groupadd -r app && useradd -r -g app app
+
+# El CLI de Prisma (migrate deploy) escribe en estos directorios: el usuario
+# no-root necesita permisos, si no falla con "Can't write to @prisma/engines".
+RUN chown -R app:app /app/node_modules/.prisma /app/node_modules/@prisma/engines
 USER app
 
 EXPOSE 3001
 
-# Healthcheck: el endpoint /api/auth/me devuelve 401 sin auth,
-# pero está vivo. Para un check más limpio, añadir un endpoint /health
-# en el futuro.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:3001/api/auth/me || exit 1
+  CMD node -e "fetch('http://localhost:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["node", "dist/src/main.js"]
+# Migraciones + arranque: aplica el esquema ANTES de servir, para que el
+# seed de categorías del sistema (BootstrapService) encuentre las tablas.
+# El comando es idempotente: si no hay migraciones nuevas, no hace nada.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

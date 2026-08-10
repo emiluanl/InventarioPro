@@ -37,6 +37,7 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   forgotPassword: (input: ForgotPasswordInput) => Promise<string>;
   resetPassword: (input: ResetPasswordInput) => Promise<string>;
+  resendVerificationEmail: (input: ForgotPasswordInput) => Promise<string>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -46,6 +47,7 @@ const PUBLIC_ROUTES = [
   '/register',
   '/forgot-password',
   '/reset-password',
+  '/verify-email',
 ];
 
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
@@ -139,6 +141,21 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     [],
   );
 
+  const resendVerificationEmail = useCallback(
+    async (input: ForgotPasswordInput): Promise<string> => {
+      try {
+        const { data } = await api.post<{ message: string }>(
+          '/auth/resend-verification',
+          input,
+        );
+        return data.message;
+      } catch (err) {
+        throw new Error(extractErrorMessage(err));
+      }
+    },
+    [],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -149,8 +166,18 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       logout,
       forgotPassword,
       resetPassword,
+      resendVerificationEmail,
     }),
-    [user, isLoading, login, register, logout, forgotPassword, resetPassword],
+    [
+      user,
+      isLoading,
+      login,
+      register,
+      logout,
+      forgotPassword,
+      resetPassword,
+      resendVerificationEmail,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

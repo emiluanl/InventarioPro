@@ -9,7 +9,11 @@ frontend/out/
 # Entorno (NUNCA subir)
 .env
 .env.local
+.env.prod
 .env.*.local
+
+# Estado local de la herramienta de edición
+.freebuff/
 
 # Archivos subidos localmente (cuando STORAGE_PROVIDER=local)
 backend/uploads/*

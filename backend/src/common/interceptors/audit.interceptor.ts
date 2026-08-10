@@ -18,6 +18,7 @@ const AUDIT_PATHS = [
   '/auth/logout',
   '/auth/forgot-password',
   '/auth/reset-password',
+  '/auth/resend-verification',
 ];
 
 @Injectable()

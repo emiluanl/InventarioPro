@@ -15,9 +15,9 @@ import {
   Post,
   Req,
   Res,
-  UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
 import { AuthService } from './auth.service';
@@ -30,7 +30,6 @@ import { CurrentUser, AuthUser } from './decorators/current-user.decorator';
 import { CookiesService } from '../common/cookies.service';
 
 @Controller('auth')
-@UseGuards(ThrottlerGuard)
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
@@ -43,6 +42,8 @@ export class AuthController {
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  // 100 por hora por IP (el guard global ThrottlerGuard aplica igualmente).
+  @Throttle({ default: { limit: 100, ttl: 60 * 60 * 1000 } })
   register(@Body() dto: RegisterDto) {
     return this.auth.register(dto);
   }
@@ -55,12 +56,9 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
-    const tokens = await this.auth.login(dto);
-    this.cookies.setAuthCookies(res, tokens);
-    return {
-      access_token: tokens.access_token,
-      expires_in: tokens.expires_in,
-    };
+    const result = await this.auth.login(dto);
+    this.cookies.setAuthCookies(res, result);
+    return result.user;
   }
 
   // ---------------------------------------------------------------------------
@@ -73,7 +71,7 @@ export class AuthController {
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const refreshToken = req.cookies?.['refresh_token'];
     if (!refreshToken) {
-      throw new Error('Refresh token no presente en cookies.');
+      throw new UnauthorizedException('Refresh token no presente en cookies.');
     }
     const tokens = await this.auth.refresh(refreshToken);
     this.cookies.setAuthCookies(res, tokens);
@@ -136,5 +134,16 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   verifyEmail(@Body() body: { token: string }) {
     return this.auth.verifyEmail(body.token);
+  }
+
+  // ---------------------------------------------------------------------------
+  // RESEND VERIFICATION EMAIL - para enlaces expirados (máx. 3 por hora).
+  // ---------------------------------------------------------------------------
+  @Public()
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 60 * 60 * 1000 } })
+  resendVerification(@Body() dto: ForgotPasswordDto) {
+    return this.auth.resendVerificationEmail(dto.email);
   }
 }

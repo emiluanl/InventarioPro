@@ -1,0 +1,21 @@
+# Dependencias locales
+node_modules
+
+# Builds y cobertura
+dist
+coverage
+
+# Archivos subidos localmente
+uploads
+
+# Entorno y secretos
+.env
+.env.local
+.env.prod
+.env.*.local
+
+# Logs
+*.log
+
+# TypeScript build info
+*.tsbuildinfo

@@ -9,8 +9,14 @@ import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
+import type { Request } from 'express';
 
 import type { AuthUser } from '../decorators/current-user.decorator';
+
+function extractJwtFromCookie(req: Request): string | null {
+  const token = req.cookies?.['access_token'];
+  return typeof token === 'string' && token.length > 0 ? token : null;
+}
 
 export interface JwtPayload {
   sub: string; // user id
@@ -27,7 +33,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new Error('JWT_ACCESS_SECRET no está definido en variables de entorno.');
     }
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        extractJwtFromCookie,
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ]),
       ignoreExpiration: false,
       secretOrKey: secret,
     });

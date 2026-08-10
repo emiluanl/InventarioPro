@@ -1,0 +1,18 @@
+# Dependencias locales (instaladas en el host: rompen el build si entran al contexto)
+node_modules
+
+# Builds
+.next
+out
+
+# Entorno y secretos
+.env
+.env.local
+.env.prod
+.env.*.local
+
+# Logs
+*.log
+
+# TypeScript build info
+tsconfig.tsbuildinfo

@@ -75,6 +75,7 @@ InventarioPro está diseñado siguiendo el principio de **mínimo privilegio** y
 | `POST /auth/login` | 5 / 15 min por IP | ✅ |
 | `POST /auth/refresh` | 10 / min | ✅ |
 | `POST /auth/forgot-password` | 3 / hora | ✅ |
+| `POST /auth/resend-verification` | 3 / hora | ✅ |
 | `POST /auth/register` | 100 / hora (global) | ✅ |
 | `POST /chat/message` | 20 / min por usuario | ✅ |
 | Global | 100 / min | ✅ |

@@ -89,7 +89,9 @@ export class AuthService {
   // ===========================================================================
   // LOGIN
   // ===========================================================================
-  async login(dto: LoginDto): Promise<AuthTokensWithCookies> {
+  async login(
+    dto: LoginDto,
+  ): Promise<AuthTokensWithCookies & { user: { id: string; email: string } }> {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (!user) {
       // Mensaje genérico para no permitir enumeración de usuarios.
@@ -101,7 +103,14 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas.');
     }
 
-    return this.issueTokens(user.id, user.email);
+    if (!user.email_verificado) {
+      throw new UnauthorizedException(
+        'Debes verificar tu email antes de iniciar sesión. Revisa tu bandeja de entrada.',
+      );
+    }
+
+    const tokens = await this.issueTokens(user.id, user.email);
+    return { ...tokens, user: { id: user.id, email: user.email } };
   }
 
   // ===========================================================================
@@ -238,6 +247,37 @@ export class AuthService {
     });
 
     return { message: 'Email verificado correctamente.' };
+  }
+
+  // ===========================================================================
+  // RESEND VERIFICATION EMAIL
+  // ===========================================================================
+  // Cubre el caso de enlace expirado: genera un token nuevo (24h) y reenvía
+  // el email. Como en forgotPassword, SIEMPRE devolvemos el mismo mensaje
+  // (privacidad): no revela si la cuenta existe ni si ya está verificada.
+  // ===========================================================================
+  async resendVerificationEmail(email: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+
+    if (user && !user.email_verificado) {
+      const token = this.generateSecureToken();
+      const tokenHash = this.hashToken(token);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          email_verification_token: tokenHash,
+          email_verification_expires_at: expiresAt,
+        },
+      });
+
+      void this.email.sendVerificationEmail(user.email, token);
+    }
+
+    return {
+      message: 'Si la cuenta existe y no está verificada, enviaremos un nuevo enlace a tu email.',
+    };
   }
 
   // ===========================================================================

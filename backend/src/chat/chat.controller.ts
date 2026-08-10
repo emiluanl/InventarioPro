@@ -4,24 +4,14 @@
 // Rate limit aplicado: 20 mensajes por minuto por usuario.
 // =============================================================================
 
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
-import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 
 import { ChatService } from './chat.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { CurrentUser, AuthUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('chat')
-@UseGuards(ThrottlerGuard)
 export class ChatController {
   constructor(private readonly chat: ChatService) {}
 

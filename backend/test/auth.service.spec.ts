@@ -100,11 +100,12 @@ describe('AuthService', () => {
   // LOGIN
   // ===========================================================================
   describe('login', () => {
-    it('emite tokens si las credenciales son válidas', async () => {
+    it('emite tokens si las credenciales son válidas y el email está verificado', async () => {
       prisma.user.findUnique.mockResolvedValue({
         id: 'u1',
         email: 'a@b.com',
         password_hash: 'fake-hash',
+        email_verificado: true,
       });
       // Espiamos verifyPassword (no podemos mockear argon2 dinámicamente fácil,
       // pero password_hash fake hará que argon2.verify devuelva false y lance
@@ -115,7 +116,23 @@ describe('AuthService', () => {
 
       expect(result.access_token).toBe('fake.access.token');
       expect(result.refresh_token).toBeDefined();
+      expect(result.user).toEqual({ id: 'u1', email: 'a@b.com' });
       expect(prisma.refreshToken.create).toHaveBeenCalled();
+    });
+
+    it('rechaza el login si el email aún no está verificado', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        email: 'a@b.com',
+        password_hash: 'fake-hash',
+        email_verificado: false,
+      });
+      (service as any).verifyPassword = jest.fn().mockResolvedValue(true);
+
+      await expect(service.login({ email: 'a@b.com', password: 'Password123' })).rejects.toThrow(
+        'Debes verificar tu email',
+      );
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
     });
 
     it('lanza UnauthorizedException con mensaje genérico si el usuario no existe', async () => {
@@ -241,6 +258,54 @@ describe('AuthService', () => {
 
       expect(result.message).toContain('actualizada');
       expect(prisma.$transaction).toHaveBeenCalled();
+    });
+  });
+
+  // ===========================================================================
+  // RESEND VERIFICATION EMAIL
+  // ===========================================================================
+  describe('resendVerificationEmail', () => {
+    it('genera un token nuevo y envía el email si la cuenta no está verificada', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        email: 'a@b.com',
+        email_verificado: false,
+      });
+      prisma.user.update.mockResolvedValue({});
+
+      const result = await service.resendVerificationEmail('a@b.com');
+
+      expect(result.message).toContain('nuevo enlace');
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'u1' },
+          data: expect.objectContaining({ email_verification_token: expect.any(String) }),
+        }),
+      );
+      expect(email.sendVerificationEmail).toHaveBeenCalled();
+    });
+
+    it('NO reenvía si la cuenta ya está verificada (mismo mensaje genérico)', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        email: 'a@b.com',
+        email_verificado: true,
+      });
+
+      const result = await service.resendVerificationEmail('a@b.com');
+
+      expect(result.message).toContain('nuevo enlace');
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(email.sendVerificationEmail).not.toHaveBeenCalled();
+    });
+
+    it('devuelve el mismo mensaje si el email no existe (no enumera cuentas)', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      const result = await service.resendVerificationEmail('ghost@x.com');
+
+      expect(result.message).toContain('nuevo enlace');
+      expect(email.sendVerificationEmail).not.toHaveBeenCalled();
     });
   });
 });

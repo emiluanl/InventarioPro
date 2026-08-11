@@ -354,6 +354,11 @@ compartirse):
 > antes de usarlo, créalo de nuevo (otro keyID) en lugar de intentar
 > recuperarlo.
 
+> ✅ **Rotación verificada el 2026-08-11**: key nueva `inventariopro-backup`
+> activa (lsd OK + backup real subido al bucket), key antigua borrada en el
+> dashboard y confirmada inválida (401). El único secreto que viajó por chat
+> quedó revocado.
+
 ## 8. Monitoreo
 
 ### Alarma de backups (watchdog + heartbeat)
@@ -372,8 +377,10 @@ El contenedor `backup` trae dos mecanismos integrados:
 #### Configurar el aviso
 
 > ✅ **Activo en este despliegue (2026-08-11)**: dos checks reales en
-> healthchecks.io, ambos verificados de punta a punta (heartbeat con wget/curl
-> → 200, simulacro de caída → DOWN + ping `/fail`).
+> healthchecks.io, ambos verificados de punta a punta. El backup pinge su
+> check diario (`BACKUP_PING_URL`, wget → 200), el monitor pinge el suyo
+> (`MONITOR_PING_URL`, cada 5 min), y un fallo de backup simulado marcó
+> `/fail` **solo** en el check de backups mientras el de la API siguió en UP.
 
 Se usan **dos checks separados** (cada contenedor pinge el suyo):
 

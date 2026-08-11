@@ -21,8 +21,11 @@ test-results/
 # Dumps de backup (volumen ./backups del compose de producción)
 backups/
 
-# Config real de rclone con credenciales (el example sí se commitea)
+# Config real de rclone con credenciales (el example sí se commitea).
+# rclone.conf.* cubre copias accidentales (.bak, .tmp...) que también llevan
+# credenciales y no deben commitearse.
 rclone/rclone.conf
+rclone/rclone.conf.*
 
 # Estado local de la herramienta de edición
 .freebuff/

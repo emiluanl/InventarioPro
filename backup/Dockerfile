@@ -11,12 +11,17 @@
 #   BACKUP_SCHEDULE   - expresión cron (por defecto 0 3 * * * -> 03:00 diario).
 #   BACKUP_KEEP_DAYS  - días de retención de dumps (por defecto 14).
 #   TZ                - zona horaria para el cron (por defecto UTC).
+#   RCLONE_REMOTE     - remote rclone (p. ej. "s3backup:inventariopro") al que
+#     copiar los dumps tras cada backup. Vacío = sin copia remota. La config de
+#     rclone vive en ./rclone/rclone.conf del host (montada en
+#     /root/.config/rclone). Ver DEPLOYMENT.md §7.
 # =============================================================================
 
 FROM postgres:16-alpine
 
 # tzdata: para que la hora del cron respete TZ (alpine sin tzdata = UTC fijo).
-RUN apk add --no-cache tzdata
+# rclone: copia remota de los dumps (S3, SFTP, WebDAV, etc.).
+RUN apk add --no-cache tzdata rclone
 
 COPY backup.sh /usr/local/bin/backup
 COPY restore.sh /usr/local/bin/restore

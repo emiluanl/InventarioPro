@@ -60,10 +60,17 @@ services:
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
       BACKUP_DIR: /backups
       TZ: ${TZ:-UTC}
+      # Copia remota de los dumps con rclone (S3, SFTP, etc.). Vacío = sin copia
+      # remota. La config de rclone se lee de ./rclone/rclone.conf (montada en
+      # /root/.config/rclone). Ver DEPLOYMENT.md §7.
+      RCLONE_REMOTE: ${RCLONE_REMOTE:-}
     volumes:
       # Mismo directorio del host que monta postgres: los dumps son accesibles
       # desde la máquina y por el contenedor de restauración.
       - ./backups:/backups
+      # Config de rclone (rclone.conf con tus remotes). El directorio existe
+      # siempre (contiene el example); sin rclone.conf la copia remota se omite.
+      - ./rclone:/root/.config/rclone
     healthcheck:
       test: ['CMD-SHELL', "[ -f /etc/crontabs/root ] && grep -q '/usr/local/bin/backup' /etc/crontabs/root"]
       interval: 30s

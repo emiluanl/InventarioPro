@@ -1,11 +1,20 @@
 #!/bin/sh
 # =============================================================================
-# backup.sh - pg_dump programado + retención
+# backup.sh - pg_dump programado + retención + copia remota (rclone)
 # =============================================================================
 # Genera un dump en formato custom (comprimido) con fecha y hora en el nombre,
-# y elimina los dumps más antiguos que BACKUP_KEEP_DAYS. Se puede ejecutar a
-# mano con:
+# elimina los dumps más antiguos que BACKUP_KEEP_DAYS y, si RCLONE_REMOTE está
+# configurado, copia los dumps al remote y aplica la misma retención allí. Se
+# puede ejecutar a mano con:
 #   docker compose -f docker-compose.prod.yml exec backup /usr/local/bin/backup
+#
+# Copia remota (opcional):
+#   RCLONE_REMOTE    - remote rclone ("s3backup:inventariopro", "mi-server:...").
+#                      Vacío o no definido = sin copia remota (no falla).
+#   BACKUP_KEEP_DAYS - se aplica también en el remote (borra los dumps más
+#                      antiguos que N días).
+#   La config de rclone se lee de /root/.config/rclone/rclone.conf (montada
+#   desde ./rclone del host). Ver DEPLOYMENT.md §7.
 # =============================================================================
 set -eu
 
@@ -16,6 +25,7 @@ POSTGRES_PASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requerido}"
 POSTGRES_DB="${POSTGRES_DB:-inventariopro}"
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-14}"
+RCLONE_REMOTE="${RCLONE_REMOTE:-}"
 
 export PGPASSWORD="${POSTGRES_PASSWORD}"
 
@@ -33,6 +43,41 @@ else
   exit 1
 fi
 
-# Retención: borra dumps más antiguos que BACKUP_KEEP_DAYS.
+# Retención local: borra dumps más antiguos que BACKUP_KEEP_DAYS.
 DELETED="$(find "${BACKUP_DIR}" -name 'inventariopro-*.dump' -mtime +"${BACKUP_KEEP_DAYS}" -delete -print | wc -l)"
-echo "[backup] retención: ${BACKUP_KEEP_DAYS} días (eliminados ${DELETED} antiguos)"
+echo "[backup] retención local: ${BACKUP_KEEP_DAYS} días (eliminados ${DELETED} antiguos)"
+
+# ---------------------------------------------------------------------------
+# Copia remota con rclone (opcional).
+# ---------------------------------------------------------------------------
+if [ -z "${RCLONE_REMOTE}" ]; then
+  echo "[backup] RCLONE_REMOTE vacío: sin copia remota (los dumps solo están en ${BACKUP_DIR})"
+  exit 0
+fi
+
+if ! command -v rclone >/dev/null 2>&1; then
+  echo "[backup] ERROR: RCLONE_REMOTE configurado pero rclone no está instalado" >&2
+  exit 1
+fi
+
+RCLONE_CONFIG="${RCLONE_CONFIG:-/root/.config/rclone/rclone.conf}"
+if [ ! -f "${RCLONE_CONFIG}" ]; then
+  echo "[backup] ERROR: no existe ${RCLONE_CONFIG} (crea ./rclone/rclone.conf desde el example). Ver DEPLOYMENT.md §7" >&2
+  exit 1
+fi
+
+echo "[backup] rclone copy ${BACKUP_DIR} -> ${RCLONE_REMOTE} (retención remota: ${BACKUP_KEEP_DAYS} días)"
+if rclone copy "${BACKUP_DIR}" "${RCLONE_REMOTE}" --include 'inventariopro-*.dump' --config "${RCLONE_CONFIG}"; then
+  echo "[backup] copia remota OK"
+else
+  echo "[backup] ERROR: rclone copy falló; el backup local sigue intacto en ${BACKUP_DIR}" >&2
+  exit 1
+fi
+
+# Retención remota: borra en el remote los dumps más antiguos que N días.
+# (--min-age: solo archivos más viejos que la edad indicada.)
+if rclone delete "${RCLONE_REMOTE}" --min-age "${BACKUP_KEEP_DAYS}d" --include 'inventariopro-*.dump' --config "${RCLONE_CONFIG}" >/dev/null 2>&1; then
+  echo "[backup] retención remota: ${BACKUP_KEEP_DAYS} días aplicada en ${RCLONE_REMOTE}"
+else
+  echo "[backup] aviso: no se pudo aplicar retención remota en ${RCLONE_REMOTE} — revisa los logs" >&2
+fi

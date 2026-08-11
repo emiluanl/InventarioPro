@@ -164,10 +164,91 @@ docker compose -f docker-compose.prod.yml exec backup \
 > base de datos por el del dump. Hazlo solo si estás seguro de querer volver a
 > ese estado (p. ej. tras un desastre o un error de migración).
 
-### Copiar los dumps fuera del servidor
+### Copia remota de los dumps (rclone)
 
-Los dumps viven en `./backups` del host. Configura una copia remota (rclone,
-rsync, un bucket S3) para que un fallo del servidor no pierda los backups:
+Los dumps viven en `./backups` del host; un fallo del disco del servidor los
+perdería. El contenedor de backups incluye **rclone** y, si se configura
+`RCLONE_REMOTE`, copia cada dump a un destino remoto (bucket S3, Backblaze B2,
+Cloudflare R2, otro servidor por SFTP, un NAS...) justo después de generarlo,
+aplicando allí la misma retención (`BACKUP_KEEP_DAYS`). **Con `RCLONE_REMOTE`
+vacío (default) no se hace nada** y el backup funciona igual que antes.
+
+#### 1. Crear la config de rclone
+
+La config se lee de `./rclone/rclone.conf` (montada en `/root/.config/rclone`
+dentro del contenedor; el archivo real está en `.gitignore`, el ejemplo
+`rclone/rclone.conf.example` sí se commitea):
+
+```bash
+cp rclone/rclone.conf.example rclone/rclone.conf
+
+# Opción A: asistente interactivo dentro del contenedor (recomendado)
+docker compose -f docker-compose.prod.yml --env-file .env.prod \
+  run --rm backup rclone config
+
+# Opción B: editar rclone/rclone.conf a mano en el host
+#   [s3backup]
+#   type = s3
+#   provider = AWS          # o B2 / Cloudflare / MinIO...
+#   access_key_id = ...
+#   secret_access_key = ...
+#   region = ...
+#   endpoint =              # solo si no es AWS (R2, MinIO...)
+```
+
+> 💡 **Cifrado**: si el destino no es de confianza, envuelve el remote en uno
+> de tipo `crypt` (genera las contraseñas con `rclone obscure 'tu-frase'`) y
+> usa ese remote en `RCLONE_REMOTE`. Los dumps contienen datos reales.
+
+> 💡 **SFTP**: para un segundo servidor con SSH, usa el backend `sftp` y monta
+> tu clave privada añadiendo al servicio `backup` un volumen como
+> `- ./backup/id_ed25519:/config/id_ed25519:ro`.
+
+#### 2. Activar la copia en `.env.prod`
+
+```bash
+# RCLONE_REMOTE=<remote>:<carpeta>  (el nombre del remote y la ruta en él)
+RCLONE_REMOTE=s3backup:inventariopro
+```
+
+#### 3. Reiniciar el contenedor y verificar
+
+```bash
+docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+  --env-file .env.prod up -d --build backup
+
+# Backup inmediato: debe aparecer "copia remota OK" en los logs
+docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+  --env-file .env.prod exec backup /usr/local/bin/backup
+
+docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+  --env-file .env.prod logs backup | grep -E 'copia|retención remota'
+
+# Confirmar los archivos en el destino (dentro del contenedor)
+docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+  --env-file .env.prod exec backup rclone ls s3backup:inventariopro
+```
+
+A partir de ahí, cada ejecución del cron (03:00) hace: `pg_dump` → retención
+local → `rclone copy` al destino → retención remota (`rclone delete
+--min-age`, mismo `BACKUP_KEEP_DAYS`).
+
+#### 4. Restaurar desde la copia remota
+
+```bash
+# 1) Traer el dump al servidor
+cd backups && docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+  --env-file .env.prod run --rm backup \
+  rclone copy s3backup:inventariopro/inventariopro-YYYYMMDD-HHMMSS.dump /backups/
+
+# 2) Restaurar (--clean: reemplaza el contenido actual de la BD)
+docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+  --env-file .env.prod exec backup \
+  /usr/local/bin/restore /backups/inventariopro-YYYYMMDD-HHMMSS.dump
+```
+
+> ⚠️ Igual que la restauración local: `restore` usa `--clean --if-exists` y
+> **reemplaza** la base actual por el contenido del dump.
 
 ## 8. Monitoreo
 

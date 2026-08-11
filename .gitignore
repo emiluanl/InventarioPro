@@ -21,6 +21,9 @@ test-results/
 # Dumps de backup (volumen ./backups del compose de producción)
 backups/
 
+# Config real de rclone con credenciales (el example sí se commitea)
+rclone/rclone.conf
+
 # Estado local de la herramienta de edición
 .freebuff/
 

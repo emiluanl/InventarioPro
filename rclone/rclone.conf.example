@@ -1,0 +1,48 @@
+# =============================================================================
+# rclone.conf - remotes para la copia remota de los backups
+# =============================================================================
+# Copia este archivo a ./rclone/rclone.conf y añade tus remotes con:
+#
+#   docker compose -f docker-compose.prod.yml run --rm backup rclone config
+#   (escribe sobre /root/.config/rclone/rclone.conf, montado en ./rclone)
+#
+# ...o edita el archivo directamente en el host. Luego define RCLONE_REMOTE en
+# .env.prod, p. ej.:
+#   RCLONE_REMOTE=s3backup:inventariopro
+#
+# Ver DEPLOYMENT.md §7 para el procedimiento completo.
+# =============================================================================
+
+# --- Ejemplo S3 (AWS, Backblaze B2, Cloudflare R2, MinIO...) ---
+# [s3backup]
+# type = s3
+# provider = AWS
+# access_key_id = TU_ACCESS_KEY
+# secret_access_key = TU_SECRET_KEY
+# region = us-east-1
+# endpoint =
+# acl = private
+# (Para B2: provider = B2, o usa el backend "b2" nativo. Para R2: provider =
+# Cloudflare con endpoint https://<account>.r2.cloudflarestorage.com)
+
+# --- Ejemplo SFTP (otro servidor) ---
+# [mi-server]
+# type = sftp
+# host = backup.example.com
+# user = backups
+# key_file = /config/id_ed25519
+# (monta tu clave privada añadiendo a docker-compose.prod.yml un volumen como
+#  - ./backup/id_ed25519:/config/id_ed25519:ro)
+
+# --- Ejemplo carpeta local montada (otro disco/NAS) ---
+# [disco]
+# type = local
+# (RCLONE_REMOTE=disco:/mnt/backups/inventariopro)
+
+# --- Ejemplo remote cifrado (crypt sobre cualquier otro remote) ---
+# [cryptbackup]
+# type = crypt
+# remote = s3backup:inventariopro-cifrado
+# password = TU_PASSWORD_OBFUSCADA
+# password2 = TU_SALT_OBFUSCADA
+# (genera las contraseñas con: rclone obscure 'tu-frase')

@@ -176,7 +176,7 @@ Guía paso a paso en [`DEPLOYMENT.md`](./DEPLOYMENT.md). Incluye:
 - Comando `docker compose -f docker-compose.prod.yml up -d --build`
 - Migración con `prisma migrate deploy`
 - HTTPS automático con Caddy (Let's Encrypt)
-- Backups automáticos de Postgres (contenedor con cron + pg_dump + retención, ver [DEPLOYMENT.md §7](./DEPLOYMENT.md))
+- Backups automáticos de Postgres (contenedor con cron + pg_dump + retención + **copia remota opcional con rclone** a S3/SFTP/NAS, ver [DEPLOYMENT.md §7](./DEPLOYMENT.md))
 - Estimación de costos (~$15–20/mes para uso personal bajo)
 - Troubleshooting
 

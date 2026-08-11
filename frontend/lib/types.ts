@@ -95,6 +95,11 @@ export const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
   DADO_DE_BAJA: 'Dado de baja',
 };
 
+export const PURCHASE_TYPE_LABELS: Record<PurchaseType, string> = {
+  FISICO: 'Física',
+  ONLINE: 'Online',
+};
+
 export const WARRANTY_LABELS: Record<WarrantyStatus, string> = {
   vigente: 'Garantía vigente',
   por_vencer: 'Vence pronto',

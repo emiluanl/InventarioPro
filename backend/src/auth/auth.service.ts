@@ -293,7 +293,8 @@ export class AuthService {
 
     for (const attachment of attachments) {
       try {
-        await this.storage.delete(attachment.url);
+        // El storage espera la key interna, no la URL pública (evita huérfanos).
+        await this.storage.delete(this.storage.keyFromUrl(attachment.url));
       } catch (err) {
         this.logger.warn(
           `No se pudo borrar el archivo ${attachment.url} del storage: ${(err as Error).message}`,

@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 
 import type { ProductsFilters, ProductStatus, PurchaseType, WarrantyStatus } from '@/lib/types';
+import { PRODUCT_STATUS_LABELS, PURCHASE_TYPE_LABELS, WARRANTY_LABELS } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -101,7 +102,7 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
         >
           <option value="">Todos los estados</option>
           {ESTADOS.map((e) => (
-            <option key={e} value={e}>{e}</option>
+            <option key={e} value={e}>{PRODUCT_STATUS_LABELS[e]}</option>
           ))}
         </select>
         <select
@@ -117,7 +118,7 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
         >
           <option value="">Compra física u online</option>
           {TIPOS.map((t) => (
-            <option key={t} value={t}>{t}</option>
+            <option key={t} value={t}>{PURCHASE_TYPE_LABELS[t]}</option>
           ))}
         </select>
         <select
@@ -133,7 +134,7 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
         >
           <option value="">Cualquier garantía</option>
           {WARRANTY.map((w) => (
-            <option key={w} value={w}>{w}</option>
+            <option key={w} value={w}>{WARRANTY_LABELS[w]}</option>
           ))}
         </select>
       </div>

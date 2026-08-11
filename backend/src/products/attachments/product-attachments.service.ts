@@ -55,9 +55,11 @@ export class ProductAttachmentsService {
       throw new NotFoundException('Adjunto no encontrado.');
     }
 
-    // Borramos de storage (best-effort) y de BD.
+    // Borramos de storage (best-effort) y de BD. Ojo: el storage espera la
+    // KEY interna (p. ej. products/<id>/archivo.jpg), no la URL pública — si
+    // le pasáramos la URL, el archivo quedaría huérfano en disco.
     try {
-      await this.storage.delete(attachment.url);
+      await this.storage.delete(this.storage.keyFromUrl(attachment.url));
     } catch {
       // Si falla el borrado en storage, seguimos y borramos la fila.
     }

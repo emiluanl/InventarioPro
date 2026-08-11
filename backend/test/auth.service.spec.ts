@@ -52,6 +52,9 @@ describe('AuthService', () => {
     };
     storage = {
       delete: jest.fn().mockResolvedValue(undefined),
+      keyFromUrl: jest.fn((url: string) =>
+        url.startsWith('/uploads/') ? url.slice('/uploads/'.length) : url,
+      ),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -403,8 +406,8 @@ describe('AuthService', () => {
       expect(result.message).toContain('eliminados');
       expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'u1' } });
       expect(storage.delete).toHaveBeenCalledTimes(2);
-      expect(storage.delete).toHaveBeenCalledWith('/uploads/a.jpg');
-      expect(storage.delete).toHaveBeenCalledWith('/uploads/b.pdf');
+      expect(storage.delete).toHaveBeenCalledWith('a.jpg');
+      expect(storage.delete).toHaveBeenCalledWith('b.pdf');
     });
 
     it('rechaza la eliminación con contraseña incorrecta (no borra nada)', async () => {

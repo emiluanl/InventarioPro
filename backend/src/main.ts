@@ -4,15 +4,17 @@
 
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import * as path from 'node:path';
 
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
 
@@ -45,6 +47,19 @@ async function bootstrap(): Promise<void> {
 
   // Cookie parser para leer cookies httpOnly en el server.
   app.use(cookieParser());
+
+  // Sirve los archivos subidos con el provider 'local' (fotos, recibos,
+  // facturas) en /uploads/<ruta>. Misma carpeta que StorageService:
+  // LOCAL_UPLOAD_DIR (por defecto ./uploads). Con Supabase las URLs ya son
+  // absolutas y firmadas, así que este directorio queda vacío.
+  const uploadDir = path.resolve(
+    config.get<string>('LOCAL_UPLOAD_DIR') ?? './uploads',
+  );
+  app.useStaticAssets(uploadDir, {
+    prefix: '/uploads/',
+    maxAge: '1d',
+    fallthrough: false,
+  });
 
   // CORS estricto: nunca usamos "*". Lista explícita por dominio.
   // credentials: true para que las cookies viajen en las requests cross-origin.

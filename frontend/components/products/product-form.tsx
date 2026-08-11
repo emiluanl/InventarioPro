@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Alert } from '@/components/ui/alert';
 import { extractErrorMessage } from '@/lib/api';
 import type { Product, ProductStatus, PurchaseType } from '@/lib/types';
-import { PRODUCT_STATUS_LABELS } from '@/lib/types';
+import { PRODUCT_STATUS_LABELS, PURCHASE_TYPE_LABELS } from '@/lib/types';
 
 interface ProductFormProps {
   mode: 'create' | 'edit';
@@ -189,7 +189,7 @@ export function ProductForm({ mode, initialProduct }: ProductFormProps): JSX.Ele
             className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500"
           >
             {TIPOS.map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>{PURCHASE_TYPE_LABELS[t]}</option>
             ))}
           </select>
         </div>

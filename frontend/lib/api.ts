@@ -19,6 +19,21 @@ export const api: AxiosInstance = axios.create({
   timeout: 15000,
 });
 
+/** Origen del backend (sin el prefijo /api), para resolver URLs relativas de archivos. */
+export const API_ORIGIN: string = new URL(API_URL).origin;
+
+/**
+ * Convierte una URL de adjunto en una URL absoluta usable en <img>/<a>.
+ * - Supabase ya devuelve URLs absolutas (firmadas): se usan tal cual.
+ * - El provider local devuelve URLs relativas (/uploads/...): hay que
+ *   prefijarlas con el ORIGEN del backend; si no, el navegador las resuelve
+ *   contra el origen del frontend y dan 404 (imagen rota).
+ */
+export function resolveFileUrl(url: string): string {
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${API_ORIGIN}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
 let isRefreshing = false;
 let refreshSubscribers: Array<() => void> = [];
 

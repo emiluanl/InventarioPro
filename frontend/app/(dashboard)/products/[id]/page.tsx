@@ -9,7 +9,7 @@ import { ProductImages } from '@/components/products/product-images';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
 import { formatCurrency, formatDate } from '@/lib/format';
-import { PRODUCT_STATUS_LABELS } from '@/lib/types';
+import { PRODUCT_STATUS_LABELS, PURCHASE_TYPE_LABELS } from '@/lib/types';
 
 // Next 14 pasa `params` como objeto plano (el patrón Promise + use() es de
 // Next 15 y React 19; aquí React 18 no exporta `use` en runtime).
@@ -102,7 +102,7 @@ export default function ProductDetailPage({ params }: PageProps): JSX.Element {
           <Row label="Categoría" value={product.categoria?.nombre ?? '—'} />
           <Row label="Estado" value={PRODUCT_STATUS_LABELS[product.estado]} />
           <Row label="Fecha de compra" value={formatDate(product.fecha_compra)} />
-          <Row label="Tipo de compra" value={product.tipo_compra} />
+          <Row label="Tipo de compra" value={PURCHASE_TYPE_LABELS[product.tipo_compra]} />
           <Row label="Lugar de compra" value={product.lugar_compra ?? '—'} />
           <Row label="Método de pago" value={product.metodo_pago ?? '—'} />
           <Row label="Número de serie" value={product.numero_serie ?? '—'} />

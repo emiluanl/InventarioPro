@@ -90,6 +90,22 @@ export class StorageService {
   async delete(key: string): Promise<void> {
     return this.provider.delete(key);
   }
+
+  /**
+   * Deriva la key interna de almacenamiento a partir de la URL pública de un
+   * adjunto, para poder borrarlo del storage:
+   *   - local:    /uploads/<key>                        -> <key>
+   *   - supabase: .../object/sign/<bucket>/<key>?token= -> <key>
+   * Si no se reconoce el formato, devuelve la URL tal cual (último recurso).
+   */
+  keyFromUrl(url: string): string {
+    if (url.startsWith('/uploads/')) {
+      return url.slice('/uploads/'.length);
+    }
+    const match = url.match(/\/object\/sign\/[^/]+\/(.+?)(?:\?|$)/);
+    if (match) return decodeURIComponent(match[1]);
+    return url;
+  }
 }
 
 // =============================================================================
@@ -108,7 +124,9 @@ class LocalStorageProvider implements IStorageProvider {
 
   async upload(folder: string, file: FileInput): Promise<UploadResult> {
     const ext = path.extname(file.original_name);
-    const filename = `${folder}-${Date.now()}-${randomBytes(8).toString('hex')}${ext}`;
+    // Ojo: el nombre NO debe incluir `folder` — el path completo ya lo añade
+    // con path.join (si no, la carpeta queda duplicada: products/<id>/products/...).
+    const filename = `${Date.now()}-${randomBytes(8).toString('hex')}${ext}`;
     const fullPath = path.join(this.uploadDir, folder, filename);
 
     await fs.mkdir(path.dirname(fullPath), { recursive: true });

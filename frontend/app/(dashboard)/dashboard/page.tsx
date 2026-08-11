@@ -10,6 +10,7 @@ import { FilterBar } from '@/components/products/filter-bar';
 import { EmptyState } from '@/components/products/empty-state';
 import { CsvActions } from '@/components/products/csv-actions';
 import type { Product, ProductsFilters } from '@/lib/types';
+import { PRODUCT_STATUS_LABELS } from '@/lib/types';
 import { formatCurrency } from '@/lib/format';
 
 function DashboardInner(): JSX.Element {
@@ -140,7 +141,7 @@ function ProductsTable({
                 {formatCurrency(p.precio, p.moneda)}
               </td>
               <td className="px-4 py-2 text-gray-700">{p.tiempo_posesion}</td>
-              <td className="px-4 py-2 text-gray-700">{p.estado}</td>
+              <td className="px-4 py-2 text-gray-700">{PRODUCT_STATUS_LABELS[p.estado]}</td>
               <td className="px-4 py-2 text-right">
                 <button
                   type="button"

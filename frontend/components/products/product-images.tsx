@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { api, extractErrorMessage } from '@/lib/api';
+import { api, extractErrorMessage, resolveFileUrl } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
@@ -120,9 +120,9 @@ export function ProductImages({ productId, attachments }: ProductImagesProps): J
                   'group relative overflow-hidden rounded-md border border-gray-200',
                 )}
               >
-                <a href={a.url} target="_blank" rel="noopener noreferrer">
+                <a href={resolveFileUrl(a.url)} target="_blank" rel="noopener noreferrer">
                   <img
-                    src={a.url}
+                    src={resolveFileUrl(a.url)}
                     alt={a.nombre ?? 'foto'}
                     className="aspect-square w-full object-cover transition group-hover:scale-105"
                   />
@@ -152,12 +152,12 @@ export function ProductImages({ productId, attachments }: ProductImagesProps): J
               >
                 <div className="min-w-0">
                   <a
-                    href={a.url}
+                    href={resolveFileUrl(a.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="truncate font-medium text-gray-900 hover:text-accent-700"
                   >
-                    {a.nombre ?? a.url.split('/').pop() ?? 'archivo'}
+                    {a.nombre ?? resolveFileUrl(a.url).split('/').pop() ?? 'archivo'}
                   </a>
                   <p className="text-xs text-gray-500">{a.tipo}</p>
                 </div>

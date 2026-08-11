@@ -313,22 +313,30 @@ code** (útil para scripts o monitores que lean `docker logs`).
 ### Alarma del backend (probe de la API)
 
 El stack incluye un contenedor **`monitor`** que comprueba la API cada 5
-minutos contra `/api/auth/me` (por defecto por la red interna del compose) y
-alerta si deja de responder:
+minutos en dos niveles y alerta si algo falla:
 
-- **Semántica tipo UptimeRobot**: cualquier respuesta HTTP 2xx-4xx = API viva
-  (sin sesión, `/api/auth/me` responde 401: "está arriba"); 5xx, timeout o
-  error de conexión = caída.
+- **Liveness** (`API_CHECK_URL`, `/api/auth/me` por defecto): confirma que el
+  proceso responde. Cualquier 2xx-4xx vale (sin sesión devuelve 401: "está
+  arriba").
+- **Readiness** (`READINESS_URL`, `/api/health` por defecto): detecta el caso
+  de **backend arriba pero degradado**. `/api/health` consulta la base de
+  datos (`SELECT 1`) y Redis, y responde **503** si alguno no está operativo
+  — p. ej. la BD caída: el contenedor sigue corriendo pero el servicio no
+  sirve bien, y el monitor lo declara DOWN.
+- **Semántica tipo UptimeRobot**: 2xx-4xx = vivo; 5xx, timeout o error de
+  conexión = caído.
 - **Sin falsos positivos**: reintenta `CHECK_RETRIES` veces (3) con
-  `RETRY_DELAY_SEC` segundos (10) antes de declarar DOWN.
-- **Aviso**: cuando la API responde hace `GET <MONITOR_PING_URL>` y si queda
-  caída `GET <MONITOR_PING_URL>/fail` (misma URL de heartbeat que los
+  `RETRY_DELAY_SEC` segundos (10) antes de declarar DOWN; liveness y
+  readiness deben pasar en el mismo intento.
+- **Aviso**: cuando todo responde hace `GET <MONITOR_PING_URL>` y si queda
+  caído `GET <MONITOR_PING_URL>/fail` (misma URL de heartbeat que los
   backups). Sin `MONITOR_PING_URL`, la alarma queda en logs y exit codes.
 
 Variables en `.env.prod` (opcionales, hay defaults):
 
 ```bash
 # API_CHECK_URL=http://backend:3001/api/auth/me
+# READINESS_URL=http://backend:3001/api/health
 # CHECK_SCHEDULE="*/5 * * * *"
 # CHECK_RETRIES=3
 # RETRY_DELAY_SEC=10

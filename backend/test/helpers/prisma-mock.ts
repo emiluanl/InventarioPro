@@ -10,6 +10,7 @@ export interface MockPrisma {
   $connect: jest.Mock;
   $disconnect: jest.Mock;
   $transaction: jest.Mock;
+  $queryRaw: jest.Mock;
   user: {
     findUnique: jest.Mock;
     findFirst: jest.Mock;
@@ -54,6 +55,7 @@ export function buildPrismaMock(): MockPrisma {
     $connect: jest.fn(),
     $disconnect: jest.fn(),
     $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+    $queryRaw: jest.fn().mockResolvedValue([{ ok: 1 }]),
     user: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),

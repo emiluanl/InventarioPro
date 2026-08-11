@@ -93,8 +93,12 @@ services:
     depends_on:
       - backend
     environment:
-      # Por defecto comprueba el backend por la red interna del compose.
+      # Por defecto comprueba el backend por la red interna del compose:
+      #   liveness  (API_CHECK_URL) -> /api/auth/me responde (proceso vivo).
+      #   readiness (READINESS_URL) -> /api/health con chequeo de BD/Redis
+      #     (503 = backend arriba pero degradado; detecta 5xx y BD caída).
       API_CHECK_URL: ${API_CHECK_URL:-http://backend:3001/api/auth/me}
+      READINESS_URL: ${READINESS_URL:-http://backend:3001/api/health}
       CHECK_SCHEDULE: ${CHECK_SCHEDULE:-*/5 * * * *}
       CHECK_RETRIES: ${CHECK_RETRIES:-3}
       RETRY_DELAY_SEC: ${RETRY_DELAY_SEC:-10}

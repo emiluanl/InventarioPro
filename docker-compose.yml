@@ -64,10 +64,10 @@ services:
       JWT_REFRESH_TTL: 7d
       STORAGE_PROVIDER: local
       LOCAL_UPLOAD_DIR: /app/uploads
-      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-replace-me}
-      MINIMAX_API_BASE: https://api.MiniMax.com/v1
-      MINIMAX_MODEL: MiniMax-M3
-      MINIMAX_TIMEOUT_MS: 10000
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-replace-with-your-api-key}
+      DEEPSEEK_API_BASE: https://api.deepseek.com/v1
+      DEEPSEEK_MODEL: deepseek-chat
+      DEEPSEEK_TIMEOUT_MS: 10000
     ports:
       - '3001:3001'
     volumes:

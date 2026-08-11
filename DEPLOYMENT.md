@@ -66,11 +66,11 @@ SUPABASE_URL=https://xxxxx.supabase.co
 SUPABASE_SERVICE_KEY=tu-service-key
 SUPABASE_BUCKET=inventariopro
 
-# IA (MiniMax M3)
-MINIMAX_API_KEY=tu-clave-MiniMax
-MINIMAX_API_BASE=https://api.MiniMax.com/v1
-MINIMAX_MODEL=MiniMax-M3
-MINIMAX_TIMEOUT_MS=10000
+# IA (DeepSeek, compatible con OpenAI). Sin key el chat usa un fallback amable.
+DEEPSEEK_API_KEY=tu-clave-DeepSeek
+DEEPSEEK_API_BASE=https://api.deepseek.com/v1
+DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_TIMEOUT_MS=10000
 
 # Web Push (notificaciones fuera de la app) - opcional
 # Genera las claves una sola vez con:
@@ -501,7 +501,7 @@ docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
 | Migración falla | Revisar `DATABASE_URL` y que Postgres esté sano |
 | Cookies no se setean | Verificar que `NODE_ENV=production` y HTTPS activo |
 | CORS rechaza el frontend | Confirmar que `CORS_ORIGIN` es EXACTO al dominio del frontend |
-| IA no responde | Verificar `MINIMAX_API_KEY` y que `MINIMAX_API_BASE` esté correcto |
+| IA no responde | Verificar `DEEPSEEK_API_KEY` y que `DEEPSEEK_API_BASE` esté correcto |
 | Storage falla | Comprobar credenciales de Supabase y nombre del bucket |
 
 ## 11. Costos estimados (hosting mínimo)
@@ -521,7 +521,7 @@ docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
 
 - `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`
 - `POSTGRES_PASSWORD`, `REDIS_PASSWORD`
-- `MINIMAX_API_KEY`
+- `DEEPSEEK_API_KEY`
 - `SUPABASE_SERVICE_KEY`
 - `SMTP_PASSWORD`
 

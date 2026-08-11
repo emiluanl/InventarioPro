@@ -55,6 +55,16 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?required}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
       POSTGRES_DB: ${POSTGRES_DB:-inventariopro}
+      # BD de desarrollo (la que usa la app en la práctica): se vuelca a
+      # inventariopro-dev-*.dump junto al dump de producción. Se accede vía
+      # host.docker.internal porque el postgres dev publica en el host:5432.
+      POSTGRES_HOST_DEV: ${POSTGRES_HOST_DEV:-host.docker.internal}
+      POSTGRES_DEV_PORT: ${POSTGRES_DEV_PORT:-5432}
+      POSTGRES_DEV_USER: ${POSTGRES_DEV_USER:-inventariopro}
+      POSTGRES_DEV_PASSWORD: ${POSTGRES_DEV_PASSWORD:-inventariopro}
+      POSTGRES_DEV_DB: ${POSTGRES_DEV_DB:-inventariopro}
+      # Fotos/recibos/facturas del host: se empaquetan en uploads-*.tar.gz.
+      UPLOADS_SRC: /uploads-src
       # Cron estándar: 03:00 UTC (o TZ) todos los días. Sobrescribible con BACKUP_SCHEDULE.
       BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 3 * * *}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
@@ -73,6 +83,8 @@ services:
       # actúa como fallback (config antigua de un único check compartido).
       BACKUP_PING_URL: ${BACKUP_PING_URL:-}
       MONITOR_PING_URL: ${MONITOR_PING_URL:-}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     volumes:
       # Mismo directorio del host que monta postgres: los dumps son accesibles
       # desde la máquina y por el contenedor de restauración.
@@ -80,6 +92,8 @@ services:
       # Config de rclone (rclone.conf con tus remotes). El directorio existe
       # siempre (contiene el example); sin rclone.conf la copia remota se omite.
       - ./rclone:/root/.config/rclone
+      # Fotos/recibos/facturas del host (lectura): entran en el tar de uploads.
+      - ./backend/uploads:/uploads-src:ro
     healthcheck:
       test: ['CMD-SHELL', "[ -f /etc/crontabs/root ] && { ! ls /backups/inventariopro-*.dump >/dev/null 2>&1 || /usr/local/bin/check >/dev/null 2>&1; }"]
       interval: 30s
@@ -151,10 +165,12 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
       SUPABASE_BUCKET: ${SUPABASE_BUCKET:-inventariopro}
-      MINIMAX_API_KEY: ${MINIMAX_API_KEY:?required}
-      MINIMAX_API_BASE: ${MINIMAX_API_BASE:-https://api.MiniMax.com/v1}
-      MINIMAX_MODEL: ${MINIMAX_MODEL:-MiniMax-M3}
-      MINIMAX_TIMEOUT_MS: ${MINIMAX_TIMEOUT_MS:-10000}
+      # Asistente de IA (DeepSeek, API compatible con OpenAI). Sin key, el chat
+      # responde con un fallback amable (no rompe el deploy).
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_API_BASE: ${DEEPSEEK_API_BASE:-https://api.deepseek.com/v1}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      DEEPSEEK_TIMEOUT_MS: ${DEEPSEEK_TIMEOUT_MS:-10000}
       # Web Push (VAPID): sin claves el push queda deshabilitado (no rompe el deploy).
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}

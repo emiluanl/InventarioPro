@@ -1,9 +1,10 @@
 // =============================================================================
-// Tipos para la integración con la API de MiniMax M3
+// Tipos para la integración con la API de DeepSeek (chat completions)
 // =============================================================================
 // Usamos el formato compatible con OpenAI/Anthropic/Qwen (chat completions
-// + function calling). Si la API real difiere, solo hay que ajustar
-// MiniMaxClient: el resto del código habla estos tipos.
+// + function calling). DeepSeek expone exactamente este formato. Si la API
+// real difiere, solo hay que ajustar DeepSeekClient: el resto del código
+// habla estos tipos.
 // =============================================================================
 
 export interface ChatMessage {

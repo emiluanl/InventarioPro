@@ -33,6 +33,15 @@ POSTGRES_DB="${POSTGRES_DB:-inventariopro}"
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-14}"
 RCLONE_REMOTE="${RCLONE_REMOTE:-}"
+# BD de desarrollo (opcional): la app en uso real apunta aquí (host:5432).
+# Si POSTGRES_HOST_DEV está definido se vuelca también a inventariopro-dev-*.dump.
+POSTGRES_HOST_DEV="${POSTGRES_HOST_DEV:-}"
+POSTGRES_DEV_PORT="${POSTGRES_DEV_PORT:-5432}"
+POSTGRES_DEV_USER="${POSTGRES_DEV_USER:-inventariopro}"
+POSTGRES_DEV_PASSWORD="${POSTGRES_DEV_PASSWORD:-inventariopro}"
+POSTGRES_DEV_DB="${POSTGRES_DEV_DB:-inventariopro}"
+# Uploads (opcional): si UPLOADS_SRC existe, se empaquetan en uploads-*.tar.gz.
+UPLOADS_SRC="${UPLOADS_SRC:-}"
 # BACKUP_PING_URL es el check diario de backups; MONITOR_PING_URL queda solo
 # como fallback (config antigua de un único check compartido).
 BACKUP_PING_URL="${BACKUP_PING_URL:-${MONITOR_PING_URL:-}}"
@@ -79,8 +88,40 @@ else
   exit 1
 fi
 
-# Retención local: borra dumps más antiguos que BACKUP_KEEP_DAYS.
-DELETED="$(find "${BACKUP_DIR}" -name 'inventariopro-*.dump' -mtime +"${BACKUP_KEEP_DAYS}" -delete -print | wc -l)"
+# ---------------------------------------------------------------------------
+# Vuelco de la BD de desarrollo (la que usa la app en la práctica).
+# ---------------------------------------------------------------------------
+if [ -n "${POSTGRES_HOST_DEV}" ]; then
+  export PGPASSWORD="${POSTGRES_DEV_PASSWORD}"
+  DEV_FILE="${BACKUP_DIR}/inventariopro-dev-${TS}.dump"
+  echo "[backup] pg_dump -Fc ${POSTGRES_DEV_DB}@${POSTGRES_HOST_DEV}:${POSTGRES_DEV_PORT} (BD dev) ..."
+  if pg_dump -Fc -h "${POSTGRES_HOST_DEV}" -p "${POSTGRES_DEV_PORT}" -U "${POSTGRES_DEV_USER}" -d "${POSTGRES_DEV_DB}" -f "${DEV_FILE}"; then
+    echo "[backup] OK dev: ${DEV_FILE} ($(du -h "${DEV_FILE}" | cut -f1))"
+  else
+    echo "[backup] ERROR: pg_dump de la BD dev falló; no se guardó ningún archivo" >&2
+    rm -f "${DEV_FILE}"
+    exit 1
+  fi
+  export PGPASSWORD="${POSTGRES_PASSWORD}"
+fi
+
+# ---------------------------------------------------------------------------
+# Uploads (fotos, recibos, facturas) - empaquetado en tar.gz.
+# ---------------------------------------------------------------------------
+if [ -n "${UPLOADS_SRC}" ] && [ -d "${UPLOADS_SRC}" ]; then
+  UP_FILE="${BACKUP_DIR}/uploads-${TS}.tar.gz"
+  echo "[backup] tar czf ${UP_FILE} (desde ${UPLOADS_SRC}) ..."
+  if tar czf "${UP_FILE}" -C "$(dirname "${UPLOADS_SRC}")" "$(basename "${UPLOADS_SRC}")"; then
+    echo "[backup] OK uploads: ${UP_FILE} ($(du -h "${UP_FILE}" | cut -f1))"
+  else
+    echo "[backup] ERROR: tar de uploads falló" >&2
+    rm -f "${UP_FILE}"
+    exit 1
+  fi
+fi
+
+# Retención local: borra dumps/tarballs más antiguos que BACKUP_KEEP_DAYS.
+DELETED="$(find "${BACKUP_DIR}" \( -name 'inventariopro-*.dump' -o -name 'uploads-*.tar.gz' \) -mtime +"${BACKUP_KEEP_DAYS}" -delete -print | wc -l)"
 echo "[backup] retención local: ${BACKUP_KEEP_DAYS} días (eliminados ${DELETED} antiguos)"
 
 # ---------------------------------------------------------------------------
@@ -103,16 +144,16 @@ if [ ! -f "${RCLONE_CONFIG}" ]; then
 fi
 
 echo "[backup] rclone copy ${BACKUP_DIR} -> ${RCLONE_REMOTE} (retención remota: ${BACKUP_KEEP_DAYS} días)"
-if rclone copy "${BACKUP_DIR}" "${RCLONE_REMOTE}" --include 'inventariopro-*.dump' --config "${RCLONE_CONFIG}"; then
+if rclone copy "${BACKUP_DIR}" "${RCLONE_REMOTE}" --include 'inventariopro-*.dump' --include 'uploads-*.tar.gz' --config "${RCLONE_CONFIG}"; then
   echo "[backup] copia remota OK"
 else
   echo "[backup] ERROR: rclone copy falló; el backup local sigue intacto en ${BACKUP_DIR}" >&2
   exit 1
 fi
 
-# Retención remota: borra en el remote los dumps más antiguos que N días.
+# Retención remota: borra en el remote los dumps/tarballs más antiguos que N días.
 # (--min-age: solo archivos más viejos que la edad indicada.)
-if rclone delete "${RCLONE_REMOTE}" --min-age "${BACKUP_KEEP_DAYS}d" --include 'inventariopro-*.dump' --config "${RCLONE_CONFIG}" >/dev/null 2>&1; then
+if rclone delete "${RCLONE_REMOTE}" --min-age "${BACKUP_KEEP_DAYS}d" --include 'inventariopro-*.dump' --include 'uploads-*.tar.gz' --config "${RCLONE_CONFIG}" >/dev/null 2>&1; then
   echo "[backup] retención remota: ${BACKUP_KEEP_DAYS} días aplicada en ${RCLONE_REMOTE}"
 else
   echo "[backup] aviso: no se pudo aplicar retención remota en ${RCLONE_REMOTE} — revisa los logs" >&2

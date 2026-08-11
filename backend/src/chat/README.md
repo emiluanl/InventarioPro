@@ -1,4 +1,4 @@
-# Fase 5 — Chat con IA (MiniMax M3)
+# Fase 5 — Chat con IA (DeepSeek)
 
 ## Endpoints
 
@@ -33,7 +33,7 @@ Todos en `/api/chat/*`.
 
 1. El usuario envía un mensaje.
 2. El backend guarda el mensaje y construye el historial (últimos 50 mensajes + system prompt).
-3. Llama a la API de MiniMax con el historial + las 4 tools definidas.
+3. Llama a la API de DeepSeek con el historial + las 4 tools definidas.
 4. Si la IA decide invocar una tool:
    - El backend la ejecuta contra la base de datos del propio usuario.
    - Devuelve el resultado a la IA.
@@ -61,7 +61,7 @@ Crea un producto a partir de parámetros extraídos. El usuario puede decir "aca
 |---|---|
 | API key no configurada | El cliente lanza `ServiceUnavailableException` → frontend recibe mensaje de fallback |
 | Timeout (>10s) | Reintento automático una vez; si vuelve a fallar, mensaje amable |
-| 4xx de MiniMax | Sin reintento (payload malo); fallback |
+| 4xx de DeepSeek | Sin reintento (payload malo); fallback |
 | 5xx / red transitoria | Un reintento con backoff; si falla, fallback |
 | Loop infinito (>5 rondas) | Mensaje de fallback |
 
@@ -70,10 +70,10 @@ Crea un producto a partir de parámetros extraídos. El usuario puede decir "aca
 ## Variables de entorno relevantes
 
 ```env
-MINIMAX_API_KEY=tu-clave-real
-MINIMAX_API_BASE=https://api.MiniMax.com/v1
-MINIMAX_MODEL=MiniMax-M3
-MINIMAX_TIMEOUT_MS=10000
+DEEPSEEK_API_KEY=tu-clave-real
+DEEPSEEK_API_BASE=https://api.deepseek.com/v1
+DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_TIMEOUT_MS=10000
 ```
 
 ## Seguridad y privacidad
@@ -85,13 +85,13 @@ MINIMAX_TIMEOUT_MS=10000
 
 ## Costos y modelo
 
-- Para producción: considera usar un modelo intermedio de la familia MiniMax en el chat diario, y reservar el modelo grande (M3) para tareas que justifiquen el costo.
+- Para producción: `deepseek-chat` es el modelo generalista recomendado para el chat diario (y `deepseek-reasoner` para tareas de razonamiento que lo justifiquen).
 - Antes de producción: confirma el pricing vigente en la documentación oficial.
 
 ## Cómo probarlo
 
 ```bash
-# 1. Configura MINIMAX_API_KEY en backend/.env
+# 1. Configura DEEPSEEK_API_KEY en backend/.env
 
 # 2. Login (necesitas un token)
 TOKEN=$(curl -s -X POST http://localhost:3001/api/auth/login \

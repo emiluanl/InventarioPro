@@ -8,7 +8,7 @@
 // Schema en formato JSON-Schema (compatible con OpenAI/Qwen/Anthropic).
 // =============================================================================
 
-import { ChatTool } from '../MiniMax/chat.types';
+import { ChatTool } from '../DeepSeek/chat.types';
 
 export const CHAT_TOOLS: ChatTool[] = [
   {

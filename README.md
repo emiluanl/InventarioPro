@@ -26,7 +26,7 @@ Pensada como una **herramienta de gestión de posesiones personales** (no como u
 | **Cache, sesiones, rate limiting** | Redis 7 |
 | **Almacenamiento de archivos** | Local (dev) / Supabase Storage (prod) |
 | **Autenticación** | JWT propio (access 15 min + refresh 7 días, cookies httpOnly) |
-| **IA conversacional** | API de MiniMax M3 (chat completions + function calling) |
+| **IA conversacional** | API de DeepSeek (chat completions + function calling, compatible con OpenAI) |
 | **Contenedores** | Docker + docker-compose |
 | **HTTPS en producción** | Caddy con Let's Encrypt automático |
 | **CI** | GitHub Actions (lint + type-check + tests + build) |
@@ -40,7 +40,7 @@ InventarioPro/
 │   │   ├── auth/                     # Login, register, refresh, logout, forgot/reset
 │   │   ├── products/                 # CRUD + filtros + tiempo de posesión
 │   │   ├── categories/               # Categorías del sistema + personalizadas
-│   │   ├── chat/                     # MiniMax M3 + 4 herramientas (function calling)
+│   │   ├── chat/                     # DeepSeek + 4 herramientas (function calling)
 │   │   ├── common/                   # Cookies, Storage, Redis, ValidationPipe, Audit
 │   │   └── prisma/                   # Cliente Prisma
 │   ├── prisma/schema.prisma          # Modelo de datos
@@ -71,7 +71,7 @@ InventarioPro/
 ### Requisitos
 - Docker + Docker Compose
 - Node.js 20+ (solo si quieres correr sin Docker)
-- Una API key de MiniMax M3
+- Una API key de DeepSeek (opcional; sin ella el chat responde con un fallback amable)
 
 ### Con Docker (recomendado)
 
@@ -83,7 +83,7 @@ cd InventarioPro
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 
-# 3. Editar backend/.env: poner secretos JWT y MINIMAX_API_KEY
+# 3. Editar backend/.env: poner secretos JWT y DEEPSEEK_API_KEY
 #    (en dev puedes dejar los valores por defecto que ya están en .env.example)
 
 # 4. Levantar todo

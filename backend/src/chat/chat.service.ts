@@ -1,5 +1,5 @@
 // =============================================================================
-// ChatService - orquesta MiniMax + function calling + persistencia
+// ChatService - orquesta DeepSeek + function calling + persistencia
 // =============================================================================
 // Flujo:
 //   1) Carga o crea la conversación.
@@ -15,10 +15,10 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ChatRole } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { MiniMaxClient } from './MiniMax/MiniMax.client';
+import { DeepSeekClient } from './DeepSeek/DeepSeek.client';
 import { ChatToolExecutor } from './tools/tool-executor';
 import { CHAT_TOOLS, SYSTEM_PROMPT } from './tools/chat-tools';
-import { ChatMessage as ApiChatMessage, ChatCompletionRequest } from './MiniMax/chat.types';
+import { ChatMessage as ApiChatMessage, ChatCompletionRequest } from './DeepSeek/chat.types';
 
 const MAX_TOOL_ROUNDS = 5;
 const FALLBACK_MESSAGE =
@@ -30,7 +30,7 @@ export class ChatService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly MiniMax: MiniMaxClient,
+    private readonly deepSeek: DeepSeekClient,
     private readonly executor: ChatToolExecutor,
   ) {}
 
@@ -149,14 +149,14 @@ export class ChatService {
       let response;
       try {
         const request: ChatCompletionRequest = {
-          model: this.MiniMax.getModel(),
+          model: this.deepSeek.getModel(),
           messages: currentMessages,
           tools: CHAT_TOOLS,
           tool_choice: 'auto',
           temperature: 0.7,
           max_tokens: 1000,
         };
-        response = await this.MiniMax.chatCompletion(request);
+        response = await this.deepSeek.chatCompletion(request);
       } catch (err) {
         // Fallback amable: nunca devolvemos el error crudo.
         this.logger.warn(`Error de IA: ${(err as Error).message}`);

@@ -68,6 +68,10 @@ services:
       # (26 h por defecto) y heartbeat opcional a un monitor externo.
       WATCHDOG_SCHEDULE: ${WATCHDOG_SCHEDULE:-7 * * * *}
       STALE_AFTER_MIN: ${STALE_AFTER_MIN:-1560}
+      # Checks de healthchecks.io. El backup usa BACKUP_PING_URL (check diario
+      # de 24 h + gracia 2 h) con prioridad; si está vacío, MONITOR_PING_URL
+      # actúa como fallback (config antigua de un único check compartido).
+      BACKUP_PING_URL: ${BACKUP_PING_URL:-}
       MONITOR_PING_URL: ${MONITOR_PING_URL:-}
     volumes:
       # Mismo directorio del host que monta postgres: los dumps son accesibles
@@ -102,7 +106,8 @@ services:
       CHECK_SCHEDULE: ${CHECK_SCHEDULE:-*/5 * * * *}
       CHECK_RETRIES: ${CHECK_RETRIES:-3}
       RETRY_DELAY_SEC: ${RETRY_DELAY_SEC:-10}
-      # Misma URL de heartbeat que el contenedor de backups (healthchecks.io).
+      # Check de la API en healthchecks.io (periodo 5 min): el probe pinge la
+      # URL en cada verificación y <url>/fail si la API queda caída.
       MONITOR_PING_URL: ${MONITOR_PING_URL:-}
       TZ: ${TZ:-UTC}
     healthcheck:

@@ -17,10 +17,11 @@
 #   desde ./rclone del host). Ver DEPLOYMENT.md §7.
 #
 # Heartbeat de monitoreo (opcional):
-#   MONITOR_PING_URL - URL tipo healthchecks.io. Tras cada ejecución se hace
-#     GET a la URL si el backup terminó bien y a "<url>/fail" si falló. Es el
-#     latido de "los backups están funcionando"; el watchdog (check.sh) cubre
-#     el caso de "el último backup es demasiado viejo".
+#   BACKUP_PING_URL - URL tipo healthchecks.io del check de BACKUPS (periodo
+#     diario, p. ej. 24 h + 2 h de gracia). Tras cada ejecución se hace GET a la
+#     URL si el backup terminó bien y a "<url>/fail" si falló. El watchdog
+#     (check.sh) usa la misma URL. Si solo está MONITOR_PING_URL (compatibilidad
+#     con la config antigua de un único check), se usa esa.
 # =============================================================================
 set -eu
 
@@ -32,7 +33,9 @@ POSTGRES_DB="${POSTGRES_DB:-inventariopro}"
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-14}"
 RCLONE_REMOTE="${RCLONE_REMOTE:-}"
-MONITOR_PING_URL="${MONITOR_PING_URL:-}"
+# BACKUP_PING_URL es el check diario de backups; MONITOR_PING_URL queda solo
+# como fallback (config antigua de un único check compartido).
+BACKUP_PING_URL="${BACKUP_PING_URL:-${MONITOR_PING_URL:-}}"
 
 export PGPASSWORD="${POSTGRES_PASSWORD}"
 
@@ -40,7 +43,7 @@ export PGPASSWORD="${POSTGRES_PASSWORD}"
 # Ping de monitoreo según el estado de salida del backup (best-effort).
 # ---------------------------------------------------------------------------
 ping() {
-  [ -z "${MONITOR_PING_URL}" ] && return 0
+  [ -z "${BACKUP_PING_URL}" ] && return 0
   URL="$1"
   if command -v wget >/dev/null 2>&1; then
     wget -q -O /dev/null --timeout=10 "$URL" 2>/dev/null || true
@@ -52,11 +55,11 @@ ping() {
 report_status() {
   rc="$?"
   if [ "${rc}" -eq 0 ]; then
-    echo "[backup] heartbeat OK → ${MONITOR_PING_URL:-<sin monitor>}"
-    ping "${MONITOR_PING_URL}"
+    echo "[backup] heartbeat OK → ${BACKUP_PING_URL:-<sin monitor>}"
+    ping "${BACKUP_PING_URL}"
   else
-    echo "[backup] heartbeat FAIL → ${MONITOR_PING_URL:-<sin monitor>} (código ${rc})"
-    ping "${MONITOR_PING_URL}/fail"
+    echo "[backup] heartbeat FAIL → ${BACKUP_PING_URL:-<sin monitor>} (código ${rc})"
+    ping "${BACKUP_PING_URL}/fail"
   fi
   exit "${rc}"
 }

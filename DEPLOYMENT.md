@@ -168,9 +168,12 @@ docker compose -f docker-compose.prod.yml exec backup \
   /usr/local/bin/restore /backups/inventariopro-YYYYMMDD-HHMMSS.dump
 ```
 
-> ⚠️ `restore` usa `--clean --if-exists`: **reemplaza** el contenido actual de la
-> base de datos por el del dump. Hazlo solo si estás seguro de querer volver a
-> ese estado (p. ej. tras un desastre o un error de migración).
+> ⚠️ `restore` usa `--clean --if-exists --no-owner`: **reemplaza** el contenido
+> actual de la base de datos por el del dump. Hazlo solo si estás seguro de
+> querer volver a ese estado (p. ej. tras un desastre o un error de migración).
+> `--no-owner` deja los objetos a nombre del usuario con el que se restaura:
+> en producción es idéntico al resultado anterior, y en una BD de recuperación
+> (donde el rol original del dump no existe) evita errores de `ALTER OWNER`.
 
 ### Copia remota de los dumps (rclone)
 
@@ -216,7 +219,8 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod \
 
 ```bash
 # RCLONE_REMOTE=<remote>:<carpeta>  (el nombre del remote y la ruta en él)
-RCLONE_REMOTE=s3backup:inventariopro
+# Remote real activo en este despliegue (Backblaze B2):
+RCLONE_REMOTE=b2backup:InventarioPro
 ```
 
 #### 3. Reiniciar el contenedor y verificar
@@ -233,8 +237,9 @@ docker compose -p inventariopro-prod -f docker-compose.prod.yml \
   --env-file .env.prod logs backup | grep -E 'copia|retención remota'
 
 # Confirmar los archivos en el destino (dentro del contenedor)
+# (b2backup es el remote real configurado en ./rclone/rclone.conf)
 docker compose -p inventariopro-prod -f docker-compose.prod.yml \
-  --env-file .env.prod exec backup rclone ls s3backup:inventariopro
+  --env-file .env.prod exec backup rclone ls b2backup:InventarioPro
 ```
 
 A partir de ahí, cada ejecución del cron (03:00) hace: `pg_dump` → retención
@@ -244,10 +249,10 @@ local → `rclone copy` al destino → retención remota (`rclone delete
 #### 4. Restaurar desde la copia remota
 
 ```bash
-# 1) Traer el dump al servidor
+# 1) Traer el dump al servidor (remote real: b2backup:InventarioPro)
 cd backups && docker compose -p inventariopro-prod -f docker-compose.prod.yml \
   --env-file .env.prod run --rm backup \
-  rclone copy s3backup:inventariopro/inventariopro-YYYYMMDD-HHMMSS.dump /backups/
+  rclone copy b2backup:InventarioPro/inventariopro-YYYYMMDD-HHMMSS.dump /backups/
 
 # 2) Restaurar (--clean: reemplaza el contenido actual de la BD)
 docker compose -p inventariopro-prod -f docker-compose.prod.yml \
@@ -257,6 +262,97 @@ docker compose -p inventariopro-prod -f docker-compose.prod.yml \
 
 > ⚠️ Igual que la restauración local: `restore` usa `--clean --if-exists` y
 > **reemplaza** la base actual por el contenido del dump.
+
+#### 5. Drill de restauración (verificación periódica)
+
+Los backups solo valen si se pueden restaurar. Al menos una vez al mes (o tras
+cambiar la configuración), verifica de punta a punta que un dump remoto
+restaura correctamente **sin tocar la BD de producción** — se restaura en una
+BD descartable en la red del stack:
+
+```bash
+# 1) BD temporal en la red del stack (el nombre de la red es <proyecto>_default)
+docker run -d --name restore-drill --network inventariopro-prod_default \
+  -e POSTGRES_USER=drill -e POSTGRES_PASSWORD=drillpass -e POSTGRES_DB=drilldb \
+  postgres:16-alpine
+
+# 2) Bajar el dump más reciente del remote dentro del contenedor de backup
+# (puedes listar los disponibles con: rclone ls b2backup:InventarioPro)
+docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+  --env-file .env.prod exec backup \
+  rclone copyto b2backup:InventarioPro/inventariopro-YYYYMMDD-HHMMSS.dump /tmp/drill.dump
+
+# 3) Restaurarlo en la BD temporal (debe terminar en "OK: base restaurada"
+#    sin errores de pg_restore)
+docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+  --env-file .env.prod exec -e POSTGRES_HOST=restore-drill -e POSTGRES_PORT=5432 \
+  -e POSTGRES_USER=drill -e POSTGRES_PASSWORD=drillpass -e POSTGRES_DB=drilldb \
+  backup /usr/local/bin/restore /tmp/drill.dump
+
+# 4) Verificar que el contenido coincide con producción (tablas y conteos)
+set -a; . ./.env.prod; set +a
+docker exec inventariopro-postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -t -c "SELECT count(*) FROM categories"
+docker exec restore-drill psql -U drill -d drilldb \
+  -t -c "SELECT count(*) FROM categories"
+# Repite el conteo para el resto de tablas (users, products, ...) y, si quieres
+# ir más fino, compara los datos con un diff: `psql ... -c 'SELECT ...'` y `diff`.
+
+# 5) Limpieza: eliminar la BD temporal y el dump de prueba
+docker rm -f restore-drill
+docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+  --env-file .env.prod exec backup sh -c 'rm -f /tmp/drill.dump'
+```
+
+> ✅ **Drill verificado el 2026-08-11** con el dump `inventariopro-20260811-150954.dump`
+> desde `b2backup:InventarioPro`: restauración limpia con `--no-owner` (el rol
+> original no existe en la BD temporal), 10 tablas restauradas, conteos
+> idénticos a producción (2 migraciones, 10 categorías) y datos de categorías
+> byte-idénticos.
+
+> 💡 El drill destapó y corrigió un fallo real: `restore` sin `--no-owner`
+> fallaba con `role "inventariopro" does not exist` en cualquier BD que no
+> tuviera el rol original. Ahora los objetos quedan a nombre del usuario con
+> el que se restaura (en producción, el mismo resultado que antes).
+
+#### 6. Rotar las credenciales de B2
+
+Si una application key viaja por un chat, un email o un ticket, conviene
+rotarla. La rotación es manual en el dashboard de Backblaze (la application
+key del bucket **no tiene permisos `writeKeys`**, y la master key no debe
+compartirse):
+
+1. **Backblaze → App Keys → Add a New Application Key**:
+   - Name: `inventariopro-backup`
+   - Allow access to Bucket(s): `InventarioPro` (solo ese)
+   - Capabilities: **Read & Write** (incluye `listFiles`, `readFiles`,
+     `writeFiles` y `deleteFiles` — `deleteFiles` la usa la retención remota)
+2. **Copy to Clipboard** y guarda el par (`keyID` + `applicationKey`) — solo
+   se muestra una vez. **No borres la key antigua todavía**: primero verifica
+   que la nueva funciona (paso 3) para no dejar backups sin copia remota.
+3. Actualiza `./rclone/rclone.conf` (gitignoreado, nunca se commitea) con el
+   par nuevo y verifica dentro del contenedor:
+
+   ```bash
+   docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+     --env-file .env.prod exec backup rclone lsd b2backup:
+   ```
+
+4. Ejecuta un backup real y confirma la subida al bucket:
+
+   ```bash
+   docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+     --env-file .env.prod exec backup /usr/local/bin/backup
+   # Espera "copia remota OK" y comprueba: rclone ls b2backup:InventarioPro
+   ```
+
+5. Ya con la nueva funcionando, borra la key antigua en **App Keys → Delete
+   Key**. Comprueba que dejó de funcionar (el comando del paso 3 con la key
+   vieja debe fallar con 401).
+
+> ⚠️ Las claves se muestran una sola vez al crearlas. Si pierdes el par nuevo
+> antes de usarlo, créalo de nuevo (otro keyID) en lugar de intentar
+> recuperarlo.
 
 ## 8. Monitoreo
 
@@ -275,24 +371,41 @@ El contenedor `backup` trae dos mecanismos integrados:
 
 #### Configurar el aviso
 
-1. Crea un **check en healthchecks.io** (gratis) con periodicidad "24 h" y
-   período de gracia de 2 h: `https://hc-ping.com/<check-id>`. También sirve
-   cualquier endpoint compatible con ese patrón (ntfy, scripts propios...).
-2. En `.env.prod`:
+> ✅ **Activo en este despliegue (2026-08-11)**: dos checks reales en
+> healthchecks.io, ambos verificados de punta a punta (heartbeat con wget/curl
+> → 200, simulacro de caída → DOWN + ping `/fail`).
 
-   ```bash
-   MONITOR_PING_URL=https://hc-ping.com/<check-id>
-   # Opcional:
-   # STALE_AFTER_MIN=1560
-   # WATCHDOG_SCHEDULE="7 * * * *"
-   ```
+Se usan **dos checks separados** (cada contenedor pinge el suyo):
 
-3. Aplica:
+1. **Check de la API** — `MONITOR_PING_URL`, **Period 5 min / Grace 10 min**.
+   Lo pinge el contenedor `monitor` en cada probe (cada 5 min) y `<url>/fail`
+   cuando la API queda caída o degradada.
+2. **Check de backups** — `BACKUP_PING_URL`, **Period 24 h (1 día) / Grace 2 h**.
+   Lo pinge el contenedor `backup`: heartbeat tras cada backup diario,
+   `<url>/fail` si el backup falla y, vía el watchdog, si el último dump se
+   queda viejo (más de `STALE_AFTER_MIN`). Si un día no corre ningún backup,
+   el check se pone DOWN a las 24 h + gracia → alerta sí o sí.
 
-   ```bash
-   docker compose -p inventariopro-prod -f docker-compose.prod.yml \
-     --env-file .env.prod up -d --build backup
-   ```
+Crea los dos checks en healthchecks.io (gratis), copia sus URLs y ponlas en
+`.env.prod`:
+
+```bash
+MONITOR_PING_URL=https://hc-ping.com/<check-api>
+BACKUP_PING_URL=https://hc-ping.com/<check-backups>
+# Opcional:
+# STALE_AFTER_MIN=1560
+# WATCHDOG_SCHEDULE="7 * * * *"
+```
+
+> 💡 Compatibilidad: si `BACKUP_PING_URL` está vacío, el contenedor de backup
+> usa `MONITOR_PING_URL` (config antigua de un único check).
+
+Aplica (recrea los contenedores que leen las variables):
+
+```bash
+docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+  --env-file .env.prod up -d --build backup monitor
+```
 
 #### Verificar la alarma
 

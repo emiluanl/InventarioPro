@@ -9,6 +9,8 @@
 # Usa --clean --if-exists: deja la BD en el estado exacto del dump
 # (elimina objetos existentes con el mismo nombre). ¡Ojo con el contenido
 # actual de la BD!
+# --no-owner: los objetos quedan a nombre del usuario con el que se restaura
+# (el rol original del dump casi nunca existe en una BD de recuperación/DR).
 # =============================================================================
 set -eu
 
@@ -28,7 +30,7 @@ if [ ! -f "${DUMP}" ]; then
 fi
 
 echo "[restore] restaurando ${DUMP} en ${POSTGRES_DB}@${POSTGRES_HOST}:${POSTGRES_PORT} ..."
-pg_restore --clean --if-exists \
+pg_restore --clean --if-exists --no-owner \
   -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
   "${DUMP}"
 echo "[restore] OK: base restaurada"

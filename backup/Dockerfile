@@ -19,8 +19,9 @@
 #     cada hora a los :07).
 #   STALE_AFTER_MIN   - minutos máximos de antigüedad del último dump antes de
 #     que el watchdog (y el healthcheck) fallen (por defecto 1560 = 26 h).
-#   MONITOR_PING_URL  - URL tipo healthchecks.io para heartbeat del backup y
-#     alarma del watchdog. Vacío = solo logs + exit codes.
+#   BACKUP_PING_URL   - URL tipo healthchecks.io del check de BACKUPS (periodo
+#     diario) para heartbeat del backup y alarma del watchdog. MONITOR_PING_URL
+#     se acepta como fallback (config antigua). Vacío = solo logs + exit codes.
 # =============================================================================
 
 FROM postgres:16-alpine

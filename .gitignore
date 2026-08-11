@@ -4,7 +4,13 @@ node_modules/
 # Builds
 backend/dist/
 frontend/.next/
+frontend/.next-e2e/
 frontend/out/
+
+# Playwright (e2e)
+e2e/.tmp/
+playwright-report/
+test-results/
 
 # Entorno (NUNCA subir)
 .env

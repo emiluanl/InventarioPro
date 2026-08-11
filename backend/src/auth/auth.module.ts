@@ -14,6 +14,7 @@ import { AuthService } from './auth.service';
 import { EmailService } from './email.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { CookiesModule } from '../common/cookies.module';
+import { parseTtlSeconds } from '../common/parse-ttl';
 
 @Module({
   imports: [
@@ -24,7 +25,8 @@ import { CookiesModule } from '../common/cookies.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_ACCESS_SECRET'),
-        signOptions: { expiresIn: config.get<string>('JWT_ACCESS_TTL') ?? '15m' },
+        // NÚMERO de segundos (un string se interpretaría como milisegundos).
+        signOptions: { expiresIn: parseTtlSeconds(config.get<string>('JWT_ACCESS_TTL')) },
       }),
     }),
   ],

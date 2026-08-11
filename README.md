@@ -59,7 +59,8 @@ InventarioPro/
 ├── docker-compose.yml                # Desarrollo
 ├── docker-compose.prod.yml           # Producción
 ├── Caddyfile                         # Reverse proxy + HTTPS
-├── .github/workflows/ci.yml          # CI
+├── e2e/                              # Tests de navegador (Playwright)
+├── .github/workflows/ci.yml          # CI (backend, frontend y e2e)
 ├── README.md                         # ← este archivo
 ├── SECURITY.md                       # Auditoría de seguridad
 └── DEPLOYMENT.md                     # Guía paso a paso para producción
@@ -121,19 +122,32 @@ npm run dev
 5. **Sube una foto** en la vista de detalle.
 6. **Abre el chat flotante** y pregunta: *"¿Cuántos productos tengo?"*.
 
-## � Tests
+## ✅ Tests
+
+Tres capas, todas en el CI:
 
 ```bash
-cd backend
-npm run test         # una pasada
-npm run test:watch   # modo watch
-npm run test:cov     # con cobertura
+# 1) Backend — Jest (99 tests)
+cd backend && npm test
+
+# 2) Frontend — Vitest + Testing Library (45 tests)
+cd frontend && npm test
+
+# 3) E2E de navegador — Playwright (registro → verificación → login → alta de producto)
+npm install            # en la raíz (deps del e2e)
+npx playwright install chromium
+npm run test:e2e
 ```
 
-Tests incluidos:
-- `auth.service.spec.ts` — register, login, refresh, logout, forgot, reset (11 tests)
-- `products.service.spec.ts` — ownership, filtros, paginación, borrado lógico (7 tests)
-- `time-ownership.spec.ts` — helper de cálculo de tiempo de posesión (11 tests)
+El e2e levanta sus propios servidores (backend en `:3002` con BD `inventariopro_e2e`
+dedicada y frontend en `:3102` con build aislado en `.next-e2e`), así que no
+interfiere con el dev server ni con la BD de desarrollo. El token de verificación
+se recupera del log de emails del backend en modo dev (`DEV_EMAIL_LOG`);
+el informe HTML queda en `playwright-report/`.
+
+Prerrequisito local: la BD `inventariopro_e2e` debe existir en el Postgres dev
+(`docker exec inventariopro-postgres-dev psql -U inventariopro -c "CREATE DATABASE inventariopro_e2e"`).
+En CI se crea automáticamente como servicio de GitHub Actions.
 
 ## 🔒 Seguridad
 
@@ -228,7 +242,7 @@ Las herramientas ejecutan SIEMPRE del lado del servidor con filtrado por `user_i
 
 - **129 archivos** de código y configuración
 - **~7 500 líneas** de TypeScript / TSX / YAML / Prisma
-- **29 tests** unitarios
+- **146 tests** (99 backend + 45 frontend + 2 e2e de navegador)
 - **9 modelos** en la base de datos + 5 enums
 - **~25 endpoints** REST
 - **11 páginas** en el frontend

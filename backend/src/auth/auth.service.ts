@@ -29,6 +29,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { createHash, randomBytes } from 'node:crypto';
+import { parseTtlSeconds } from '../common/parse-ttl';
 
 interface AuthTokens {
   access_token: string;
@@ -284,22 +285,24 @@ export class AuthService {
   // HELPERS
   // ===========================================================================
   private async issueTokens(userId: string, email: string): Promise<AuthTokensWithCookies> {
-    const accessTtl = this.config.get<string>('JWT_ACCESS_TTL') ?? '15m';
-    const refreshTtl = this.config.get<string>('JWT_REFRESH_TTL') ?? '7d';
+    const accessMaxAgeSec = parseTtlSeconds(this.config.get<string>('JWT_ACCESS_TTL'));
+    const refreshMaxAgeSec = parseTtlSeconds(
+      this.config.get<string>('JWT_REFRESH_TTL'),
+      7 * 24 * 60 * 60,
+    );
 
     const access_token = await this.jwt.signAsync(
       { sub: userId, email },
       {
         secret: this.config.get<string>('JWT_ACCESS_SECRET'),
-        expiresIn: accessTtl,
+        // NÚMERO de segundos: si pasáramos un string, jsonwebtoken lo
+        // interpretaría como milisegundos ('900' = 0.9 s → token instantáneo).
+        expiresIn: accessMaxAgeSec,
       },
     );
 
     const refresh_token = this.generateSecureToken();
     const refresh_token_hash = this.hashToken(refresh_token);
-
-    const accessMaxAgeSec = this.parseTtl(accessTtl);
-    const refreshMaxAgeSec = this.parseTtl(refreshTtl);
 
     await this.prisma.refreshToken.create({
       data: {
@@ -347,28 +350,5 @@ export class AuthService {
 
   private hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
-  }
-
-  /**
-   * Convierte "15m" / "7d" / "30s" / "1h" a segundos.
-   * Si no reconoce el formato, devuelve 15 minutos como fallback seguro.
-   */
-  private parseTtl(ttl: string): number {
-    const match = /^(\d+)([smhd])$/.exec(ttl);
-    if (!match) return 15 * 60;
-    const [, num, unit] = match;
-    const n = Number(num);
-    switch (unit) {
-      case 's':
-        return n;
-      case 'm':
-        return n * 60;
-      case 'h':
-        return n * 60 * 60;
-      case 'd':
-        return n * 60 * 60 * 24;
-      default:
-        return 15 * 60;
-    }
   }
 }

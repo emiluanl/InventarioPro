@@ -1,0 +1,15 @@
+{
+  "name": "inventariopro-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tests e2e de navegador (Playwright) para InventarioPro",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
+}

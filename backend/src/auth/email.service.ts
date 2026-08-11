@@ -8,6 +8,7 @@
 // En producción configura las variables SMTP_* en .env y se usará SMTP real.
 // =============================================================================
 
+import { appendFileSync } from 'node:fs';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
@@ -53,6 +54,7 @@ export class EmailService {
 
   async sendVerificationEmail(to: string, token: string): Promise<void> {
     const url = `${this.baseUrl}/verify-email?token=${encodeURIComponent(token)}`;
+    this.logDevLink('VERIFY', to, url);
     await this.send(
       to,
       'Verifica tu cuenta de InventarioPro',
@@ -67,6 +69,7 @@ export class EmailService {
 
   async sendPasswordResetEmail(to: string, token: string): Promise<void> {
     const url = `${this.baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+    this.logDevLink('RESET', to, url);
     await this.send(
       to,
       'Restablece tu contraseña de InventarioPro',
@@ -96,6 +99,25 @@ export class EmailService {
     } catch (err) {
       this.logger.error(`Error enviando email a ${to}: ${(err as Error).message}`);
       // No lanzamos: un fallo de email no debe tumbar el registro.
+    }
+  }
+
+  /**
+   * Modo desarrollo (sin SMTP): registra el enlace en una línea limpia en
+   * consola y, si DEV_EMAIL_LOG apunta a un archivo, lo añade también ahí.
+   * Es la vía que usan los tests e2e para recuperar el token real.
+   */
+  private logDevLink(kind: 'VERIFY' | 'RESET', to: string, url: string): void {
+    if (this.config.get<string>('SMTP_HOST')) {
+      return; // En producción los enlaces van por SMTP, nunca se loguean.
+    }
+    this.logger.warn(`[EMAIL DEV] ${kind} | ${to} | ${url}`);
+    const file = this.config.get<string>('DEV_EMAIL_LOG');
+    if (!file) return;
+    try {
+      appendFileSync(file, `${kind}|${to}|${url}\n`);
+    } catch (err) {
+      this.logger.error(`No se pudo escribir DEV_EMAIL_LOG (${file}): ${(err as Error).message}`);
     }
   }
 

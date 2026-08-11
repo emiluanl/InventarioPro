@@ -21,6 +21,7 @@ import type {
   RegisterInput,
   ForgotPasswordInput,
   ResetPasswordInput,
+  ChangePasswordInput,
 } from '@/lib/validations/auth';
 
 export interface AuthUser {
@@ -38,6 +39,8 @@ interface AuthContextValue {
   forgotPassword: (input: ForgotPasswordInput) => Promise<string>;
   resetPassword: (input: ResetPasswordInput) => Promise<string>;
   resendVerificationEmail: (input: ForgotPasswordInput) => Promise<string>;
+  changePassword: (input: ChangePasswordInput) => Promise<string>;
+  deleteAccount: (password: string) => Promise<string>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -156,6 +159,40 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     [],
   );
 
+  const changePassword = useCallback(
+    async (input: ChangePasswordInput): Promise<string> => {
+      try {
+        // confirm_password es solo validación de UI; el backend (whitelist
+        // estricta) rechazaría la propiedad extra.
+        const { confirm_password: _confirm, ...payload } = input;
+        const { data } = await api.post<{ message: string }>(
+          '/auth/change-password',
+          payload,
+        );
+        return data.message;
+      } catch (err) {
+        throw new Error(extractErrorMessage(err));
+      }
+    },
+    [],
+  );
+
+  const deleteAccount = useCallback(
+    async (password: string): Promise<string> => {
+      try {
+        const { data } = await api.delete<{ message: string }>('/auth/account', {
+          data: { password },
+        });
+        setUser(null);
+        router.replace('/login');
+        return data.message;
+      } catch (err) {
+        throw new Error(extractErrorMessage(err));
+      }
+    },
+    [router],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -167,6 +204,8 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       forgotPassword,
       resetPassword,
       resendVerificationEmail,
+      changePassword,
+      deleteAccount,
     }),
     [
       user,
@@ -177,6 +216,8 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       forgotPassword,
       resetPassword,
       resendVerificationEmail,
+      changePassword,
+      deleteAccount,
     ],
   );
 

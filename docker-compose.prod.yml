@@ -64,6 +64,11 @@ services:
       # remota. La config de rclone se lee de ./rclone/rclone.conf (montada en
       # /root/.config/rclone). Ver DEPLOYMENT.md §7.
       RCLONE_REMOTE: ${RCLONE_REMOTE:-}
+      # Watchdog de monitoreo: alarma si el último dump supera STALE_AFTER_MIN
+      # (26 h por defecto) y heartbeat opcional a un monitor externo.
+      WATCHDOG_SCHEDULE: ${WATCHDOG_SCHEDULE:-7 * * * *}
+      STALE_AFTER_MIN: ${STALE_AFTER_MIN:-1560}
+      MONITOR_PING_URL: ${MONITOR_PING_URL:-}
     volumes:
       # Mismo directorio del host que monta postgres: los dumps son accesibles
       # desde la máquina y por el contenedor de restauración.
@@ -72,7 +77,32 @@ services:
       # siempre (contiene el example); sin rclone.conf la copia remota se omite.
       - ./rclone:/root/.config/rclone
     healthcheck:
-      test: ['CMD-SHELL', "[ -f /etc/crontabs/root ] && grep -q '/usr/local/bin/backup' /etc/crontabs/root"]
+      test: ['CMD-SHELL', "[ -f /etc/crontabs/root ] && { ! ls /backups/inventariopro-*.dump >/dev/null 2>&1 || /usr/local/bin/check >/dev/null 2>&1; }"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Monitor de la API: probe periódico a /api/auth/me con aviso externo
+  # (healthchecks.io o similar) y logs. Ver DEPLOYMENT.md §8.
+  monitor:
+    build:
+      context: ./monitor
+    container_name: inventariopro-monitor
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      # Por defecto comprueba el backend por la red interna del compose.
+      API_CHECK_URL: ${API_CHECK_URL:-http://backend:3001/api/auth/me}
+      CHECK_SCHEDULE: ${CHECK_SCHEDULE:-*/5 * * * *}
+      CHECK_RETRIES: ${CHECK_RETRIES:-3}
+      RETRY_DELAY_SEC: ${RETRY_DELAY_SEC:-10}
+      # Misma URL de heartbeat que el contenedor de backups (healthchecks.io).
+      MONITOR_PING_URL: ${MONITOR_PING_URL:-}
+      TZ: ${TZ:-UTC}
+    healthcheck:
+      test: ['CMD-SHELL', "[ -f /etc/crontabs/root ] && grep -q '/usr/local/bin/uptime' /etc/crontabs/root"]
       interval: 30s
       timeout: 5s
       retries: 3

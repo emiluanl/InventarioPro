@@ -37,7 +37,27 @@ export const resetPasswordSchema = z
     path: ['confirm_password'],
   });
 
+export const changePasswordSchema = z
+  .object({
+    current_password: z.string().min(1, 'La contraseña actual es obligatoria.'),
+    new_password: z
+      .string()
+      .min(8, 'Mínimo 8 caracteres.')
+      .regex(/^(?=.*[A-Za-z])(?=.*\d).{8,}$/, 'Debe incluir letras y números.'),
+    confirm_password: z.string(),
+  })
+  .refine((data) => data.new_password === data.confirm_password, {
+    message: 'Las contraseñas no coinciden.',
+    path: ['confirm_password'],
+  });
+
+export const deleteAccountSchema = z.object({
+  password: z.string().min(1, 'Debes confirmar con tu contraseña.'),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type DeleteAccountInput = z.infer<typeof deleteAccountSchema>;

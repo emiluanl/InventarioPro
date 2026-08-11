@@ -25,9 +25,11 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from './email.service';
+import { StorageService } from '../common/storage.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { createHash, randomBytes } from 'node:crypto';
 import { parseTtlSeconds } from '../common/parse-ttl';
 
@@ -52,6 +54,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly email: EmailService,
+    private readonly storage: StorageService,
   ) {}
 
   // ===========================================================================
@@ -220,6 +223,86 @@ export class AuthService {
     ]);
 
     return { message: 'Contraseña actualizada. Inicia sesión con tu nueva contraseña.' };
+  }
+
+  // ===========================================================================
+  // CHANGE PASSWORD (estando logueado)
+  // ===========================================================================
+  // Exige la contraseña actual (evita que alguien con una sesión robada la
+  // cambie sin conocerla) y revoca TODAS las sesiones activas: cualquier otro
+  // dispositivo deja de ser válido al agotarse su access token.
+  // ===========================================================================
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('Credenciales inválidas.');
+    }
+
+    const ok = await this.verifyPassword(dto.current_password, user.password_hash);
+    if (!ok) {
+      throw new UnauthorizedException('La contraseña actual no es correcta.');
+    }
+
+    const password_hash = await this.hashPassword(dto.new_password);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { password_hash },
+      }),
+      // Por seguridad, cerramos todas las sesiones activas.
+      this.prisma.refreshToken.updateMany({
+        where: { user_id: userId, revoked_at: null },
+        data: { revoked_at: new Date() },
+      }),
+    ]);
+
+    this.logger.log(`Contraseña cambiada: ${userId}`);
+    return { message: 'Contraseña actualizada. Inicia sesión con tu nueva contraseña.' };
+  }
+
+  // ===========================================================================
+  // DELETE ACCOUNT
+  // ===========================================================================
+  // Destructivo e irreversible: exige la contraseña actual como confirmación.
+  // Las relaciones del esquema borran en cascada (productos, categorías,
+  // adjuntos, notificaciones, chat, push, refresh tokens); los ARCHIVOS del
+  // storage (fotos/recibos) se borran aparte, best-effort: si el provider
+  // falla no impedimos la eliminación de la cuenta.
+  // ===========================================================================
+  async deleteAccount(userId: string, password: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('Credenciales inválidas.');
+    }
+
+    const ok = await this.verifyPassword(password, user.password_hash);
+    if (!ok) {
+      throw new UnauthorizedException('La contraseña no es correcta.');
+    }
+
+    // Recolectamos las URLs (claves) de los adjuntos del usuario antes de
+    // borrar, porque la cascada elimina las filas de la BD.
+    const attachments = await this.prisma.productAttachment.findMany({
+      where: { product: { user_id: userId } },
+      select: { url: true },
+    });
+
+    // La cascada del esquema se encarga del resto de tablas.
+    await this.prisma.user.delete({ where: { id: userId } });
+
+    for (const attachment of attachments) {
+      try {
+        await this.storage.delete(attachment.url);
+      } catch (err) {
+        this.logger.warn(
+          `No se pudo borrar el archivo ${attachment.url} del storage: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    this.logger.log(`Cuenta eliminada: ${userId} (${attachments.length} adjuntos)`);
+    return { message: 'Tu cuenta y todos tus datos fueron eliminados.' };
   }
 
   // ===========================================================================

@@ -1,0 +1,210 @@
+'use client';
+
+// =============================================================================
+// Configuración de la cuenta: cambio de contraseña y eliminación de cuenta.
+// =============================================================================
+
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+import { changePasswordSchema, type ChangePasswordInput } from '@/lib/validations/auth';
+import { useAuth } from '@/hooks/use-auth';
+import { extractErrorMessage } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert } from '@/components/ui/alert';
+
+export default function SettingsPage(): JSX.Element {
+  const { user, changePassword, deleteAccount, logout } = useAuth();
+
+  // --- Cambio de contraseña ---
+  const [pwSuccess, setPwSuccess] = useState<string | null>(null);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<ChangePasswordInput>({
+    resolver: zodResolver(changePasswordSchema),
+  });
+
+  const onSubmitPassword = async (data: ChangePasswordInput): Promise<void> => {
+    setPwError(null);
+    setPwSuccess(null);
+    try {
+      const msg = await changePassword(data);
+      setPwSuccess(msg);
+      reset();
+      // El backend revocó TODAS las sesiones: volvemos al login para re-entrar.
+      setTimeout(() => {
+        void logout();
+      }, 1800);
+    } catch (err) {
+      setPwError(extractErrorMessage(err));
+    }
+  };
+
+  // --- Eliminación de cuenta (dos pasos para evitar accidentes) ---
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const onDelete = async (): Promise<void> => {
+    setDeleteError(null);
+    setDeleting(true);
+    try {
+      // El provider limpia la sesión y redirige a /login tras el éxito.
+      await deleteAccount(deletePassword);
+    } catch (err) {
+      setDeleteError(extractErrorMessage(err));
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">Configuración</h1>
+        <p className="mt-1 text-sm text-gray-600">
+          Cuenta: <span className="font-medium text-gray-800">{user?.email}</span>
+        </p>
+      </div>
+
+      {/* --------------------------------------------------------------------- */}
+      {/* CAMBIO DE CONTRASEÑA                                                  */}
+      {/* --------------------------------------------------------------------- */}
+      <section className="rounded-lg border border-gray-200 bg-white p-6">
+        <h2 className="text-lg font-semibold text-gray-900">Cambiar contraseña</h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Al cambiarla se cerrarán todas tus sesiones (incluida la actual).
+        </p>
+
+        {pwSuccess && (
+          <Alert variant="success" className="mt-4">
+            {pwSuccess}
+          </Alert>
+        )}
+        {pwError && (
+          <Alert variant="error" className="mt-4">
+            {pwError}
+          </Alert>
+        )}
+
+        <form onSubmit={handleSubmit(onSubmitPassword)} className="mt-4 space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="current_password">Contraseña actual</Label>
+            <Input
+              id="current_password"
+              type="password"
+              autoComplete="current-password"
+              {...register('current_password')}
+              error={errors.current_password?.message}
+            />
+            {errors.current_password?.message && (
+              <p className="mt-1 text-xs text-red-600">{errors.current_password.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="new_password">Nueva contraseña</Label>
+            <Input
+              id="new_password"
+              type="password"
+              autoComplete="new-password"
+              {...register('new_password')}
+              error={errors.new_password?.message}
+            />
+            <p className="text-xs text-gray-500">Mínimo 8 caracteres, con letras y números.</p>
+            {errors.new_password?.message && (
+              <p className="mt-1 text-xs text-red-600">{errors.new_password.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="confirm_password">Confirmar nueva contraseña</Label>
+            <Input
+              id="confirm_password"
+              type="password"
+              autoComplete="new-password"
+              {...register('confirm_password')}
+              error={errors.confirm_password?.message}
+            />
+            {errors.confirm_password?.message && (
+              <p className="mt-1 text-xs text-red-600">{errors.confirm_password.message}</p>
+            )}
+          </div>
+
+          <Button type="submit" isLoading={isSubmitting}>
+            Cambiar contraseña
+          </Button>
+        </form>
+      </section>
+
+      {/* --------------------------------------------------------------------- */}
+      {/* ELIMINACIÓN DE CUENTA                                                 */}
+      {/* --------------------------------------------------------------------- */}
+      <section className="rounded-lg border border-red-200 bg-red-50 p-6">
+        <h2 className="text-lg font-semibold text-red-900">Zona de peligro</h2>
+        <p className="mt-1 text-sm text-red-700">
+          Eliminar tu cuenta borra de forma permanente tu usuario, productos, adjuntos,
+          notificaciones y conversaciones. Esta acción no se puede deshacer.
+        </p>
+
+        {deleteError && (
+          <Alert variant="error" className="mt-4">
+            {deleteError}
+          </Alert>
+        )}
+
+        {!confirmingDelete ? (
+          <Button
+            variant="danger"
+            className="mt-4"
+            onClick={() => setConfirmingDelete(true)}
+          >
+            Eliminar mi cuenta
+          </Button>
+        ) : (
+          <div className="mt-4 space-y-4">
+            <div className="space-y-1">
+              <Label htmlFor="delete_password">
+                Confirma con tu contraseña para eliminar la cuenta
+              </Label>
+              <Input
+                id="delete_password"
+                type="password"
+                autoComplete="current-password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="danger"
+                isLoading={deleting}
+                disabled={!deletePassword}
+                onClick={() => void onDelete()}
+              >
+                Confirmar eliminación definitiva
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={deleting}
+                onClick={() => {
+                  setConfirmingDelete(false);
+                  setDeletePassword('');
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

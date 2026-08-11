@@ -20,11 +20,60 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import { ThrottlerStorage } from '@nestjs/throttler';
 
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { EmailService } from '../src/auth/email.service';
+import { StorageService } from '../src/common/storage.service';
 import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';
+
+// =============================================================================
+// Storage de throttling con RESET entre tests.
+// =============================================================================
+// El guard global aplica los límites reales (login: 5 por 15 min por IP, etc.).
+// Como toda la suite comparte la misma IP, sin reset los buckets se acumulan
+// entre tests y el 5º/6º login de la suite recibe 429 (falso positivo). Con
+// este storage, cada test arranca con buckets vacíos: los límites se respetan
+// DENTRO de cada test, pero no se arrastran entre tests.
+// =============================================================================
+// El record que espera el guard no se exporta del paquete; replicamos su forma.
+interface ThrottleRecord {
+  totalHits: number;
+  timeToExpire: number;
+  isBlocked: boolean;
+  timeToBlockExpire: number;
+}
+
+class TestThrottleStorage implements ThrottlerStorage {
+  private buckets = new Map<string, { hits: number; expireAt: number; blockedUntil: number }>();
+
+  async increment(
+    key: string,
+    ttl: number,
+    limit: number,
+    blockDuration: number,
+  ): Promise<ThrottleRecord> {
+    const now = Date.now();
+    const prev = this.buckets.get(key);
+    const hits = prev && prev.expireAt > now ? prev.hits + 1 : 1;
+    const wasBlocked = prev ? prev.blockedUntil > now : false;
+    const isBlocked = hits > limit || wasBlocked;
+    const blockedUntil = isBlocked ? Math.max(now + blockDuration, prev?.blockedUntil ?? 0) : 0;
+    const expireAt = Math.max(now + ttl, prev?.expireAt ?? 0);
+    this.buckets.set(key, { hits, expireAt, blockedUntil });
+    return {
+      totalHits: hits,
+      timeToExpire: Math.max(0, expireAt - now),
+      isBlocked,
+      timeToBlockExpire: isBlocked ? Math.max(0, blockedUntil - now) : 0,
+    };
+  }
+
+  reset(): void {
+    this.buckets.clear();
+  }
+}
 
 jest.setTimeout(60000);
 
@@ -46,7 +95,11 @@ interface Db {
 /** Conecta el mock de Prisma a una "BD" en memoria para que el flujo sea realista. */
 function wireDbMocks(prisma: MockPrisma, db: Db): void {
   prisma.user.findUnique.mockImplementation(({ where }: any) => {
-    if (!db.user || db.user.email !== where.email) return null;
+    if (!db.user) return null;
+    // El service busca tanto por email (login) como por id (change-password,
+    // delete-account): matcheamos por la clave que traiga el where.
+    if (where.email && db.user.email !== where.email) return null;
+    if (where.id && db.user.id !== where.id) return null;
     return db.user;
   });
 
@@ -95,6 +148,13 @@ function wireDbMocks(prisma: MockPrisma, db: Db): void {
   }));
 
   prisma.refreshToken.update.mockResolvedValue({});
+
+  prisma.user.delete.mockImplementation(() => {
+    db.user = null;
+    return { id: 'deleted' };
+  });
+
+  prisma.productAttachment.findMany.mockResolvedValue([]);
 }
 
 describe('Flujo completo de auth (integración)', () => {
@@ -102,6 +162,8 @@ describe('Flujo completo de auth (integración)', () => {
   let prisma: MockPrisma;
   let email: { sendVerificationEmail: jest.Mock; sendPasswordResetEmail: jest.Mock };
   let db: Db;
+
+  let throttlerStorage: TestThrottleStorage;
 
   beforeAll(async () => {
     process.env.JWT_ACCESS_SECRET = 'test-access-secret-32chars-minimum';
@@ -117,11 +179,18 @@ describe('Flujo completo de auth (integración)', () => {
       sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
     };
 
+    const storage = { delete: jest.fn().mockResolvedValue(undefined) };
+    throttlerStorage = new TestThrottleStorage();
+
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prisma)
       .overrideProvider(EmailService)
       .useValue(email)
+      .overrideProvider(StorageService)
+      .useValue(storage)
+      .overrideProvider(ThrottlerStorage)
+      .useValue(throttlerStorage)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -140,6 +209,7 @@ describe('Flujo completo de auth (integración)', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    throttlerStorage.reset();
   });
 
   const http = () => request(app.getHttpServer());
@@ -244,6 +314,109 @@ describe('Flujo completo de auth (integración)', () => {
     expect(dup.body.message).toContain('No se pudo completar el registro');
     // No se envía un segundo email de verificación
     expect(email.sendVerificationEmail).toHaveBeenCalledTimes(1);
+  });
+
+  // ===========================================================================
+  // CHANGE PASSWORD estando logueado
+  // ===========================================================================
+  it('cambia la contraseña con la actual correcta y revoca las sesiones', async () => {
+    const reg = await http()
+      .post('/api/auth/register')
+      .send({ email: 'cambio@example.com', password: 'OldPass123', nombre: 'C' });
+    expect(reg.status).toBe(201);
+    const token = lastVerificationToken();
+    await http().post('/api/auth/verify-email').send({ token });
+
+    const login = await http()
+      .post('/api/auth/login')
+      .send({ email: 'cambio@example.com', password: 'OldPass123' });
+    const setCookie = (login.headers['set-cookie'] as unknown as string[]) ?? [];
+
+    // 1) Contraseña actual incorrecta → 401 y NO se cambia nada.
+    const wrong = await http()
+      .post('/api/auth/change-password')
+      .set('Cookie', setCookie)
+      .send({ current_password: 'WrongPass1', new_password: 'NewPass456' });
+    expect(wrong.status).toBe(401);
+    expect(wrong.body.message).toContain('actual no es correcta');
+
+    // 1b) La whitelist estricta del backend rechaza propiedades extra
+    // (confirm_password es solo validación de UI, nunca debe viajar).
+    const extra = await http().post('/api/auth/change-password').set('Cookie', setCookie).send({
+      current_password: 'OldPass123',
+      new_password: 'NewPass456',
+      confirm_password: 'NewPass456',
+    });
+    expect(extra.status).toBe(400);
+    expect((extra.body.message as string[]).join(' ')).toContain('should not exist');
+
+    // 2) Cambio correcto → 200, limpia cookies y revoca TODAS las sesiones.
+    const change = await http()
+      .post('/api/auth/change-password')
+      .set('Cookie', setCookie)
+      .send({ current_password: 'OldPass123', new_password: 'NewPass456' });
+    expect(change.status).toBe(200);
+    expect(change.body.message).toContain('actualizada');
+    const cleared = (change.headers['set-cookie'] as unknown as string[]) ?? [];
+    expect(cleared.join('; ')).toContain('access_token=;');
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ user_id: expect.any(String) }),
+      }),
+    );
+
+    // 3) La contraseña vieja ya no sirve; la nueva sí.
+    const oldLogin = await http()
+      .post('/api/auth/login')
+      .send({ email: 'cambio@example.com', password: 'OldPass123' });
+    expect(oldLogin.status).toBe(401);
+
+    const newLogin = await http()
+      .post('/api/auth/login')
+      .send({ email: 'cambio@example.com', password: 'NewPass456' });
+    expect(newLogin.status).toBe(200);
+  });
+
+  // ===========================================================================
+  // DELETE ACCOUNT
+  // ===========================================================================
+  it('elimina la cuenta solo con la contraseña correcta y limpia la sesión', async () => {
+    const reg = await http()
+      .post('/api/auth/register')
+      .send({ email: 'borrame@example.com', password: 'Delete123', nombre: 'B' });
+    expect(reg.status).toBe(201);
+    const token = lastVerificationToken();
+    await http().post('/api/auth/verify-email').send({ token });
+
+    const login = await http()
+      .post('/api/auth/login')
+      .send({ email: 'borrame@example.com', password: 'Delete123' });
+    const setCookie = (login.headers['set-cookie'] as unknown as string[]) ?? [];
+
+    // 1) Contraseña incorrecta → 401, la cuenta sigue.
+    const wrong = await http()
+      .delete('/api/auth/account')
+      .set('Cookie', setCookie)
+      .send({ password: 'WrongPass1' });
+    expect(wrong.status).toBe(401);
+    expect(db.user?.email).toBe('borrame@example.com');
+
+    // 2) Eliminación correcta → 200, cookies limpiadas y usuario borrado.
+    const del = await http()
+      .delete('/api/auth/account')
+      .set('Cookie', setCookie)
+      .send({ password: 'Delete123' });
+    expect(del.status).toBe(200);
+    expect(del.body.message).toContain('eliminados');
+    const cleared = (del.headers['set-cookie'] as unknown as string[]) ?? [];
+    expect(cleared.join('; ')).toContain('access_token=;');
+    expect(db.user).toBeNull();
+
+    // 3) Login con las credenciales antiguas → ya no existe la cuenta.
+    const relogin = await http()
+      .post('/api/auth/login')
+      .send({ email: 'borrame@example.com', password: 'Delete123' });
+    expect(relogin.status).toBe(401);
   });
 
   // ===========================================================================

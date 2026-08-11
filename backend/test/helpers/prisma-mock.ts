@@ -9,13 +9,16 @@
 export interface MockPrisma {
   $connect: jest.Mock;
   $disconnect: jest.Mock;
+  $transaction: jest.Mock;
   user: {
     findUnique: jest.Mock;
     findFirst: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
     updateMany: jest.Mock;
+    delete: jest.Mock;
   };
+  productAttachment: { findMany: jest.Mock };
   category: { upsert: jest.Mock; findMany: jest.Mock };
   refreshToken: {
     create: jest.Mock;
@@ -50,13 +53,16 @@ export function buildPrismaMock(): MockPrisma {
   return {
     $connect: jest.fn(),
     $disconnect: jest.fn(),
+    $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
     user: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
+      delete: jest.fn(),
     },
+    productAttachment: { findMany: jest.fn() },
     category: { upsert: jest.fn(), findMany: jest.fn() },
     refreshToken: {
       create: jest.fn(),

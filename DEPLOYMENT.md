@@ -131,9 +131,17 @@ adicional) y escribe los dumps en `./backups` del host:
 #   BACKUP_SCHEDULE="0 3 * * *"
 #   BACKUP_KEEP_DAYS=14
 #   TZ=America/Argentina/Buenos_Aires
+#   WATCHDOG_SCHEDULE="7 * * * *"   (watchdog cada hora)
+#   STALE_AFTER_MIN=1560             (26 h: alarma si el último dump es viejo)
+#   MONITOR_PING_URL="https://hc-ping.com/<check-id>"  (heartbeat/alarma, ver §8)
 
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 ```
+
+> Además del backup diario, el contenedor ejecuta un **watchdog** (`check.sh`)
+> cada hora que comprueba la antigüedad del último dump y, si supera
+> `STALE_AFTER_MIN` (26 h), lo registra en los logs, avisa a `MONITOR_PING_URL`
+> (si está configurada) y deja de pasar el healthcheck de Docker.
 
 ### Verificar que funciona
 
@@ -252,10 +260,100 @@ docker compose -p inventariopro-prod -f docker-compose.prod.yml \
 
 ## 8. Monitoreo
 
-Recomendaciones mínimas:
+### Alarma de backups (watchdog + heartbeat)
+
+El contenedor `backup` trae dos mecanismos integrados:
+
+- **Heartbeat**: `backup.sh` hace `GET <MONITOR_PING_URL>` cuando el backup
+  termina bien y `GET <MONITOR_PING_URL>/fail` si falla (convención
+  healthchecks.io). Es el latido de "los backups están funcionando".
+- **Watchdog**: `check.sh` (cron cada hora) comprueba que el último dump tenga
+  menos de `STALE_AFTER_MIN` minutos (26 h por defecto). Si está viejo o no
+  hay ningún dump, hace `GET <MONITOR_PING_URL>/fail` y falla el healthcheck
+  de Docker (`docker ps` lo muestra como *unhealthy*). Sin dumps aún (primer
+  arranque) el healthcheck se considera sano.
+
+#### Configurar el aviso
+
+1. Crea un **check en healthchecks.io** (gratis) con periodicidad "24 h" y
+   período de gracia de 2 h: `https://hc-ping.com/<check-id>`. También sirve
+   cualquier endpoint compatible con ese patrón (ntfy, scripts propios...).
+2. En `.env.prod`:
+
+   ```bash
+   MONITOR_PING_URL=https://hc-ping.com/<check-id>
+   # Opcional:
+   # STALE_AFTER_MIN=1560
+   # WATCHDOG_SCHEDULE="7 * * * *"
+   ```
+
+3. Aplica:
+
+   ```bash
+   docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+     --env-file .env.prod up -d --build backup
+   ```
+
+#### Verificar la alarma
+
+```bash
+# Estado del último dump y del watchdog (OK o STALE + antigüedad)
+docker compose -p inventariopro-prod -f docker-compose.prod.yml exec backup /usr/local/bin/check
+
+# Healthcheck de Docker (healthy/unhealthy)
+docker ps --filter name=inventariopro-backup
+
+# Pings enviados (al configurar MONITOR_PING_URL, healthchecks.io los registra)
+docker compose -p inventariopro-prod -f docker-compose.prod.yml logs backup | grep heartbeat
+```
+
+Sin `MONITOR_PING_URL`, la alarma sigue funcionando vía **logs** y **exit
+code** (útil para scripts o monitores que lean `docker logs`).
+
+### Alarma del backend (probe de la API)
+
+El stack incluye un contenedor **`monitor`** que comprueba la API cada 5
+minutos contra `/api/auth/me` (por defecto por la red interna del compose) y
+alerta si deja de responder:
+
+- **Semántica tipo UptimeRobot**: cualquier respuesta HTTP 2xx-4xx = API viva
+  (sin sesión, `/api/auth/me` responde 401: "está arriba"); 5xx, timeout o
+  error de conexión = caída.
+- **Sin falsos positivos**: reintenta `CHECK_RETRIES` veces (3) con
+  `RETRY_DELAY_SEC` segundos (10) antes de declarar DOWN.
+- **Aviso**: cuando la API responde hace `GET <MONITOR_PING_URL>` y si queda
+  caída `GET <MONITOR_PING_URL>/fail` (misma URL de heartbeat que los
+  backups). Sin `MONITOR_PING_URL`, la alarma queda en logs y exit codes.
+
+Variables en `.env.prod` (opcionales, hay defaults):
+
+```bash
+# API_CHECK_URL=http://backend:3001/api/auth/me
+# CHECK_SCHEDULE="*/5 * * * *"
+# CHECK_RETRIES=3
+# RETRY_DELAY_SEC=10
+```
+
+Verificar:
+
+```bash
+# Probe manual (UP/DOWN + antigüedad de la respuesta)
+docker compose -p inventariopro-prod -f docker-compose.prod.yml exec monitor /usr/local/bin/uptime
+
+# Logs del cron
+docker compose -p inventariopro-prod -f docker-compose.prod.yml logs -f monitor
+```
+
+> 🌐 **Cuando tengas un dominio real** (ver §6), puedes además apuntar
+> **UptimeRobot o BetterStack** directamente a
+> `https://api.tudominio.com/api/auth/me` con intervalo de 5 min: al ser una
+> URL pública, esos servicios la comprueban desde fuera y avisan por email/otra
+> vía. El contenedor `monitor` cubre el caso local (localhost) y sirve de
+> respaldo aunque el dominio externo falle.
+
+### Resto de monitoreo (recomendado)
 
 - **Logs centralizados**: usar un driver de Docker (json-file con rotación o syslog).
-- **Uptime monitoring**: UptimeRobot, BetterStack o Healthchecks.io contra `/api/auth/me`.
 - **Métricas**: si crece el uso, añadir Prometheus + Grafana.
 
 ## 9. Actualizar el deployment

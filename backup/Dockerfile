@@ -15,6 +15,12 @@
 #     copiar los dumps tras cada backup. Vacío = sin copia remota. La config de
 #     rclone vive en ./rclone/rclone.conf del host (montada en
 #     /root/.config/rclone). Ver DEPLOYMENT.md §7.
+#   WATCHDOG_SCHEDULE - cron del watchdog check.sh (por defecto 7 * * * * =
+#     cada hora a los :07).
+#   STALE_AFTER_MIN   - minutos máximos de antigüedad del último dump antes de
+#     que el watchdog (y el healthcheck) fallen (por defecto 1560 = 26 h).
+#   MONITOR_PING_URL  - URL tipo healthchecks.io para heartbeat del backup y
+#     alarma del watchdog. Vacío = solo logs + exit codes.
 # =============================================================================
 
 FROM postgres:16-alpine
@@ -24,9 +30,10 @@ FROM postgres:16-alpine
 RUN apk add --no-cache tzdata rclone
 
 COPY backup.sh /usr/local/bin/backup
+COPY check.sh /usr/local/bin/check
 COPY restore.sh /usr/local/bin/restore
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /usr/local/bin/backup /usr/local/bin/restore /entrypoint.sh
+RUN chmod +x /usr/local/bin/backup /usr/local/bin/check /usr/local/bin/restore /entrypoint.sh
 
 # crond en primer plano con logs a stdout (docker logs backup).
 ENTRYPOINT ["/entrypoint.sh"]

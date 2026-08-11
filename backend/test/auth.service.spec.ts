@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { AuthService } from '../src/auth/auth.service';
 import { EmailService } from '../src/auth/email.service';
+import { StorageService } from '../src/common/storage.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('AuthService', () => {
@@ -20,6 +21,8 @@ describe('AuthService', () => {
   let jwt: any;
   let email: any;
 
+  let storage: any;
+
   beforeEach(async () => {
     prisma = {
       user: {
@@ -27,6 +30,10 @@ describe('AuthService', () => {
         findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
+      },
+      productAttachment: {
+        findMany: jest.fn(),
       },
       refreshToken: {
         create: jest.fn(),
@@ -42,6 +49,9 @@ describe('AuthService', () => {
     email = {
       sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
       sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
+    };
+    storage = {
+      delete: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -63,6 +73,7 @@ describe('AuthService', () => {
           },
         },
         { provide: EmailService, useValue: email },
+        { provide: StorageService, useValue: storage },
       ],
     }).compile();
 
@@ -306,6 +317,127 @@ describe('AuthService', () => {
 
       expect(result.message).toContain('nuevo enlace');
       expect(email.sendVerificationEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  // ===========================================================================
+  // CHANGE PASSWORD (estando logueado)
+  // ===========================================================================
+  describe('changePassword', () => {
+    it('cambia la contraseña y revoca todas las sesiones', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        email: 'a@b.com',
+        password_hash: 'old-hash',
+      });
+      (service as any).verifyPassword = jest.fn().mockResolvedValue(true);
+      (service as any).hashPassword = jest.fn().mockResolvedValue('new-hash');
+      prisma.user.update.mockResolvedValue({});
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 3 });
+
+      const result = await service.changePassword('u1', {
+        current_password: 'OldPass123',
+        new_password: 'NewPass456',
+      });
+
+      expect(result.message).toContain('actualizada');
+      // El hash nuevo se guarda y TODAS las sesiones se revocan.
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'u1' },
+        data: { password_hash: 'new-hash' },
+      });
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { user_id: 'u1', revoked_at: null },
+        data: { revoked_at: expect.any(Date) },
+      });
+    });
+
+    it('rechaza el cambio si la contraseña actual no coincide', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        email: 'a@b.com',
+        password_hash: 'old-hash',
+      });
+      (service as any).verifyPassword = jest.fn().mockResolvedValue(false);
+
+      await expect(
+        service.changePassword('u1', {
+          current_password: 'WrongPass1',
+          new_password: 'NewPass456',
+        }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('lanza 401 si el usuario no existe', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      await expect(
+        service.changePassword('ghost', {
+          current_password: 'OldPass123',
+          new_password: 'NewPass456',
+        }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+  });
+
+  // ===========================================================================
+  // DELETE ACCOUNT
+  // ===========================================================================
+  describe('deleteAccount', () => {
+    it('elimina la cuenta, borra los adjuntos del storage y devuelve mensaje', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        email: 'a@b.com',
+        password_hash: 'hash',
+      });
+      (service as any).verifyPassword = jest.fn().mockResolvedValue(true);
+      prisma.productAttachment.findMany.mockResolvedValue([
+        { url: '/uploads/a.jpg' },
+        { url: '/uploads/b.pdf' },
+      ]);
+      prisma.user.delete.mockResolvedValue({});
+
+      const result = await service.deleteAccount('u1', 'MyPass123');
+
+      expect(result.message).toContain('eliminados');
+      expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'u1' } });
+      expect(storage.delete).toHaveBeenCalledTimes(2);
+      expect(storage.delete).toHaveBeenCalledWith('/uploads/a.jpg');
+      expect(storage.delete).toHaveBeenCalledWith('/uploads/b.pdf');
+    });
+
+    it('rechaza la eliminación con contraseña incorrecta (no borra nada)', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        email: 'a@b.com',
+        password_hash: 'hash',
+      });
+      (service as any).verifyPassword = jest.fn().mockResolvedValue(false);
+
+      await expect(service.deleteAccount('u1', 'WrongPass1')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+      expect(storage.delete).not.toHaveBeenCalled();
+    });
+
+    it('borra la cuenta aunque un archivo falle en el storage (best-effort)', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        email: 'a@b.com',
+        password_hash: 'hash',
+      });
+      (service as any).verifyPassword = jest.fn().mockResolvedValue(true);
+      prisma.productAttachment.findMany.mockResolvedValue([{ url: '/uploads/a.jpg' }]);
+      prisma.user.delete.mockResolvedValue({});
+      storage.delete.mockRejectedValueOnce(new Error('S3 caído'));
+
+      const result = await service.deleteAccount('u1', 'MyPass123');
+
+      expect(result.message).toContain('eliminados');
+      expect(prisma.user.delete).toHaveBeenCalled();
+      expect(storage.delete).toHaveBeenCalledTimes(1);
     });
   });
 });

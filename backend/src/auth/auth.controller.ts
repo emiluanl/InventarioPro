@@ -9,6 +9,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -25,6 +26,8 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser, AuthUser } from './decorators/current-user.decorator';
 import { CookiesService } from '../common/cookies.service';
@@ -116,6 +119,39 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.auth.resetPassword(dto);
+  }
+
+  // ---------------------------------------------------------------------------
+  // CHANGE PASSWORD (requiere estar autenticado). Al cambiar la contraseña se
+  // revocan todas las sesiones, así que limpiamos las cookies: el frontend
+  // pedirá volver a iniciar sesión.
+  // ---------------------------------------------------------------------------
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  async changePassword(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.auth.changePassword(user.id, dto);
+    this.cookies.clearAuthCookies(res);
+    return result;
+  }
+
+  // ---------------------------------------------------------------------------
+  // DELETE ACCOUNT (requiere estar autenticado). Destructivo: elimina la
+  // cuenta y todos sus datos. Limpiamos las cookies de la sesión actual.
+  // ---------------------------------------------------------------------------
+  @Delete('account')
+  @HttpCode(HttpStatus.OK)
+  async deleteAccount(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: DeleteAccountDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.auth.deleteAccount(user.id, dto.password);
+    this.cookies.clearAuthCookies(res);
+    return result;
   }
 
   // ---------------------------------------------------------------------------

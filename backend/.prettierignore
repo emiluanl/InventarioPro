@@ -1,0 +1,4 @@
+# Código generado por Prisma (src/generated/prisma): no se formatea.
+# Evita que `npm run format` reescriba (EOL) archivos que el generador vuelve
+# a emitir con CRLF en Windows.
+src/generated/

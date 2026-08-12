@@ -58,7 +58,9 @@ jobs:
           DATABASE_URL: postgresql://test:test@localhost:5432/test?schema=public
         run: npx prisma generate
 
-      - name: Lint
+      # Estricto: sin --fix, falla ante violaciones (npm run lint:fix para
+      # auto-corregir en local). src/generated/ está excluido via .eslintignore.
+      - name: Lint (estricto: falla ante violaciones)
         run: npm run lint --if-present
 
       - name: Type-check

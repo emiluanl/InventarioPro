@@ -1,0 +1,4 @@
+# Código generado por Prisma (src/generated/prisma): no se lintea.
+# El generador lo escribe con CRLF en Windows y prettier lo rechaza; además
+# es código que no debería pasar por la cadena de lint.
+src/generated/

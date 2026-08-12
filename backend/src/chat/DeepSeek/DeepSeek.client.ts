@@ -28,15 +28,18 @@ export class DeepSeekClient {
 
   constructor(private readonly config: ConfigService) {
     this.apiKey = config.get<string>('DEEPSEEK_API_KEY') ?? '';
-    this.baseUrl = (config.get<string>('DEEPSEEK_API_BASE') ?? 'https://api.deepseek.com/v1').replace(
-      /\/$/,
-      '',
-    );
+    this.baseUrl = (
+      config.get<string>('DEEPSEEK_API_BASE') ?? 'https://api.deepseek.com/v1'
+    ).replace(/\/$/, '');
     this.model = config.get<string>('DEEPSEEK_MODEL') ?? 'deepseek-chat';
-    this.defaultTimeoutMs = Number(config.get<string>('DEEPSEEK_TIMEOUT_MS') ?? FALLBACK_TIMEOUT_MS);
+    this.defaultTimeoutMs = Number(
+      config.get<string>('DEEPSEEK_TIMEOUT_MS') ?? FALLBACK_TIMEOUT_MS,
+    );
 
     if (!this.apiKey || this.apiKey === PLACEHOLDER_KEY) {
-      this.logger.warn('DEEPSEEK_API_KEY no configurada: las llamadas a la IA fallarán (el chat responde con fallback amable).');
+      this.logger.warn(
+        'DEEPSEEK_API_KEY no configurada: las llamadas a la IA fallarán (el chat responde con fallback amable).',
+      );
     }
   }
 

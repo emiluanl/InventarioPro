@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type JSX } from 'react';
 
 import type { ProductsFilters, ProductStatus, PurchaseType, WarrantyStatus } from '@/lib/types';
 import { PRODUCT_STATUS_LABELS, PURCHASE_TYPE_LABELS, WARRANTY_LABELS } from '@/lib/types';

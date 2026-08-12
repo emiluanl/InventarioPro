@@ -17,7 +17,7 @@ import {
   IsPositive,
   IsISO4217CurrencyCode,
 } from 'class-validator';
-import { ProductStatus, PurchaseType } from '@prisma/client';
+import { ProductStatus, PurchaseType } from '../../generated/prisma/client';
 
 export class CreateProductDto {
   @IsString()

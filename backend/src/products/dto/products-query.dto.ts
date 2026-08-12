@@ -7,7 +7,7 @@
 
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, Max, Min, MaxLength } from 'class-validator';
-import { ProductStatus, PurchaseType } from '@prisma/client';
+import { ProductStatus, PurchaseType } from '../../generated/prisma/client';
 
 export enum WarrantyStatusFilter {
   VIGENTE = 'vigente',

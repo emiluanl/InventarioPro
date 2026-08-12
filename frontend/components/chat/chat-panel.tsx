@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 
 import {
   useConversations,
@@ -23,14 +23,12 @@ export function ChatPanel({ onClose }: ChatPanelProps): JSX.Element {
   const { data: conversations } = useConversations();
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
 
-  // Al cargar conversaciones, abrimos la más reciente.
-  useEffect(() => {
-    if (!conversationId && conversations && conversations.length > 0) {
-      setConversationId(conversations[0].id);
-    }
-  }, [conversations, conversationId]);
+  // Mientras no se elija una conversación explícitamente, usamos la más
+  // reciente (la primera de la lista). Derivar en el render (en vez de un
+  // useEffect con setState) cumple react-hooks/set-state-in-effect.
+  const activeConversationId = conversationId ?? conversations?.[0]?.id;
 
-  const { data: messages, isLoading } = useMessages(conversationId);
+  const { data: messages, isLoading } = useMessages(activeConversationId);
   const send = useSendMessage();
 
   const [input, setInput] = useState<string>('');
@@ -49,7 +47,7 @@ export function ChatPanel({ onClose }: ChatPanelProps): JSX.Element {
     if (!trimmed || send.isPending) return;
     setInput('');
     try {
-      await send.mutateAsync({ conversationId, message: trimmed });
+      await send.mutateAsync({ conversationId: activeConversationId, message: trimmed });
     } catch {
       // El error ya se muestra en send.error
     }

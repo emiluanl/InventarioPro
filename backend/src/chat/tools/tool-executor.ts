@@ -7,7 +7,7 @@
 // =============================================================================
 
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma, PurchaseType } from '@prisma/client';
+import { Prisma, PurchaseType } from '../../generated/prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import {

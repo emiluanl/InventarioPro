@@ -7,7 +7,7 @@
 // =============================================================================
 
 import { NotFoundException } from '@nestjs/common';
-import { NotificationType } from '@prisma/client';
+import { NotificationType } from '../src/generated/prisma/client';
 
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';

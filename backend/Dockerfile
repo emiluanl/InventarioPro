@@ -10,7 +10,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
-COPY tsconfig.json tsconfig.build.json nest-cli.json ./
+COPY tsconfig.json tsconfig.build.json nest-cli.json prisma.config.ts ./
 RUN npm ci
 
 COPY src ./src
@@ -31,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-cert
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 COPY package.json ./
 
 # Usuario no-root
@@ -38,7 +39,9 @@ RUN groupadd -r app && useradd -r -g app app
 
 # El CLI de Prisma (migrate deploy) escribe en estos directorios: el usuario
 # no-root necesita permisos, si no falla con "Can't write to @prisma/engines".
-RUN chown -R app:app /app/node_modules/.prisma /app/node_modules/@prisma/engines
+# Con Prisma 7 el cliente se genera en src/generated (ya no en .prisma), así
+# que el chown tolera directorios ausentes.
+RUN chown -R app:app /app/node_modules/.prisma /app/node_modules/@prisma/engines 2>/dev/null || true
 USER app
 
 EXPOSE 3001

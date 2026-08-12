@@ -19,7 +19,7 @@
 // =============================================================================
 
 import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
-import { NotificationType } from '@prisma/client';
+import { NotificationType } from '../generated/prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';

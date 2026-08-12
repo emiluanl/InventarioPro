@@ -10,7 +10,7 @@
 // =============================================================================
 
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
-import { Prisma, Product, ProductStatus, PurchaseType } from '@prisma/client';
+import { Prisma, Product, ProductStatus, PurchaseType } from '../generated/prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';

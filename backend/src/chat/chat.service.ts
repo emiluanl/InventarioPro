@@ -12,7 +12,7 @@
 // =============================================================================
 
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ChatRole } from '@prisma/client';
+import { ChatRole } from '../generated/prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { DeepSeekClient } from './DeepSeek/DeepSeek.client';

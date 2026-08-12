@@ -6,7 +6,7 @@
 // (404/410) y el payload del aviso de garantía.
 // =============================================================================
 
-import { NotificationType } from '@prisma/client';
+import { NotificationType } from '../src/generated/prisma/client';
 
 import { PushService } from '../src/push/push.service';
 import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';

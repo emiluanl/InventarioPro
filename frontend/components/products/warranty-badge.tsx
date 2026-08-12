@@ -1,3 +1,5 @@
+import type { JSX } from 'react';
+
 import type { WarrantyStatus } from '@/lib/types';
 import { WARRANTY_LABELS } from '@/lib/types';
 import { cn } from '@/lib/utils';

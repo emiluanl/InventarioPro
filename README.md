@@ -19,10 +19,10 @@ Pensada como una **herramienta de gestión de posesiones personales** (no como u
 
 | Capa | Tecnología |
 |---|---|
-| **Frontend** | Next.js 14 (App Router) + TypeScript + Tailwind CSS |
+| **Frontend** | Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS |
 | **Estado y datos remotos** | React Query + react-hook-form + zod |
-| **Backend** | NestJS 10 + TypeScript |
-| **Base de datos** | PostgreSQL 16 + Prisma ORM |
+| **Backend** | NestJS 11 + TypeScript |
+| **Base de datos** | PostgreSQL 16 + Prisma ORM 7 (cliente generado + driver adapter pg) |
 | **Cache, sesiones, rate limiting** | Redis 7 |
 | **Almacenamiento de archivos** | Local (dev) / Supabase Storage (prod) |
 | **Autenticación** | JWT propio (access 15 min + refresh 7 días, cookies httpOnly) |
@@ -42,8 +42,10 @@ InventarioPro/
 │   │   ├── categories/               # Categorías del sistema + personalizadas
 │   │   ├── chat/                     # DeepSeek + 4 herramientas (function calling)
 │   │   ├── common/                   # Cookies, Storage, Redis, ValidationPipe, Audit
-│   │   └── prisma/                   # Cliente Prisma
+│   │   ├── generated/prisma/         # Cliente Prisma generado (v7, se commitea)
+│   │   └── prisma/                   # PrismaService (adapter pg)
 │   ├── prisma/schema.prisma          # Modelo de datos
+│   ├── prisma.config.ts              # Config del CLI Prisma 7 (URL, migraciones)
 │   ├── test/                         # Tests con Jest
 │   ├── Dockerfile
 │   └── package.json
@@ -70,7 +72,7 @@ InventarioPro/
 
 ### Requisitos
 - Docker + Docker Compose
-- Node.js 20+ (solo si quieres correr sin Docker)
+- Node.js 20.9+ (solo si quieres correr sin Docker)
 - Una API key de DeepSeek (opcional; sin ella el chat responde con un fallback amable)
 
 ### Con Docker (recomendado)
@@ -94,6 +96,11 @@ docker compose up --build
 # Postgres → localhost:5432
 # Redis    → localhost:6379
 ```
+
+> ⚠️ El compose de desarrollo comparte **nombres de contenedor** con el de
+> producción (`inventariopro-postgres`, `inventariopro-backend`, …). Si el
+> stack de producción está levantado en la misma máquina, detenlo antes de
+> `docker compose up` (dev).
 
 ### Sin Docker
 
@@ -127,10 +134,10 @@ npm run dev
 Tres capas, todas en el CI:
 
 ```bash
-# 1) Backend — Jest (99 tests)
+# 1) Backend — Jest (111 tests)
 cd backend && npm test
 
-# 2) Frontend — Vitest + Testing Library (45 tests)
+# 2) Frontend — Vitest + Testing Library (51 tests)
 cd frontend && npm test
 
 # 3) E2E de navegador — Playwright (registro → verificación → login → alta de producto)
@@ -145,8 +152,9 @@ interfiere con el dev server ni con la BD de desarrollo. El token de verificaci�
 se recupera del log de emails del backend en modo dev (`DEV_EMAIL_LOG`);
 el informe HTML queda en `playwright-report/`.
 
-Prerrequisito local: la BD `inventariopro_e2e` debe existir en el Postgres dev
-(`docker exec inventariopro-postgres-dev psql -U inventariopro -c "CREATE DATABASE inventariopro_e2e"`).
+Prerrequisito local: la BD `inventariopro_e2e` debe existir en el Postgres del
+stack de desarrollo (el que publica `localhost:5432`):
+`docker exec inventariopro-postgres psql -U inventariopro -c "CREATE DATABASE inventariopro_e2e"`.
 En CI se crea automáticamente como servicio de GitHub Actions.
 
 ## 🔒 Seguridad
@@ -241,13 +249,13 @@ Las herramientas ejecutan SIEMPRE del lado del servidor con filtrado por `user_i
 
 ## 📊 Estadísticas del proyecto
 
-- **129 archivos** de código y configuración
-- **~7 500 líneas** de TypeScript / TSX / YAML / Prisma
-- **146 tests** (99 backend + 45 frontend + 2 e2e de navegador)
+- **143 archivos** de código y configuración (+ 17 del cliente Prisma generado)
+- **~13 300 líneas** de TypeScript / TSX / YAML / Prisma (sin el cliente generado)
+- **164 tests** (111 backend + 51 frontend + 2 e2e de navegador)
 - **9 modelos** en la base de datos + 5 enums
-- **~25 endpoints** REST
-- **11 páginas** en el frontend
-- **11 componentes** reutilizables
+- **~35 endpoints** REST
+- **12 páginas** en el frontend
+- **24 componentes** reutilizables
 
 ## 📝 Licencia
 

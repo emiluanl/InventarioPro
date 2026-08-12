@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { cn } from '@/lib/utils';
 
 import { ChatPanel } from './chat-panel';

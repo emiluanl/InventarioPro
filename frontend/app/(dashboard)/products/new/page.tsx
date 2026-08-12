@@ -1,3 +1,5 @@
+import type { JSX } from 'react';
+
 import { ProductForm } from '@/components/products/product-form';
 
 export default function NewProductPage(): JSX.Element {

@@ -3,7 +3,7 @@
 // =============================================================================
 
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { AttachmentType } from '@prisma/client';
+import { AttachmentType } from '../../generated/prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService, FileInput } from '../../common/storage.service';

@@ -13,7 +13,7 @@
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { NotificationType } from '@prisma/client';
+import { NotificationType } from '../generated/prisma/client';
 import * as webpush from 'web-push';
 
 import { PrismaService } from '../prisma/prisma.service';

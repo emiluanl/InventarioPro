@@ -52,9 +52,7 @@ async function bootstrap(): Promise<void> {
   // facturas) en /uploads/<ruta>. Misma carpeta que StorageService:
   // LOCAL_UPLOAD_DIR (por defecto ./uploads). Con Supabase las URLs ya son
   // absolutas y firmadas, así que este directorio queda vacío.
-  const uploadDir = path.resolve(
-    config.get<string>('LOCAL_UPLOAD_DIR') ?? './uploads',
-  );
+  const uploadDir = path.resolve(config.get<string>('LOCAL_UPLOAD_DIR') ?? './uploads');
   app.useStaticAssets(uploadDir, {
     prefix: '/uploads/',
     maxAge: '1d',

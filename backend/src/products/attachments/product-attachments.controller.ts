@@ -19,7 +19,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AttachmentType } from '@prisma/client';
+import { AttachmentType } from '../../generated/prisma/client';
 
 import { ProductAttachmentsService } from './product-attachments.service';
 import { CurrentUser, AuthUser } from '../../auth/decorators/current-user.decorator';

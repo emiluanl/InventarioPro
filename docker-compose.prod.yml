@@ -8,6 +8,11 @@
 # (ver DEPLOYMENT.md para la lista completa).
 # =============================================================================
 
+# Nombre de proyecto fijo: red y volúmenes quedan estables
+# (inventariopro-prod_default, inventariopro-prod_postgres_data, ...) sin
+# depender de un -p en cada comando ni del nombre del directorio.
+name: inventariopro-prod
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -55,10 +60,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?required}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
       POSTGRES_DB: ${POSTGRES_DB:-inventariopro}
-      # BD de desarrollo (la que usa la app en la práctica): se vuelca a
-      # inventariopro-dev-*.dump junto al dump de producción. Se accede vía
-      # host.docker.internal porque el postgres dev publica en el host:5432.
-      POSTGRES_HOST_DEV: ${POSTGRES_HOST_DEV:-host.docker.internal}
+      # BD de desarrollo (opcional): si POSTGRES_HOST_DEV está definido se
+      # vuelca además a inventariopro-dev-*.dump. Desde que la app usa la BD
+      # del stack queda vacío por defecto (sin volcado dev).
+      POSTGRES_HOST_DEV: ${POSTGRES_HOST_DEV:-}
       POSTGRES_DEV_PORT: ${POSTGRES_DEV_PORT:-5432}
       POSTGRES_DEV_USER: ${POSTGRES_DEV_USER:-inventariopro}
       POSTGRES_DEV_PASSWORD: ${POSTGRES_DEV_PASSWORD:-inventariopro}
@@ -211,12 +216,11 @@ services:
     image: caddy:2-alpine
     container_name: inventariopro-caddy
     restart: always
-    # El Caddyfile usa {$FRONTEND_DOMAIN} / {$API_DOMAIN}: deben llegar como
-    # variables de entorno al contenedor de Caddy, si no usa los defaults
-    # inventariopro.example.com y no sirve los dominios reales.
+    # El Caddyfile sirve frontend + API bajo el MISMO dominio (dominio único):
+    # /api/* y /uploads/* van al backend, todo lo demás al frontend. Solo hace
+    # falta FRONTEND_DOMAIN; si no se define, Caddy usa su default localhost.
     environment:
       FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:-inventariopro.example.com}
-      API_DOMAIN: ${API_DOMAIN:-api.inventariopro.example.com}
     ports:
       - '80:80'
       - '443:443'

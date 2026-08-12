@@ -7,6 +7,37 @@ import axios, { AxiosError, type AxiosInstance } from 'axios';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 
 /**
+ * Endpoints de /auth/ donde un 401 NO debe disparar el refresh de sesión:
+ * son fallos de credenciales legítimos (login/register) o flujos que ya
+ * gestionan su propio error. `/auth/me` queda FUERA de esta lista a
+ * propósito: si el access token expiró, recargar la página debe refrescar
+ * la sesión en vez de expulsar al usuario al login.
+ */
+const AUTH_NO_REFRESH = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/refresh',
+  '/auth/resend-verification',
+  '/auth/verify-email',
+];
+
+/**
+ * Evento global que AuthProvider escucha para cerrar la sesión cuando el
+ * refresh falla. NO usamos window.location aquí: recargar la página tras un
+ * 401 monta AuthProvider de nuevo, que reintenta /auth/me, que vuelve a
+ * fallar... y eso es un bucle infinito de recargas.
+ */
+export const SESSION_EXPIRED_EVENT = 'auth:session-expired';
+
+function notifySessionExpired(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+  }
+}
+
+/**
  Cliente axios con:
    - Base URL apuntando al backend.
    - withCredentials: las cookies httpOnly se envían en cada request.
@@ -57,7 +88,7 @@ api.interceptors.response.use(
       error.response?.status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
-      !originalRequest.url?.includes('/auth/')
+      !AUTH_NO_REFRESH.some((path) => originalRequest.url?.includes(path))
     ) {
       if (isRefreshing) {
         return new Promise((resolve) => {
@@ -82,11 +113,11 @@ api.interceptors.response.use(
       } catch (refreshError) {
         isRefreshing = false;
         refreshSubscribers = [];
-        // Si el refresh falla, dejamos que el error se propague.
-        // El AuthProvider detectará que la sesión no es válida.
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
-        }
+        // Si el refresh falla, dejamos que el error se propague y avisamos a
+        // AuthProvider para cerrar la sesión con navegación SPA. NO recargamos
+        // la página: eso montaría AuthProvider otra vez → /auth/me 401 → refresh
+        // falla → recarga → bucle infinito.
+        notifySessionExpired();
         return Promise.reject(refreshError);
       }
     }

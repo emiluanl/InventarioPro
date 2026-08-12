@@ -1,16 +1,37 @@
 # =============================================================================
 # Caddyfile - reverse proxy con HTTPS automático
 # =============================================================================
-# Ajusta los dominios a los tuyos reales.
+# Frontend y API se sirven bajo el MISMO dominio. Esto es imprescindible para
+# que las cookies de sesión (httpOnly + Secure + SameSite=Strict) funcionen:
+# si la página vive en localhost y el API en api.localhost, Chrome los trata
+# como sitios distintos (cross-site) y BLOQUEA las cookies de sesión.
+#
+#  https://localhost/        -> frontend (Next.js en :3000)
+#  https://localhost/api/*   -> backend  (NestJS en :3001, prefijo /api)
+#  https://localhost/uploads/* -> archivos locales del backend (fotos/recibos)
+#
+# En producción con dominio real se hace lo mismo con FRONTEND_DOMAIN:
+#  https://app.tudominio.com/        -> frontend
+#  https://app.tudominio.com/api/*   -> backend
+#  https://app.tudominio.com/uploads/* -> archivos locales
+# =============================================================================
 
-# Frontend
-{$FRONTEND_DOMAIN:inventariopro.example.com} {
-    reverse_proxy frontend:3000
-    encode gzip zstd
-}
+{$FRONTEND_DOMAIN:localhost} {
+    # API bajo el mismo dominio (mismo "site" que la página -> cookies válidas)
+    handle /api/* {
+        reverse_proxy backend:3001
+    }
 
-# Backend API (subdominio)
-{$API_DOMAIN:api.inventariopro.example.com} {
-    reverse_proxy backend:3001
+    # Archivos subidos con el provider 'local' (fotos, recibos, facturas).
+    # Nest los sirve en /uploads/* (sin el prefijo /api).
+    handle /uploads/* {
+        reverse_proxy backend:3001
+    }
+
+    # Frontend (todo lo demás)
+    handle {
+        reverse_proxy frontend:3000
+    }
+
     encode gzip zstd
 }

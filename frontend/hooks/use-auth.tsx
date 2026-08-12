@@ -11,11 +11,12 @@ import {
   useEffect,
   useMemo,
   useState,
+  type JSX,
   type ReactNode,
 } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
-import { api, extractErrorMessage } from '@/lib/api';
+import { api, extractErrorMessage, SESSION_EXPIRED_EVENT } from '@/lib/api';
 import type {
   LoginInput,
   RegisterInput,
@@ -86,6 +87,19 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     }
   }, [user, isLoading, pathname, router]);
 
+  // Sesión expirada/revocada (el interceptor de api.ts emite este evento cuando
+  // el refresh falla). Cerramos la sesión con router.replace (navegación SPA,
+  // SIN recargar la página): recargar aquí reintentaría /auth/me y volvería a
+  // fallar, creando un bucle infinito de recargas.
+  useEffect(() => {
+    const onSessionExpired = (): void => {
+      setUser(null);
+      router.replace('/login');
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+  }, [router]);
+
   const login = useCallback(
     async (input: LoginInput): Promise<void> => {
       const { data } = await api.post<AuthUser>('/auth/login', input);
@@ -132,9 +146,12 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   const resetPassword = useCallback(
     async (input: ResetPasswordInput): Promise<string> => {
       try {
+        // confirm_password es solo validación de UI; el backend (whitelist
+        // estricta) rechazaría la propiedad extra.
+        const { confirm_password: _confirm, ...payload } = input;
         const { data } = await api.post<{ message: string }>(
           '/auth/reset-password',
-          input,
+          payload,
         );
         return data.message;
       } catch (err) {

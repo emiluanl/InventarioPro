@@ -6,7 +6,7 @@
 
 - **Servidor** con Docker 24+ y Docker Compose v2.
 - **Dominio** propio con DNS apuntando al servidor (A o AAAA records).
-- **Subdominios** para frontend y API (ej. `app.inventariopro.com` y `api.inventariopro.com`).
+- **Dominio único**: frontend y API se sirven bajo el MISMO dominio (ej. `app.inventariopro.com`). Caddy enruta `/api/*` y `/uploads/*` al backend y todo lo demás al frontend — así las cookies de sesión (httpOnly + Secure + SameSite=Strict) funcionan sin tratarse como cross-site.
 - **Puerto 80 y 443** abiertos en el firewall.
 
 ## 2. Generar secretos
@@ -14,7 +14,6 @@
 ```bash
 # Genera strings aleatorios para JWT
 openssl rand -hex 32   # JWT_ACCESS_SECRET
-openssl rand -hex 32   # JWT_REFRESH_SECRET
 
 # Genera una contraseña fuerte para Redis y Postgres
 openssl rand -hex 24   # REDIS_PASSWORD
@@ -26,14 +25,14 @@ openssl rand -hex 24   # POSTGRES_PASSWORD
 En la raíz del proyecto, crea `.env.prod` con TODAS estas variables:
 
 ```env
-# Dominios
+# Dominio único (frontend + API bajo el mismo dominio; Caddy enruta /api/*
+# y /uploads/* al backend)
 FRONTEND_DOMAIN=app.inventariopro.com
-API_DOMAIN=api.inventariopro.com
 
-# API expuesta al frontend
-PUBLIC_API_URL=https://api.inventariopro.com/api
+# API expuesta al frontend (mismo dominio, prefijo /api)
+PUBLIC_API_URL=https://app.inventariopro.com/api
 
-# CORS: solo el dominio exacto del frontend
+# CORS: solo el dominio exacto
 CORS_ORIGIN=https://app.inventariopro.com
 
 # Base URL para links en emails (verificación, reset)
@@ -50,7 +49,6 @@ REDIS_PASSWORD=tu-redis-password-aqui
 # JWT
 JWT_ACCESS_SECRET=tu-access-secret-aqui-32-chars-min
 JWT_ACCESS_TTL=15m
-JWT_REFRESH_SECRET=tu-refresh-secret-aqui-32-chars-min
 JWT_REFRESH_TTL=7d
 
 # Email (SMTP real)
@@ -107,6 +105,12 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
 ```
 
+> El comando es **idempotente** y además ya se ejecuta solo: el contenedor del
+> backend corre `npx prisma migrate deploy && node dist/main.js` en cada
+> arranque, así que un `up -d` con código nuevo aplica las migraciones
+> pendientes antes de servir. Este paso solo hace falta si quieres aplicarlas
+> sin reiniciar el backend.
+
 ## 6. HTTPS automático
 
 Caddy (incluido en el compose) obtiene y renueva certificados de Let's Encrypt automáticamente.
@@ -114,7 +118,7 @@ Caddy (incluido en el compose) obtiene y renueva certificados de Let's Encrypt a
 Verifica después de unos minutos:
 
 ```bash
-curl -I https://api.inventariopro.com/api/auth/me
+curl -I https://app.inventariopro.com/api/auth/me
 curl -I https://app.inventariopro.com
 ```
 
@@ -226,19 +230,19 @@ RCLONE_REMOTE=b2backup:InventarioPro
 #### 3. Reiniciar el contenedor y verificar
 
 ```bash
-docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+docker compose -f docker-compose.prod.yml \
   --env-file .env.prod up -d --build backup
 
 # Backup inmediato: debe aparecer "copia remota OK" en los logs
-docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+docker compose -f docker-compose.prod.yml \
   --env-file .env.prod exec backup /usr/local/bin/backup
 
-docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+docker compose -f docker-compose.prod.yml \
   --env-file .env.prod logs backup | grep -E 'copia|retención remota'
 
 # Confirmar los archivos en el destino (dentro del contenedor)
 # (b2backup es el remote real configurado en ./rclone/rclone.conf)
-docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+docker compose -f docker-compose.prod.yml \
   --env-file .env.prod exec backup rclone ls b2backup:InventarioPro
 ```
 
@@ -250,12 +254,12 @@ local → `rclone copy` al destino → retención remota (`rclone delete
 
 ```bash
 # 1) Traer el dump al servidor (remote real: b2backup:InventarioPro)
-cd backups && docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+cd backups && docker compose -f docker-compose.prod.yml \
   --env-file .env.prod run --rm backup \
   rclone copy b2backup:InventarioPro/inventariopro-YYYYMMDD-HHMMSS.dump /backups/
 
 # 2) Restaurar (--clean: reemplaza el contenido actual de la BD)
-docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+docker compose -f docker-compose.prod.yml \
   --env-file .env.prod exec backup \
   /usr/local/bin/restore /backups/inventariopro-YYYYMMDD-HHMMSS.dump
 ```
@@ -278,13 +282,13 @@ docker run -d --name restore-drill --network inventariopro-prod_default \
 
 # 2) Bajar el dump más reciente del remote dentro del contenedor de backup
 # (puedes listar los disponibles con: rclone ls b2backup:InventarioPro)
-docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+docker compose -f docker-compose.prod.yml \
   --env-file .env.prod exec backup \
   rclone copyto b2backup:InventarioPro/inventariopro-YYYYMMDD-HHMMSS.dump /tmp/drill.dump
 
 # 3) Restaurarlo en la BD temporal (debe terminar en "OK: base restaurada"
 #    sin errores de pg_restore)
-docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+docker compose -f docker-compose.prod.yml \
   --env-file .env.prod exec -e POSTGRES_HOST=restore-drill -e POSTGRES_PORT=5432 \
   -e POSTGRES_USER=drill -e POSTGRES_PASSWORD=drillpass -e POSTGRES_DB=drilldb \
   backup /usr/local/bin/restore /tmp/drill.dump
@@ -300,7 +304,7 @@ docker exec restore-drill psql -U drill -d drilldb \
 
 # 5) Limpieza: eliminar la BD temporal y el dump de prueba
 docker rm -f restore-drill
-docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+docker compose -f docker-compose.prod.yml \
   --env-file .env.prod exec backup sh -c 'rm -f /tmp/drill.dump'
 ```
 
@@ -334,14 +338,14 @@ compartirse):
    par nuevo y verifica dentro del contenedor:
 
    ```bash
-   docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+   docker compose -f docker-compose.prod.yml \
      --env-file .env.prod exec backup rclone lsd b2backup:
    ```
 
 4. Ejecuta un backup real y confirma la subida al bucket:
 
    ```bash
-   docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+   docker compose -f docker-compose.prod.yml \
      --env-file .env.prod exec backup /usr/local/bin/backup
    # Espera "copia remota OK" y comprueba: rclone ls b2backup:InventarioPro
    ```
@@ -410,7 +414,7 @@ BACKUP_PING_URL=https://hc-ping.com/<check-backups>
 Aplica (recrea los contenedores que leen las variables):
 
 ```bash
-docker compose -p inventariopro-prod -f docker-compose.prod.yml \
+docker compose -f docker-compose.prod.yml \
   --env-file .env.prod up -d --build backup monitor
 ```
 
@@ -418,13 +422,13 @@ docker compose -p inventariopro-prod -f docker-compose.prod.yml \
 
 ```bash
 # Estado del último dump y del watchdog (OK o STALE + antigüedad)
-docker compose -p inventariopro-prod -f docker-compose.prod.yml exec backup /usr/local/bin/check
+docker compose -f docker-compose.prod.yml exec backup /usr/local/bin/check
 
 # Healthcheck de Docker (healthy/unhealthy)
 docker ps --filter name=inventariopro-backup
 
 # Pings enviados (al configurar MONITOR_PING_URL, healthchecks.io los registra)
-docker compose -p inventariopro-prod -f docker-compose.prod.yml logs backup | grep heartbeat
+docker compose -f docker-compose.prod.yml logs backup | grep heartbeat
 ```
 
 Sin `MONITOR_PING_URL`, la alarma sigue funcionando vía **logs** y **exit
@@ -466,15 +470,15 @@ Verificar:
 
 ```bash
 # Probe manual (UP/DOWN + antigüedad de la respuesta)
-docker compose -p inventariopro-prod -f docker-compose.prod.yml exec monitor /usr/local/bin/uptime
+docker compose -f docker-compose.prod.yml exec monitor /usr/local/bin/uptime
 
 # Logs del cron
-docker compose -p inventariopro-prod -f docker-compose.prod.yml logs -f monitor
+docker compose -f docker-compose.prod.yml logs -f monitor
 ```
 
 > 🌐 **Cuando tengas un dominio real** (ver §6), puedes además apuntar
 > **UptimeRobot o BetterStack** directamente a
-> `https://api.tudominio.com/api/auth/me` con intervalo de 5 min: al ser una
+> `https://app.tudominio.com/api/auth/me` con intervalo de 5 min: al ser una
 > URL pública, esos servicios la comprueban desde fuera y avisan por email/otra
 > vía. El contenedor `monitor` cubre el caso local (localhost) y sirve de
 > respaldo aunque el dominio externo falle.
@@ -519,7 +523,7 @@ docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
 
 ## 12. Variables que NO debes commitear
 
-- `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`
+- `JWT_ACCESS_SECRET`
 - `POSTGRES_PASSWORD`, `REDIS_PASSWORD`
 - `DEEPSEEK_API_KEY`
 - `SUPABASE_SERVICE_KEY`

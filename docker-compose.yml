@@ -7,7 +7,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: inventariopro-postgres
+    container_name: inventariopro-postgres-dev
     restart: unless-stopped
     environment:
       POSTGRES_USER: inventariopro
@@ -25,7 +25,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: inventariopro-redis
+    container_name: inventariopro-redis-dev
     restart: unless-stopped
     ports:
       - '6379:6379'
@@ -41,7 +41,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: inventariopro-backend
+    container_name: inventariopro-backend-dev
     restart: unless-stopped
     depends_on:
       postgres:
@@ -52,7 +52,9 @@ services:
       NODE_ENV: development
       PORT: 3001
       API_PREFIX: api
-      CORS_ORIGIN: http://localhost:3000
+      # El frontend dev publica en :3010 para no chocar con el de producción
+      # (que usa :3000). Ver README "Con Docker".
+      CORS_ORIGIN: http://localhost:3010
       DATABASE_URL: postgresql://inventariopro:inventariopro@postgres:5432/inventariopro?schema=public
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -76,14 +78,15 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: http://localhost:3001/api
-    container_name: inventariopro-frontend
+    container_name: inventariopro-frontend-dev
     restart: unless-stopped
     depends_on:
       - backend
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:3001/api
     ports:
-      - '3000:3000'
+      # 3010 en el host (3000 lo ocupa el stack de producción).
+      - '3010:3000'
 
 volumes:
   postgres_data:

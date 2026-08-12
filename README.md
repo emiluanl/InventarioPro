@@ -91,16 +91,17 @@ cp frontend/.env.example frontend/.env
 # 4. Levantar todo
 docker compose up --build
 
-# Frontend → http://localhost:3000
+# Frontend → http://localhost:3010
 # Backend  → http://localhost:3001/api
 # Postgres → localhost:5432
 # Redis    → localhost:6379
 ```
 
-> ⚠️ El compose de desarrollo comparte **nombres de contenedor** con el de
-> producción (`inventariopro-postgres`, `inventariopro-backend`, …). Si el
-> stack de producción está levantado en la misma máquina, detenlo antes de
-> `docker compose up` (dev).
+> ✅ El stack de desarrollo **puede correr a la vez que el de producción**: los
+> contenedores usan sufijo `-dev` (`inventariopro-postgres-dev`, …) y el
+> frontend publica en `:3010` (producción usa `:3000`). Sus Postgres/Redis
+> publican `localhost:5432/6379`, que producción no toca (solo usa la red
+> interna).
 
 ### Sin Docker
 
@@ -118,11 +119,12 @@ cd ../frontend
 npm install
 cp .env.example .env
 npm run dev
+# (sirve en http://localhost:3010)
 ```
 
 ### Primer uso
 
-1. Abre http://localhost:3000
+1. Abre http://localhost:3010
 2. **Regístrate** con email y contraseña.
 3. Revisa la consola del backend: ahí verás el **email de verificación** (modo dev sin SMTP).
 4. **Crea un producto** desde "+ Nuevo producto".
@@ -154,7 +156,7 @@ el informe HTML queda en `playwright-report/`.
 
 Prerrequisito local: la BD `inventariopro_e2e` debe existir en el Postgres del
 stack de desarrollo (el que publica `localhost:5432`):
-`docker exec inventariopro-postgres psql -U inventariopro -c "CREATE DATABASE inventariopro_e2e"`.
+`docker exec inventariopro-postgres-dev psql -U inventariopro -c "CREATE DATABASE inventariopro_e2e"`.
 En CI se crea automáticamente como servicio de GitHub Actions.
 
 ## 🔒 Seguridad

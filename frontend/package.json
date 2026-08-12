@@ -1,6 +1,9 @@
 {
   "name": "inventariopro-frontend",
   "version": "0.1.0",
+  "engines": {
+    "node": ">=20.9"
+  },
   "description": "Frontend del InventarioPro (Next.js + Tailwind + React Query)",
   "private": true,
   "scripts": {

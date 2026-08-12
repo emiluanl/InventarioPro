@@ -1,6 +1,9 @@
 {
   "name": "inventariopro-backend",
   "version": "0.1.0",
+  "engines": {
+    "node": ">=20.9"
+  },
   "description": "Backend del InventarioPro (NestJS + Prisma + PostgreSQL + Redis)",
   "private": true,
   "license": "UNLICENSED",

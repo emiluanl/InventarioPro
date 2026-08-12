@@ -145,7 +145,7 @@ cd frontend && npm test
 # 3) E2E de navegador — Playwright (registro → verificación → login → alta de producto)
 npm install            # en la raíz (deps del e2e)
 npx playwright install chromium
-npm run test:e2e
+npm run test:e2e:local # levanta el stack dev, crea la BD e2e si falta, corre y baja
 ```
 
 El e2e levanta sus propios servidores (backend en `:3002` con BD `inventariopro_e2e`
@@ -154,10 +154,14 @@ interfiere con el dev server ni con la BD de desarrollo. El token de verificaci�
 se recupera del log de emails del backend en modo dev (`DEV_EMAIL_LOG`);
 el informe HTML queda en `playwright-report/`.
 
-Prerrequisito local: la BD `inventariopro_e2e` debe existir en el Postgres del
-stack de desarrollo (el que publica `localhost:5432`):
-`docker exec inventariopro-postgres-dev psql -U inventariopro -c "CREATE DATABASE inventariopro_e2e"`.
-En CI se crea automáticamente como servicio de GitHub Actions.
+`npm run test:e2e:local` hace el ciclo completo: levanta el stack de desarrollo
+(`docker compose up -d`), espera a que Postgres/Redis estén healthy, crea la BD
+`inventariopro_e2e` en ese Postgres si no existe, corre Playwright y baja el stack
+(los volúmenes persisten). Pasa flags con `--`: `npm run test:e2e:local -- --trace=on`.
+
+Si ya tienes el stack dev arriba, `npm run test:e2e` (sin el script) sirve igual,
+pero requiere que la BD `inventariopro_e2e` exista en el Postgres que publica
+`localhost:5432`. En CI se crea automáticamente como servicio de GitHub Actions.
 
 ## 🔒 Seguridad
 

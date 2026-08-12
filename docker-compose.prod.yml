@@ -169,6 +169,11 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
       SUPABASE_BUCKET: ${SUPABASE_BUCKET:-inventariopro}
+      # Storage local (fotos/recibos/facturas): mismo directorio que el
+      # contenedor de backup empaqueta (UPLOADS_SRC=./backend/uploads). Sin
+      # LOCAL_UPLOAD_DIR + volumen, las fotos vivirían en la capa efímera del
+      # contenedor y se perderían en cada recreate.
+      LOCAL_UPLOAD_DIR: ${LOCAL_UPLOAD_DIR:-/app/uploads}
       # Asistente de IA (DeepSeek, API compatible con OpenAI). Sin key, el chat
       # responde con un fallback amable (no rompe el deploy).
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
@@ -179,6 +184,12 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@inventariopro.example.com}
+    volumes:
+      # Fotos/recibos/facturas persistentes en el host; backup/ los empaqueta
+      # en uploads-*.tar.gz (mismo path ./backend/uploads). En un servidor
+      # Linux, el usuario 'app' del contenedor (uid 999) debe poder escribir:
+      #   chown -R 999:999 backend/uploads   (o chmod g+w)
+      - ./backend/uploads:/app/uploads
     expose:
       - '3001'
     healthcheck:

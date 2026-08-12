@@ -129,6 +129,11 @@ dentro de Docker ejecuta `pg_dump` en formato custom comprimido (`-Fc`) y
 aplica retención. Se levanta solo con `up -d` (no necesita configuración
 adicional) y escribe los dumps en `./backups` del host:
 
+> Además de los dumps, cada backup empaqueta los **uploads** (fotos/recibos/facturas)
+> en `uploads-*.tar.gz`. El backend de producción monta `./backend/uploads` como
+> almacenamiento local (`LOCAL_UPLOAD_DIR`), así que lo que el backup ve es
+> exactamente lo que la app guardó.
+
 ```bash
 # Por defecto: 03:00 diario (UTC o la TZ configurada), retención 14 días.
 # Sobrescribible desde .env.prod:

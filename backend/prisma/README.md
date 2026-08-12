@@ -66,11 +66,11 @@ Cuando quieras categorías predefinidas (electrónica, electrodomésticos, muebl
 npx prisma db seed
 ```
 
-Configurar `package.json`:
+Configurar `package.json` (requiere instalar `tsx` como devDependency):
 
 ```json
 "prisma": {
-  "seed": "ts-node prisma/seed.ts"
+  "seed": "tsx prisma/seed.ts"
 }
 ```
 

@@ -58,7 +58,6 @@ services:
       REDIS_PORT: 6379
       JWT_ACCESS_SECRET: dev-access-secret-change-me
       JWT_ACCESS_TTL: 15m
-      JWT_REFRESH_SECRET: dev-refresh-secret-change-me
       JWT_REFRESH_TTL: 7d
       STORAGE_PROVIDER: local
       LOCAL_UPLOAD_DIR: /app/uploads

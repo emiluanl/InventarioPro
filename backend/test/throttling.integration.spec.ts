@@ -32,7 +32,6 @@ describe('Rate limiting por endpoint (integración)', () => {
 
   beforeAll(async () => {
     process.env.JWT_ACCESS_SECRET = 'test-access-secret-32chars-minimum';
-    process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-32chars-minimum';
     process.env.NODE_ENV = 'test';
 
     prisma = buildPrismaMock();

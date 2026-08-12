@@ -53,7 +53,6 @@ export default defineConfig({
         REDIS_PORT: '6379',
         NODE_ENV: 'test',
         JWT_ACCESS_SECRET: 'e2e-access-secret-32chars-min!!',
-        JWT_REFRESH_SECRET: 'e2e-refresh-secret-32chars-min!',
         JWT_ACCESS_TTL: '15m',
         JWT_REFRESH_TTL: '7d',
         CORS_ORIGIN: FRONTEND_URL,

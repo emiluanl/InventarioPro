@@ -139,7 +139,7 @@ grep -rEn "(password|secret|api_key|apiKey|token)\s*[:=]\s*['\"][^'\"]+['\"]" ba
 Antes de subir a producción:
 
 - [ ] `NODE_ENV=production` en el servidor.
-- [ ] Generar `JWT_ACCESS_SECRET` y `JWT_REFRESH_SECRET` con `openssl rand -hex 32` (cada uno).
+- [ ] Generar `JWT_ACCESS_SECRET` con `openssl rand -hex 32`.
 - [ ] Configurar SMTP real para emails.
 - [ ] Configurar Supabase Storage con credenciales reales.
 - [ ] `CORS_ORIGIN` con el dominio exacto (sin `*`).

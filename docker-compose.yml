@@ -1,5 +1,3 @@
-version: '3.9'
-
 # =============================================================================
 # InventarioPro - Entorno de desarrollo local
 # Levanta: PostgreSQL, Redis, backend (NestJS) y frontend (Next.js).

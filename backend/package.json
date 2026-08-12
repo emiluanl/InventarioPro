@@ -45,7 +45,6 @@
     "passport-jwt": "4.0.1",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.1",
-    "uuid": "10.0.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
@@ -60,7 +59,6 @@
     "@types/nodemailer": "6.4.16",
     "@types/passport-jwt": "4.0.1",
     "@types/supertest": "6.0.2",
-    "@types/uuid": "10.0.0",
     "@types/web-push": "^3.6.4",
     "@typescript-eslint/eslint-plugin": "7.18.0",
     "@typescript-eslint/parser": "7.18.0",

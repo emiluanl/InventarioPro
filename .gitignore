@@ -5,6 +5,7 @@ node_modules/
 backend/dist/
 frontend/.next/
 frontend/.next-e2e/
+frontend/.next-pwa/
 frontend/out/
 
 # Playwright (e2e)

@@ -91,14 +91,23 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   // el refresh falla). Cerramos la sesión con router.replace (navegación SPA,
   // SIN recargar la página): recargar aquí reintentaría /auth/me y volvería a
   // fallar, creando un bucle infinito de recargas.
+  //
+  // Ojo: /auth/me dispara el refresh también sin sesión previa (para restaurar
+  // la sesión de quien tiene el refresh cookie válido), así que el evento llega
+  // a visitantes anónimos en rutas públicas (login, register, verify-email…).
+  // Ahí NO redirigimos: expulsaría de /register o rompería el enlace de
+  // verificación de /verify-email. El redirect solo aplica en rutas protegidas.
   useEffect(() => {
     const onSessionExpired = (): void => {
       setUser(null);
-      router.replace('/login');
+      const isPublic = PUBLIC_ROUTES.some((r) => pathname?.startsWith(r));
+      if (!isPublic) {
+        router.replace('/login');
+      }
     };
     window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
-  }, [router]);
+  }, [router, pathname]);
 
   const login = useCallback(
     async (input: LoginInput): Promise<void> => {

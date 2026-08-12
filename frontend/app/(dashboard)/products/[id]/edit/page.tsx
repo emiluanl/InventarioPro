@@ -1,6 +1,6 @@
 'use client';
 
-import type { JSX } from 'react';
+import { use, type JSX } from 'react';
 
 import Link from 'next/link';
 
@@ -8,14 +8,14 @@ import { useProduct } from '@/hooks/use-products';
 import { ProductForm } from '@/components/products/product-form';
 import { Alert } from '@/components/ui/alert';
 
-// Next 14 pasa `params` como objeto plano (el patrón Promise + use() es de
-// Next 15 y React 19; aquí React 18 no exporta `use` en runtime).
+// Desde Next 15, `params` llega como Promise (patrón recomendado: use() de
+// React 19 para resolverla).
 interface PageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default function EditProductPage({ params }: PageProps): JSX.Element {
-  const { id } = params;
+  const { id } = use(params);
   const { data: product, isLoading, isError, error } = useProduct(id);
 
   if (isLoading) {

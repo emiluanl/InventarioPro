@@ -58,6 +58,11 @@ export default defineConfig({
         CORS_ORIGIN: FRONTEND_URL,
         APP_BASE_URL: FRONTEND_URL,
         DEV_EMAIL_LOG: EMAIL_LOG,
+        // backend/.env (SMTP_* reales del dev) no debe contaminar el e2e: si
+        // SMTP_HOST queda definido, EmailService usa SMTP real y deja de
+        // escribir DEV_EMAIL_LOG (los tests no podrían recuperar el token).
+        // Forzamos SMTP_HOST vacío para caer en el modo dev (enlaces en log).
+        SMTP_HOST: '',
         STORAGE_PROVIDER: 'local',
       },
     },

@@ -31,6 +31,8 @@ CHECK_RETRIES="${CHECK_RETRIES:-3}"
 RETRY_DELAY_SEC="${RETRY_DELAY_SEC:-10}"
 TIMEOUT_SEC="${TIMEOUT_SEC:-10}"
 MONITOR_PING_URL="${MONITOR_PING_URL:-}"
+MONITOR_WEBHOOK_URL="${MONITOR_WEBHOOK_URL:-}"
+MONITOR_WEBHOOK_TOKEN="${MONITOR_WEBHOOK_TOKEN:-}"
 
 # ---------------------------------------------------------------------------
 # Ping de notificación (best-effort: un fallo de red NO debe romper el probe).
@@ -38,6 +40,40 @@ MONITOR_PING_URL="${MONITOR_PING_URL:-}"
 ping() {
   [ -z "${MONITOR_PING_URL}" ] && return 0
   curl -fsS -m 10 "$1" >/dev/null 2>&1 || true
+}
+
+# ---------------------------------------------------------------------------
+# Webhook de alerta (Slack/Discord/Mattermost: POST JSON con texto).
+# Best-effort como ping: un fallo aquí no rompe el probe.
+#   MONITOR_WEBHOOK_URL   - URL del webhook (p. ej. Slack Incoming Webhook).
+#   MONITOR_WEBHOOK_TOKEN - token opcional; se envía como cabecera
+#                           Authorization: Bearer <token>.
+# ---------------------------------------------------------------------------
+alert() {
+  [ -z "${MONITOR_WEBHOOK_URL}" ] && return 0
+  PAYLOAD=$(printf '{"text": "%s"}' "$1")
+  if [ -n "${MONITOR_WEBHOOK_TOKEN}" ]; then
+    curl -fsS -m 10 -H "Authorization: Bearer ${MONITOR_WEBHOOK_TOKEN}" \
+      -H "Content-Type: application/json" -d "${PAYLOAD}" "${MONITOR_WEBHOOK_URL}" >/dev/null 2>&1 || true
+  else
+    curl -fsS -m 10 -H "Content-Type: application/json" -d "${PAYLOAD}" \
+      "${MONITOR_WEBHOOK_URL}" >/dev/null 2>&1 || true
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Notificación SOLO en cambios de estado (DOWN↔UP), para no spamear cada
+# corrida del cron. Usa un archivo de estado en /tmp (efímero por contenedor;
+# suficiente para evitar el spam dentro de una sesión de uptime continua).
+# ---------------------------------------------------------------------------
+STATE_FILE="/tmp/monitor-state"
+
+set_state() {
+  echo "$1" > "${STATE_FILE}"
+}
+
+state_changed() {
+  [ "$(cat "${STATE_FILE}" 2>/dev/null || echo 'UP')" != "$1" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -69,6 +105,10 @@ while [ "${i}" -le "${CHECK_RETRIES}" ]; do
   if [ "${LIVENESS_OK}" = 1 ] && [ "${READINESS_OK}" = 1 ]; then
     echo "[uptime] UP: liveness y readiness responden (intento ${i})"
     ping "${MONITOR_PING_URL}"
+    if state_changed UP; then
+      alert "[InventarioPro] Recuperado: la API vuelve a responder."
+      set_state UP
+    fi
     exit 0
   fi
 
@@ -79,4 +119,8 @@ done
 
 echo "[uptime] DOWN: liveness (${API_CHECK_URL}) o readiness (${READINESS_URL}) fallan tras ${CHECK_RETRIES} intentos"
 ping "${MONITOR_PING_URL}/fail"
+if state_changed DOWN; then
+  alert "[InventarioPro] ALERTA: la API no responde (liveness y/o readiness fallan)."
+  set_state DOWN
+fi
 exit 1

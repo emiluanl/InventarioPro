@@ -1,0 +1,61 @@
+name: Deploy
+
+# =============================================================================
+# Deploy automatizado a producción.
+#
+# ⚠️  REQUIERE CONFIGURAR LOS SECRETS EN GitHub (Settings → Secrets → Actions):
+#     DEPLOY_HOST     - IP o dominio del servidor
+#     DEPLOY_USER     - usuario SSH (debe poder ejecutar docker)
+#     DEPLOY_SSH_KEY  - clave privada SSH (formato PEM, sin passphrase)
+#     DEPLOY_PORT     - puerto SSH (por defecto 22)
+#
+# El flujo es el patrón que ya usa DEPLOYMENT.md: pull del código en el
+# servidor + `docker compose up -d --build`. El job `migrate` del compose
+# aplica las migraciones automáticamente antes de que el backend sirva.
+#
+# Se dispara manualmente (workflow_dispatch) o al pushear a main. Si el
+# proyecto se mueve a un registro de imágenes (GHCR), este workflow puede
+# evolucionar a build+push en CI y pull en el servidor.
+# =============================================================================
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy a producción
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar secrets configurados
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          if [ -z "$HOST" ] || [ -z "$USER" ] || [ -z "$KEY" ]; then
+            echo "::error::Faltan secrets: configura DEPLOY_HOST, DEPLOY_USER y DEPLOY_SSH_KEY en Settings → Secrets."
+            exit 1
+          fi
+
+      - name: Desplegar vía SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script: |
+            set -e
+            cd "${{ vars.DEPLOY_DIR || '~/InventarioPro' }}"
+            git pull --ff-only origin main
+            # El env-file es local al servidor (NUNCA subir a git).
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+            # Verificación rápida: healthcheck del backend por la red interna.
+            sleep 15
+            docker inspect --format '{{.State.Health.Status}}' inventariopro-backend

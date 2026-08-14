@@ -98,6 +98,28 @@ docker compose -f docker-compose.prod.yml logs -f
 docker compose -f docker-compose.prod.yml ps
 ```
 
+### Deploy automatizado (GitHub Actions)
+
+El workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) hace
+`git pull` + `docker compose up -d --build` en el servidor vía SSH (el mismo
+flujo de esta sección). Se dispara al pushear a `main` o manualmente desde la
+pestaña Actions.
+
+Para activarlo, configura estos **secrets** en GitHub
+(`Settings → Secrets and variables → Actions`):
+
+| Secret | Descripción |
+|---|---|
+| `DEPLOY_HOST` | IP o dominio del servidor |
+| `DEPLOY_USER` | Usuario SSH con permisos sobre Docker |
+| `DEPLOY_SSH_KEY` | Clave privada SSH (PEM, sin passphrase) |
+| `DEPLOY_PORT` | Puerto SSH (opcional, por defecto 22) |
+| `DEPLOY_DIR` (variable) | Ruta del repo en el servidor (por defecto `~/InventarioPro`) |
+
+> El job `migrate` del compose aplica las migraciones automáticamente antes de
+> que el backend sirva; el workflow verifica el healthcheck al final. El
+> `.env.prod` vive solo en el servidor y nunca se sube a git.
+
 ## 5. Migrar la base de datos
 
 ```bash
@@ -411,6 +433,15 @@ BACKUP_PING_URL=https://hc-ping.com/<check-backups>
 # Opcional:
 # STALE_AFTER_MIN=1560
 # WATCHDOG_SCHEDULE="7 * * * *"
+```
+
+**Webhook de alerta directa (Slack/Discord/Teams, opcional)**: además del
+heartbeat de healthchecks.io, el monitor puede enviar un mensaje a un webhook
+**solo cuando el estado cambia** (DOWN↔UP), no en cada corrida:
+
+```bash
+MONITOR_WEBHOOK_URL=https://hooks.slack.com/services/...
+# MONITOR_WEBHOOK_TOKEN=opcional  # se envía como Authorization: Bearer
 ```
 
 > 💡 Compatibilidad: si `BACKUP_PING_URL` está vacío, el contenedor de backup

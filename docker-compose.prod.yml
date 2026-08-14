@@ -128,6 +128,11 @@ services:
       # Check de la API en healthchecks.io (periodo 5 min): el probe pinge la
       # URL en cada verificación y <url>/fail si la API queda caída.
       MONITOR_PING_URL: ${MONITOR_PING_URL:-}
+      # Webhook opcional (Slack/Discord/Teams): alerta SOLO en transiciones
+      # DOWN↔UP, no en cada corrida. MONITOR_WEBHOOK_TOKEN se manda como
+      # cabecera Authorization: Bearer <token>.
+      MONITOR_WEBHOOK_URL: ${MONITOR_WEBHOOK_URL:-}
+      MONITOR_WEBHOOK_TOKEN: ${MONITOR_WEBHOOK_TOKEN:-}
       TZ: ${TZ:-UTC}
     healthcheck:
       test: ['CMD-SHELL', "[ -f /etc/crontabs/root ] && grep -q '/usr/local/bin/uptime' /etc/crontabs/root"]

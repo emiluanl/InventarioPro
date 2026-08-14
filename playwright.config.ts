@@ -14,7 +14,6 @@ import {
   BACKEND_PORT,
   DATABASE_URL,
   EMAIL_LOG,
-  FRONTEND_DIR,
   FRONTEND_PORT,
   FRONTEND_URL,
   ROOT_DIR,
@@ -70,14 +69,18 @@ export default defineConfig({
       },
     },
     {
-      command: `npm run build && npx next start -p ${FRONTEND_PORT}`,
-      cwd: FRONTEND_DIR,
+      // e2e/start-frontend.cjs hace backup de next-env.d.ts y tsconfig.json,
+      // compila con NEXT_DIST_DIR=.next-e2e y los restaura al terminar — así
+      // el e2e local no ensucia el working tree (next build los reescribe).
+      command: `node e2e/start-frontend.cjs`,
+      cwd: ROOT_DIR,
       url: FRONTEND_URL,
       timeout: 300_000,
       reuseExistingServer: false,
       env: {
         NEXT_DIST_DIR: '.next-e2e',
         NEXT_PUBLIC_API_URL: API_URL,
+        E2E_FRONTEND_PORT: String(FRONTEND_PORT),
       },
     },
   ],

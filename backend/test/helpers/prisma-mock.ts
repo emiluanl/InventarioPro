@@ -20,7 +20,7 @@ export interface MockPrisma {
     delete: jest.Mock;
   };
   productAttachment: { findMany: jest.Mock };
-  category: { upsert: jest.Mock; findMany: jest.Mock };
+  category: { upsert: jest.Mock; findMany: jest.Mock; findFirst: jest.Mock; create: jest.Mock };
   refreshToken: {
     create: jest.Mock;
     findUnique: jest.Mock;
@@ -34,7 +34,14 @@ export interface MockPrisma {
     findMany: jest.Mock;
   };
   chatMessage: { findMany: jest.Mock; create: jest.Mock };
-  product: { findMany: jest.Mock };
+  product: {
+    findMany: jest.Mock;
+    findFirst: jest.Mock;
+    findUnique: jest.Mock;
+    count: jest.Mock;
+    create: jest.Mock;
+    update: jest.Mock;
+  };
   notification: {
     findMany: jest.Mock;
     findFirst: jest.Mock;
@@ -65,7 +72,7 @@ export function buildPrismaMock(): MockPrisma {
       delete: jest.fn(),
     },
     productAttachment: { findMany: jest.fn() },
-    category: { upsert: jest.fn(), findMany: jest.fn() },
+    category: { upsert: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
     refreshToken: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -79,7 +86,14 @@ export function buildPrismaMock(): MockPrisma {
       findMany: jest.fn(),
     },
     chatMessage: { findMany: jest.fn(), create: jest.fn() },
-    product: { findMany: jest.fn() },
+    product: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
+      count: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
     notification: {
       findMany: jest.fn(),
       findFirst: jest.fn(),

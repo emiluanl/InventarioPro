@@ -137,10 +137,12 @@ describe('NotificationsService', () => {
       prisma.notification.findFirst.mockResolvedValue(null);
       // El create devuelve la notificación creada (el service usa su mensaje
       // y product_id para el push).
-      prisma.notification.create.mockImplementation(async ({ data }: any) => ({
-        id: 'n1',
-        ...data,
-      }));
+      prisma.notification.create.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => ({
+          id: 'n1',
+          ...data,
+        }),
+      );
     });
 
     it('crea GARANTIA_POR_VENCER y GARANTIA_VENCIDA, y omite vigentes/sin garantía', async () => {
@@ -212,8 +214,9 @@ describe('NotificationsService', () => {
 
     it('dedupe: no crea un aviso si ya existe para el mismo producto y tipo', async () => {
       // findFirst devuelve una notificación existente para p1, pero null para p2.
-      prisma.notification.findFirst.mockImplementation(async ({ where }: any) =>
-        where.product_id === 'p1' ? { id: 'existing' } : null,
+      prisma.notification.findFirst.mockImplementation(
+        async ({ where }: { where: { product_id?: string } }) =>
+          where.product_id === 'p1' ? { id: 'existing' } : null,
       );
 
       const result = await service.checkWarranties(now);

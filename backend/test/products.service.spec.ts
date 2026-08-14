@@ -7,25 +7,16 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 
 import { ProductsService } from '../src/products/products.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { SortBy, SortOrder } from '../src/products/dto/products-query.dto';
+import { PurchaseType } from '../src/generated/prisma/client';
+import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';
 
 describe('ProductsService', () => {
   let service: ProductsService;
-  let prisma: any;
+  let prisma: MockPrisma;
 
   beforeEach(async () => {
-    prisma = {
-      product: {
-        findFirst: jest.fn(),
-        findMany: jest.fn(),
-        findUnique: jest.fn(),
-        count: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-      },
-      category: {
-        findFirst: jest.fn(),
-      },
-    };
+    prisma = buildPrismaMock();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [ProductsService, { provide: PrismaService, useValue: prisma }],
@@ -108,16 +99,16 @@ describe('ProductsService', () => {
   describe('create (categoría)', () => {
     it('rechaza categorías que no son del usuario ni del sistema', async () => {
       prisma.category.findFirst.mockResolvedValue(null);
-      prisma.product.create.mockResolvedValue({} as any);
+      prisma.product.create.mockResolvedValue({});
 
       await expect(
         service.create('u1', {
           nombre: 'X',
           fecha_compra: '2024-01-01',
-          tipo_compra: 'FISICO',
+          tipo_compra: PurchaseType.FISICO,
           precio: 100,
           categoria_id: 'cat-invalid',
-        } as any),
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
@@ -156,9 +147,9 @@ describe('ProductsService', () => {
       const result = await service.list('u1', {
         page: 2,
         per_page: 10,
-        sort_by: 'fecha_compra' as any,
-        sort_order: 'desc' as any,
-      } as any);
+        sort_by: SortBy.FECHA_COMPRA,
+        sort_order: SortOrder.DESC,
+      });
 
       expect(result.pagination).toEqual({
         page: 2,
@@ -183,9 +174,9 @@ describe('ProductsService', () => {
         page: 1,
         per_page: 20,
         search: 'licuadora',
-        sort_by: 'fecha_compra' as any,
-        sort_order: 'desc' as any,
-      } as any);
+        sort_by: SortBy.FECHA_COMPRA,
+        sort_order: SortOrder.DESC,
+      });
 
       const call = prisma.product.findMany.mock.calls[0][0];
       expect(call.where.OR).toBeDefined();

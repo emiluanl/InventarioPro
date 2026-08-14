@@ -94,41 +94,57 @@ interface Db {
 
 /** Conecta el mock de Prisma a una "BD" en memoria para que el flujo sea realista. */
 function wireDbMocks(prisma: MockPrisma, db: Db): void {
-  prisma.user.findUnique.mockImplementation(({ where }: any) => {
-    if (!db.user) return null;
-    // El service busca tanto por email (login) como por id (change-password,
-    // delete-account): matcheamos por la clave que traiga el where.
-    if (where.email && db.user.email !== where.email) return null;
-    if (where.id && db.user.id !== where.id) return null;
-    return db.user;
-  });
+  prisma.user.findUnique.mockImplementation(
+    ({ where }: { where: { email?: string; id?: string } }) => {
+      if (!db.user) return null;
+      // El service busca tanto por email (login) como por id (change-password,
+      // delete-account): matcheamos por la clave que traiga el where.
+      if (where.email && db.user.email !== where.email) return null;
+      if (where.id && db.user.id !== where.id) return null;
+      return db.user;
+    },
+  );
 
-  prisma.user.findFirst.mockImplementation(({ where }: any) => {
-    if (!db.user) return null;
-    if (where.email_verification_token !== db.user.email_verification_token) return null;
-    if (
-      db.user.email_verification_expires_at &&
-      db.user.email_verification_expires_at <= new Date()
-    ) {
-      return null;
-    }
-    return db.user;
-  });
+  prisma.user.findFirst.mockImplementation(
+    ({ where }: { where: { email_verification_token?: string } }) => {
+      if (!db.user) return null;
+      if (where.email_verification_token !== db.user.email_verification_token) return null;
+      if (
+        db.user.email_verification_expires_at &&
+        db.user.email_verification_expires_at <= new Date()
+      ) {
+        return null;
+      }
+      return db.user;
+    },
+  );
 
-  prisma.user.create.mockImplementation(({ data }: any) => {
-    db.user = {
-      id: `u-${Math.random().toString(36).slice(2, 10)}`,
-      email: data.email,
-      password_hash: data.password_hash,
-      nombre: data.nombre,
-      email_verificado: false,
-      email_verification_token: data.email_verification_token,
-      email_verification_expires_at: data.email_verification_expires_at,
-    };
-    return db.user;
-  });
+  prisma.user.create.mockImplementation(
+    ({
+      data,
+    }: {
+      data: {
+        email: string;
+        password_hash: string;
+        nombre: string;
+        email_verification_token: string;
+        email_verification_expires_at: Date | null;
+      };
+    }) => {
+      db.user = {
+        id: `u-${Math.random().toString(36).slice(2, 10)}`,
+        email: data.email,
+        password_hash: data.password_hash,
+        nombre: data.nombre,
+        email_verificado: false,
+        email_verification_token: data.email_verification_token,
+        email_verification_expires_at: data.email_verification_expires_at,
+      };
+      return db.user;
+    },
+  );
 
-  prisma.user.update.mockImplementation(({ data }: any) => {
+  prisma.user.update.mockImplementation(({ data }: { data: Partial<DbUser> }) => {
     if (!db.user) throw new Error('update sin usuario en BD');
     Object.assign(db.user, data);
     return db.user;
@@ -139,13 +155,15 @@ function wireDbMocks(prisma: MockPrisma, db: Db): void {
     return { id: `rt${db.refreshTokens}` };
   });
 
-  prisma.refreshToken.findUnique.mockImplementation(({ where }: any) => ({
-    id: 'rt-stored',
-    token_hash: where.token_hash,
-    revoked_at: null,
-    expires_at: new Date(Date.now() + 60 * 60 * 1000),
-    user: { id: db.user?.id ?? 'u1', email: db.user?.email ?? 'a@b.com' },
-  }));
+  prisma.refreshToken.findUnique.mockImplementation(
+    ({ where }: { where: { token_hash?: string } }) => ({
+      id: 'rt-stored',
+      token_hash: where.token_hash,
+      revoked_at: null,
+      expires_at: new Date(Date.now() + 60 * 60 * 1000),
+      user: { id: db.user?.id ?? 'u1', email: db.user?.email ?? 'a@b.com' },
+    }),
+  );
 
   prisma.refreshToken.update.mockResolvedValue({});
 

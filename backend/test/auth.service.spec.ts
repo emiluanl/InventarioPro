@@ -14,35 +14,25 @@ import { AuthService } from '../src/auth/auth.service';
 import { EmailService } from '../src/auth/email.service';
 import { StorageService } from '../src/common/storage.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';
+
+// Métodos privados que los tests parchean para no depender de argon2 real.
+// Tipo plano (sin intersección con AuthService: sus propiedades privadas
+// reducirían el tipo a `never`). El cast vía unknown es el puente estándar.
+type AuthServicePrivates = {
+  verifyPassword: jest.Mock;
+  hashPassword: jest.Mock;
+};
 
 describe('AuthService', () => {
   let service: AuthService;
-  let prisma: any;
-  let jwt: any;
-  let email: any;
-
-  let storage: any;
+  let prisma: MockPrisma;
+  let jwt: { signAsync: jest.Mock };
+  let email: { sendVerificationEmail: jest.Mock; sendPasswordResetEmail: jest.Mock };
+  let storage: { delete: jest.Mock; keyFromUrl: jest.Mock };
 
   beforeEach(async () => {
-    prisma = {
-      user: {
-        findUnique: jest.fn(),
-        findFirst: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-        delete: jest.fn(),
-      },
-      productAttachment: {
-        findMany: jest.fn(),
-      },
-      refreshToken: {
-        create: jest.fn(),
-        findUnique: jest.fn(),
-        update: jest.fn(),
-        updateMany: jest.fn(),
-      },
-      $transaction: jest.fn((ops) => Promise.all(ops)),
-    };
+    prisma = buildPrismaMock();
     jwt = {
       signAsync: jest.fn().mockResolvedValue('fake.access.token'),
     };
@@ -124,7 +114,9 @@ describe('AuthService', () => {
       // Espiamos verifyPassword (no podemos mockear argon2 dinámicamente fácil,
       // pero password_hash fake hará que argon2.verify devuelva false y lance
       // UnauthorizedException). En su lugar, parcheamos el método del service:
-      (service as any).verifyPassword = jest.fn().mockResolvedValue(true);
+      (service as unknown as AuthServicePrivates).verifyPassword = jest
+        .fn()
+        .mockResolvedValue(true);
 
       const result = await service.login({ email: 'a@b.com', password: 'Password123' });
 
@@ -141,7 +133,9 @@ describe('AuthService', () => {
         password_hash: 'fake-hash',
         email_verificado: false,
       });
-      (service as any).verifyPassword = jest.fn().mockResolvedValue(true);
+      (service as unknown as AuthServicePrivates).verifyPassword = jest
+        .fn()
+        .mockResolvedValue(true);
 
       await expect(service.login({ email: 'a@b.com', password: 'Password123' })).rejects.toThrow(
         'Debes verificar tu email',
@@ -162,7 +156,9 @@ describe('AuthService', () => {
         email: 'a@b.com',
         password_hash: 'fake-hash',
       });
-      (service as any).verifyPassword = jest.fn().mockResolvedValue(false);
+      (service as unknown as AuthServicePrivates).verifyPassword = jest
+        .fn()
+        .mockResolvedValue(false);
 
       await expect(service.login({ email: 'a@b.com', password: 'wrong' })).rejects.toBeInstanceOf(
         UnauthorizedException,
@@ -261,7 +257,9 @@ describe('AuthService', () => {
 
     it('cambia la contraseña y revoca todos los tokens', async () => {
       prisma.user.findFirst.mockResolvedValue({ id: 'u1' });
-      (service as any).hashPassword = jest.fn().mockResolvedValue('new-hash');
+      (service as unknown as AuthServicePrivates).hashPassword = jest
+        .fn()
+        .mockResolvedValue('new-hash');
       prisma.user.update.mockResolvedValue({});
       prisma.refreshToken.updateMany.mockResolvedValue({ count: 2 });
 
@@ -333,8 +331,12 @@ describe('AuthService', () => {
         email: 'a@b.com',
         password_hash: 'old-hash',
       });
-      (service as any).verifyPassword = jest.fn().mockResolvedValue(true);
-      (service as any).hashPassword = jest.fn().mockResolvedValue('new-hash');
+      (service as unknown as AuthServicePrivates).verifyPassword = jest
+        .fn()
+        .mockResolvedValue(true);
+      (service as unknown as AuthServicePrivates).hashPassword = jest
+        .fn()
+        .mockResolvedValue('new-hash');
       prisma.user.update.mockResolvedValue({});
       prisma.refreshToken.updateMany.mockResolvedValue({ count: 3 });
 
@@ -362,7 +364,9 @@ describe('AuthService', () => {
         email: 'a@b.com',
         password_hash: 'old-hash',
       });
-      (service as any).verifyPassword = jest.fn().mockResolvedValue(false);
+      (service as unknown as AuthServicePrivates).verifyPassword = jest
+        .fn()
+        .mockResolvedValue(false);
 
       await expect(
         service.changePassword('u1', {
@@ -394,7 +398,9 @@ describe('AuthService', () => {
         email: 'a@b.com',
         password_hash: 'hash',
       });
-      (service as any).verifyPassword = jest.fn().mockResolvedValue(true);
+      (service as unknown as AuthServicePrivates).verifyPassword = jest
+        .fn()
+        .mockResolvedValue(true);
       prisma.productAttachment.findMany.mockResolvedValue([
         { url: '/uploads/a.jpg' },
         { url: '/uploads/b.pdf' },
@@ -416,7 +422,9 @@ describe('AuthService', () => {
         email: 'a@b.com',
         password_hash: 'hash',
       });
-      (service as any).verifyPassword = jest.fn().mockResolvedValue(false);
+      (service as unknown as AuthServicePrivates).verifyPassword = jest
+        .fn()
+        .mockResolvedValue(false);
 
       await expect(service.deleteAccount('u1', 'WrongPass1')).rejects.toBeInstanceOf(
         UnauthorizedException,
@@ -431,7 +439,9 @@ describe('AuthService', () => {
         email: 'a@b.com',
         password_hash: 'hash',
       });
-      (service as any).verifyPassword = jest.fn().mockResolvedValue(true);
+      (service as unknown as AuthServicePrivates).verifyPassword = jest
+        .fn()
+        .mockResolvedValue(true);
       prisma.productAttachment.findMany.mockResolvedValue([{ url: '/uploads/a.jpg' }]);
       prisma.user.delete.mockResolvedValue({});
       storage.delete.mockRejectedValueOnce(new Error('S3 caído'));

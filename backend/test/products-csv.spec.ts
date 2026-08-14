@@ -12,22 +12,14 @@ import { BadRequestException } from '@nestjs/common';
 import { ProductsService } from '../src/products/products.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { parseProductsCsv } from '../src/products/csv';
+import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';
 
 describe('ProductsService CSV', () => {
   let service: ProductsService;
-  let prisma: any;
+  let prisma: MockPrisma;
 
   beforeEach(async () => {
-    prisma = {
-      product: {
-        findMany: jest.fn(),
-        create: jest.fn(),
-      },
-      category: {
-        findFirst: jest.fn(),
-        create: jest.fn(),
-      },
-    };
+    prisma = buildPrismaMock();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [ProductsService, { provide: PrismaService, useValue: prisma }],
@@ -198,7 +190,12 @@ describe('ProductsService CSV', () => {
     ].join('\n');
 
     beforeEach(() => {
-      prisma.product.create.mockImplementation(async ({ data }: any) => ({ id: 'new', ...data }));
+      prisma.product.create.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => ({
+          id: 'new',
+          ...data,
+        }),
+      );
     });
 
     it('importa las filas válidas y normaliza los campos', async () => {
@@ -233,10 +230,12 @@ describe('ProductsService CSV', () => {
 
     it('crea la categoría personalizada si no existe y la cachea por import', async () => {
       prisma.category.findFirst.mockResolvedValue(null);
-      prisma.category.create.mockImplementation(async ({ data }: any) => ({
-        id: 'cat-new',
-        nombre: data.nombre,
-      }));
+      prisma.category.create.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => ({
+          id: 'cat-new',
+          nombre: data.nombre,
+        }),
+      );
 
       const result = await service.importCsv('u1', csv);
 

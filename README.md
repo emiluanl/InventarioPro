@@ -258,9 +258,9 @@ Las herramientas ejecutan SIEMPRE del lado del servidor con filtrado por `user_i
 
 ## 📊 Estadísticas del proyecto
 
-- **143 archivos** de código y configuración (+ 17 del cliente Prisma generado)
-- **~13 300 líneas** de TypeScript / TSX / YAML / Prisma (sin el cliente generado)
-- **164 tests** (111 backend + 51 frontend + 2 e2e de navegador)
+- **175 archivos** de código y configuración (+ 17 del cliente Prisma generado)
+- **~15 400 líneas** de TypeScript / TSX / YAML / Prisma (sin el cliente generado)
+- **179 tests** (118 backend + 55 frontend + 6 e2e de navegador)
 - **9 modelos** en la base de datos + 5 enums
 - **~35 endpoints** REST
 - **12 páginas** en el frontend

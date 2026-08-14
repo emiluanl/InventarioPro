@@ -58,11 +58,13 @@ SMTP_USER=noreply@inventariopro.com
 SMTP_PASSWORD=tu-smtp-password
 SMTP_FROM="InventarioPro <noreply@inventariopro.com>"
 
-# Storage (Supabase)
-STORAGE_PROVIDER=supabase
-SUPABASE_URL=https://xxxxx.supabase.co
-SUPABASE_SERVICE_KEY=tu-service-key
-SUPABASE_BUCKET=inventariopro
+# Storage de archivos. Local (despliegue actual: ./backend/uploads, montado
+# en el contenedor y empaquetado en los backups) o Supabase (opcional):
+STORAGE_PROVIDER=local
+# Solo si STORAGE_PROVIDER=supabase:
+# SUPABASE_URL=https://xxxxx.supabase.co
+# SUPABASE_SERVICE_KEY=tu-service-key
+# SUPABASE_BUCKET=inventariopro
 
 # IA (DeepSeek, compatible con OpenAI). Sin key el chat usa un fallback amable.
 DEEPSEEK_API_KEY=tu-clave-DeepSeek
@@ -107,8 +109,10 @@ docker compose -f docker-compose.prod.yml ps
 El workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) hace
 `git pull` + `docker compose up -d --build` en el servidor vía SSH (el mismo
 flujo de esta sección). **Soporta dos entornos** — `staging` y `production` —
-y se dispara al pushear a `main` (producción) o manualmente desde la pestaña
-Actions eligiendo el entorno.
+y se lanza **manualmente** desde la pestaña Actions eligiendo el entorno
+(`workflow_dispatch`). El trigger automático por push a `main` está desactivado
+hasta configurar los secrets — ver [docs/DEPLOY-SETUP.md](docs/DEPLOY-SETUP.md) §5
+para reactivarlo.
 
 #### 1. Crear un entorno de staging (recomendado antes de tocar prod)
 
@@ -143,13 +147,14 @@ environment). El workflow mapea cada entorno a sus propios secrets:
 1. En GitHub, ve a la pestaña **Actions** → **Deploy** → **Run workflow**.
 2. Elige `staging` en el desplegable y lanza el job.
 3. El workflow hace `git pull` + `docker compose up -d --build` en staging y
-   verifica el healthcheck del backend al final.
+   verifica el healthcheck del backend al final (falla con `::error::` si no
+   quedó healthy).
 4. Solo cuando staging valide, repite con `production`.
 
 > El job `migrate` del compose aplica las migraciones automáticamente antes de
-> que el backend sirva; el workflow verifica el healthcheck al final. El
-> `.env.prod` vive solo en el servidor y nunca se sube a git. Para protección
-> extra, puedes crear *environments* en
+> que el backend sirva; el workflow verifica el healthcheck al final y **falla
+> si el backend no quedó healthy**. El `.env.prod` vive solo en el servidor y
+> nunca se sube a git. Para protección extra, puedes crear *environments* en
 > `Settings → Environments` y exigir aprobación manual antes de desplegar a
 > producción.
 
@@ -500,11 +505,11 @@ docker compose -f docker-compose.prod.yml exec backup /usr/local/bin/check
 # Healthcheck de Docker (healthy/unhealthy)
 docker ps --filter name=inventariopro-backup
 
-# Pings enviados (al configurar MONITOR_PING_URL, healthchecks.io los registra)
+# Pings enviados (al configurar BACKUP_PING_URL, healthchecks.io los registra)
 docker compose -f docker-compose.prod.yml logs backup | grep heartbeat
 ```
 
-Sin `MONITOR_PING_URL`, la alarma sigue funcionando vía **logs** y **exit
+Sin `BACKUP_PING_URL`, la alarma sigue funcionando vía **logs** y **exit
 code** (útil para scripts o monitores que lean `docker logs`).
 
 ### Alarma del backend (probe de la API)
@@ -526,8 +531,9 @@ minutos en dos niveles y alerta si algo falla:
   `RETRY_DELAY_SEC` segundos (10) antes de declarar DOWN; liveness y
   readiness deben pasar en el mismo intento.
 - **Aviso**: cuando todo responde hace `GET <MONITOR_PING_URL>` y si queda
-  caído `GET <MONITOR_PING_URL>/fail` (misma URL de heartbeat que los
-  backups). Sin `MONITOR_PING_URL`, la alarma queda en logs y exit codes.
+  caído `GET <MONITOR_PING_URL>/fail` (su propio check de la API — el de
+  backups es `BACKUP_PING_URL`, ver arriba). Sin `MONITOR_PING_URL`, la alarma
+  queda en logs y exit codes.
 
 Variables en `.env.prod` (opcionales, hay defaults):
 
@@ -576,7 +582,8 @@ El script [`scripts/verify-prod-health.sh`](scripts/verify-prod-health.sh)
 comprueba en un solo comando que el stack prod esté sano después de un
 reinicio de Docker Desktop o de un deploy:
 
-1. Docker arriba y los 7 servicios de prod presentes.
+1. Docker arriba y los 8 servicios de prod presentes (7 permanentes + el job
+   one-shot `migrate`).
 2. Healthchecks de cada contenedor (`running` + `healthy`).
 3. API responde con BD y Redis arriba (`/api/health`).
 4. El job `migrate` re-ejecuta de forma idempotente (exit 0 si no hay
@@ -728,7 +735,9 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod exec backend \
 ```bash
 cd /opt/inventariopro
 git clone <repo> .          # o copia el proyecto existente
-cp .env.prod.example .env.prod   # y completa los secretos
+# Crea .env.prod desde la plantilla de §3 (no existe .env.prod.example
+# commiteado: el archivo real nunca se sube a git) y completa los secretos
+cp backend/.env.example .env.prod   # base, y añade las vars de §3
 # 1. BD: levanta el Postgres, restaura el dump y verifica (sección 12.1)
 # 2. Uploads: descomprime el tar (sección 12.2)
 # 3. Stack: sube todo — el job 'migrate' es idempotente (no aplica nada ya

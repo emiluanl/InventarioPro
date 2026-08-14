@@ -1,0 +1,12 @@
+# Normaliza todos los archivos de texto a LF en el repo y en el checkout.
+# Anula core.autocrlf de Windows: los .ts/.tsx nunca se commitean con CRLF.
+* text=auto eol=lf
+
+# Binarios explícitos (nunca normalizar ni tocar)
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.pdf binary

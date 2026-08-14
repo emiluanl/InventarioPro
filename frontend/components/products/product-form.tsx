@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type JSX } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 
@@ -49,7 +49,7 @@ export function ProductForm({ mode, initialProduct }: ProductFormProps): JSX.Ele
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<ProductFormInput>({
     resolver: zodResolver(productFormSchema),
@@ -74,8 +74,10 @@ export function ProductForm({ mode, initialProduct }: ProductFormProps): JSX.Ele
     },
   });
 
-  const watchDuracion = watch('duracion_garantia_meses');
-  const watchFechaCompra = watch('fecha_compra');
+  // useWatch en vez de watch(): la regla react-hooks/incompatible-library exige
+  // la API recomendada por RHF para suscribirse a campos desde el render.
+  const watchDuracion = useWatch({ control, name: 'duracion_garantia_meses' });
+  const watchFechaCompra = useWatch({ control, name: 'fecha_compra' });
 
   // Si cambia duración o fecha_compra, recalcula fecha_vencimiento automáticamente.
   useEffect(() => {

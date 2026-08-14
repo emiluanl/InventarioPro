@@ -100,6 +100,8 @@ export function ProductImages({ productId, attachments }: ProductImagesProps): J
           Subir archivo
         </Button>
         {preview && (
+          /* eslint-disable-next-line @next/next/no-img-element -- preview es un
+             blob URL (URL.createObjectURL) que next/image no soporta. */
           <img
             src={preview}
             alt="preview"
@@ -121,6 +123,9 @@ export function ProductImages({ productId, attachments }: ProductImagesProps): J
                 )}
               >
                 <a href={resolveFileUrl(a.url)} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- URLs
+                      firmadas de Supabase/local con host dinámico: next/image
+                      exigiría remotePatterns frágiles y rompe el provider local. */}
                   <img
                     src={resolveFileUrl(a.url)}
                     alt={a.nombre ?? 'foto'}

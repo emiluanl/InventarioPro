@@ -12,9 +12,18 @@ name: Deploy
 # aplica las migraciones automáticamente antes de que el backend sirva.
 #
 # Cómo usarlo:
-#   - Manual (recomendado para probar): Actions → Deploy → "Run workflow"
-#     → elegir entorno (staging o production).
+#   - Manual: Actions → Deploy → "Run workflow" → elegir entorno (staging o
+#     production).
 #   - Automático: al pushear a main se despliega a producción.
+#
+# ⚠️  El trigger automático de push a main está DESACTIVADO temporalmente
+#     (hasta configurar los secrets en GitHub): con secrets ausentes el job
+#     fallaría en "Validar secrets" en cada push. Para reactivarlo, volver a
+#     añadir:
+#       push:
+#         branches: [main]
+#     Una vez los secrets DEPLOY_* estén configurados (ver
+#     docs/DEPLOY-SETUP.md), reinserta ese bloque.
 #
 # ⚠️  Staging no existe todavía: necesitas un servidor de pruebas. Una vez
 #     creado, configura sus secrets y podrás probar el workflow completo ahí
@@ -32,8 +41,6 @@ on:
         options:
           - staging
           - production
-  push:
-    branches: [main]
 
 jobs:
   deploy:

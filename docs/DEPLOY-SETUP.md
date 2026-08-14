@@ -205,7 +205,13 @@ aprobación antes de ejecutar el SSH.
 
 ## 5. Activar el deploy automático
 
-El push a `main` dispara el workflow automáticamente. Dos opciones:
+> 🔕 **Estado actual**: el trigger de push a `main` está **desactivado**
+> temporalmente en `.github/workflows/deploy.yml` (hasta configurar los
+> secrets, para que el CI no falle en cada push). Para reactivarlo, vuelve a
+> añadir el bloque `push: branches: [main]` (hay un comentario en el
+> workflow con las instrucciones).
+
+Cuando los secrets ya estén configurados, reactiva el trigger y:
 
 - **Inmediato**: haz el primer `git push` de la rama actual.
 - **Controlando cuándo**: elige `main` como `Deployment branches` en el

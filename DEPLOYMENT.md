@@ -526,7 +526,132 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 
 **Total estimado**: $15–20/mes para un uso personal bajo.
 
-## 12. Variables que NO debes commitear
+## 12. Recuperación ante desastre (DR)
+
+> **Procedimiento probado**: la restauración descrita abajo se validó de punta a
+> punta (restaurar el dump en un Postgres limpio 16-alpine → verificar conteos
+> y datos → conectar el cliente Prisma del backend → descomprimir el tar de
+> uploads). Los pasos funcionan tal cual están escritos.
+
+Cubre dos desastres comunes:
+
+| Escenario | Qué restaurar |
+|---|---|
+| BD corrupta, borrado accidental o error de migración | el **dump** (`inventariopro-*.dump`) |
+| Pérdida de fotos/recibos/facturas o disco nuevo | el **tar de uploads** (`uploads-*.tar.gz`) |
+| Servidor nuevo completo | **ambos**, en ese orden |
+
+Los artefactos viven en `./backups` del host (y, si configuraste `RCLONE_REMOTE`,
+una copia en el destino remoto — descárgala con rclone y colócala en `./backups`).
+
+### 12.1 Restaurar la base de datos
+
+**Opción rápida** (misma instancia, BD existente): usa el helper del contenedor
+`backup`, que aplica `--clean --if-exists --no-owner` (deja la BD en el estado
+exacto del dump):
+
+```bash
+cd /opt/inventariopro
+# 1. Baja el backend (no debe escribir en la BD mientras se restaura)
+docker compose -f docker-compose.prod.yml --env-file .env.prod stop backend
+# 2. Restaura
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec backup \
+  /usr/local/bin/restore backups/inventariopro-YYYYMMDD-HHMMSS.dump
+# 3. Vuelve a levantarlo
+docker compose -f docker-compose.prod.yml --env-file .env.prod start backend
+```
+
+**Opción completa** (Postgres limpio / servidor nuevo): en vez de confiar en la
+BD existente, se restaura en un Postgres nuevo y se verifica antes de apuntar el
+stack hacia él:
+
+```bash
+# 1. Levanta un Postgres temporal con la MISMA imagen de producción
+#    (16-alpine) en un puerto que no colisione (5433):
+docker run -d --name inventariopro-dr-test \
+  -e POSTGRES_USER=inventariopro -e POSTGRES_PASSWORD=inventariopro \
+  -e POSTGRES_DB=inventariopro -p 5433:5432 \
+  -v inventariopro_dr_test:/var/lib/postgresql/data \
+  postgres:16-alpine
+
+# 2. Espera a que esté listo y restaura el dump (--exit-on-error aborta si
+#    algo no cuadra; --no-owner evita errores si el rol original no existe):
+docker cp backups/inventariopro-YYYYMMDD-HHMMSS.dump inventariopro-dr-test:/tmp/dump
+docker exec inventariopro-dr-test pg_restore \
+  -U inventariopro -d inventariopro --no-owner --exit-on-error /tmp/dump
+#    (Nota Windows/Git Bash: antepone MSYS_NO_PATHCONV=1 al docker exec para
+#    que /tmp no se convierta en ruta de Windows.)
+
+# 3. VERIFICA antes de seguir (esto es lo que hace que el procedimiento sirva):
+#    los conteos de las 10 tablas deben coincidir con los de producción.
+#    Si restauras en un servidor nuevo, compáralos con la última copia remota.
+docker exec inventariopro-dr-test psql -U inventariopro -d inventariopro -tAc \
+  "SELECT (SELECT count(*) FROM users), (SELECT count(*) FROM products), (SELECT count(*) FROM categories)"
+
+# 4. Comprueba también datos reales (emails, productos):
+docker exec inventariopro-dr-test psql -U inventariopro -d inventariopro -tAc \
+  "SELECT email FROM users ORDER BY email"
+
+# 5. (Opcional pero recomendado) Conecta el cliente Prisma del backend contra
+#    la BD restaurada — el mismo camino que usa la app en producción. Requiere
+#    el build local (backend/dist existe tras `npm run build`; en un servidor
+#    nuevo sin build puedes saltarlo, los pasos 3-4 ya verifican los datos):
+cd backend && DATABASE_URL="postgresql://inventariopro:inventariopro@localhost:5433/inventariopro?schema=public" \
+  node -e "const {PrismaClient}=require('./dist/generated/prisma/client.js');const {PrismaPg}=require('@prisma/adapter-pg');const p=new PrismaClient({adapter:new PrismaPg({connectionString:process.env.DATABASE_URL})});p.user.count().then(c=>{console.log('users='+c);return p.product.count()}).then(c=>{console.log('products='+c);process.exit(0)}).catch(e=>{console.error(e.message);process.exit(1)})"
+```
+
+Si todo cuadra, detén el stack, apunta `DATABASE_URL` al Postgres restaurado
+(en el servidor nuevo: edita `.env.prod` con la IP del nuevo Postgres y sube el
+stack) y elimina el contenedor de prueba:
+
+```bash
+docker rm -f inventariopro-dr-test && docker volume rm inventariopro_dr_test
+```
+
+### 12.2 Restaurar los uploads
+
+El tar empaqueta con prefijo `uploads-src/` (el `basename` de `UPLOADS_SRC`, el
+mount del contenedor de backup). Al restaurar hay que **extraer el contenido
+DENTRO de `backend/uploads`** (el directorio que el backend monta en
+`/app/uploads`) quitando ese prefijo con `--strip-components=1`:
+
+```bash
+cd /opt/inventariopro
+# 1. Con el backend detenido (o tras el restore de la BD), descomprime el tar
+#    dentro de backend/uploads (el prefijo uploads-src/ del tar se descarta):
+tar -xzf backups/uploads-YYYYMMDD-HHMMSS.tar.gz -C backend/uploads --strip-components=1
+
+# 2. Verifica que las fotos quedaron en el directorio que el backend monta:
+ls backend/uploads/products/
+
+# 3. Comprueba que el contenedor las ve (el backend monta ./backend/uploads):
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec backend \
+  ls -la /app/uploads/products/
+```
+
+> En un servidor Linux recuerda los permisos: el usuario `app` del contenedor
+> (uid 999) debe poder leer `backend/uploads` — `chown -R 999:999 backend/uploads`
+> si los archivos restaurados quedaron con otro dueño.
+
+### 12.3 Orden de recuperación completo (servidor nuevo)
+
+```bash
+cd /opt/inventariopro
+git clone <repo> .          # o copia el proyecto existente
+cp .env.prod.example .env.prod   # y completa los secretos
+# 1. BD: levanta el Postgres, restaura el dump y verifica (sección 12.1)
+# 2. Uploads: descomprime el tar (sección 12.2)
+# 3. Stack: sube todo — el job 'migrate' es idempotente (no aplica nada ya
+#    aplicado en el dump) y el backend arranca después
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+```
+
+> ⚠️ El dump de `pg_dump -Fc` **no** incluye la estructura de objetos ajenos a
+> la app (roles, tablespaces). En un servidor nuevo, el usuario `inventariopro`
+> debe existir con su rol antes de restaurar — el `docker run` de la sección
+> 12.1 ya lo crea vía `POSTGRES_USER`.
+
+## 13. Variables que NO debes commitear
 
 - `JWT_ACCESS_SECRET`
 - `POSTGRES_PASSWORD`, `REDIS_PASSWORD`

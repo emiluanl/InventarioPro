@@ -191,6 +191,7 @@ Guía paso a paso en [`DEPLOYMENT.md`](./DEPLOYMENT.md). Incluye:
 - Migraciones aplicadas por el job one-shot `migrate` antes de servir
 - HTTPS automático con Caddy (Let's Encrypt)
 - Backups automáticos de Postgres (contenedor con cron + pg_dump + retención + **copia remota opcional con rclone** a S3/SFTP/NAS + **watchdog que alarma si el último dump supera 26 h** con heartbeat a healthchecks.io, ver [DEPLOYMENT.md §7-8](./DEPLOYMENT.md))
+- **Recuperación ante desastre** con procedimiento probado: restaurar el dump (BD) y el tar de uploads (fotos) en servidor nuevo o tras corrupción, ver [DEPLOYMENT.md §12](./DEPLOYMENT.md)
 - Monitoreo de la API (contenedor `monitor` con probe cada 5 min a `/api/auth/me`, alerta si la API deja de responder; extensible a UptimeRobot/BetterStack con dominio real, ver [DEPLOYMENT.md §8](./DEPLOYMENT.md))
 - Estimación de costos (~$15–20/mes para uso personal bajo)
 - Troubleshooting

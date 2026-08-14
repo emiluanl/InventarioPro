@@ -43,7 +43,10 @@ export default defineConfig({
       command: 'node e2e/start-backend.cjs',
       cwd: ROOT_DIR,
       url: `${API_URL}/health`,
-      timeout: 180_000,
+      // En local (Windows) el nest build en frío + generate + migrate puede
+      // superar 180s cuando corre en paralelo con el build del frontend y con
+      // Docker activo. En CI (Linux) sobra con 300s.
+      timeout: 300_000,
       reuseExistingServer: false,
       env: {
         PORT: String(BACKEND_PORT),

@@ -24,12 +24,12 @@ Pensada como una **herramienta de gestión de posesiones personales** (no como u
 | **Backend** | NestJS 11 + TypeScript |
 | **Base de datos** | PostgreSQL 16 + Prisma ORM 7 (cliente generado + driver adapter pg) |
 | **Cache, sesiones, rate limiting** | Redis 7 |
-| **Almacenamiento de archivos** | Local (dev) / Supabase Storage (prod) |
+| **Almacenamiento de archivos** | Local (dev y despliegue actual: `./backend/uploads`, incluido en los backups) / Supabase Storage (opción soportada) |
 | **Autenticación** | JWT propio (access 15 min + refresh 7 días, cookies httpOnly) |
 | **IA conversacional** | API de DeepSeek (chat completions + function calling, compatible con OpenAI) |
 | **Contenedores** | Docker + docker-compose |
 | **HTTPS en producción** | Caddy con Let's Encrypt automático |
-| **CI** | GitHub Actions (lint + type-check + tests + build) |
+| **CI** | GitHub Actions (lint + type-check + tests + build + audit) |
 
 ## 📂 Estructura
 
@@ -136,13 +136,15 @@ npm run dev
 Tres capas, todas en el CI:
 
 ```bash
-# 1) Backend — Jest (111 tests)
+# 1) Backend — Jest (118 tests)
 cd backend && npm test
 
-# 2) Frontend — Vitest + Testing Library (51 tests)
+# 2) Frontend — Vitest + Testing Library (55 tests)
 cd frontend && npm test
 
-# 3) E2E de navegador — Playwright (registro → verificación → login → alta de producto)
+# 3) E2E de navegador — Playwright (6 tests: registro → verificación → login,
+#    CRUD de productos, categorías, reportes + CSV, chat, notificaciones y
+#    configuración de cuenta)
 npm install            # en la raíz (deps del e2e)
 npx playwright install chromium
 npm run test:e2e:local # levanta el stack dev, crea la BD e2e si falta, corre y baja

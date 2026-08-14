@@ -31,6 +31,7 @@ import { DeleteAccountDto } from './dto/delete-account.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser, AuthUser } from './decorators/current-user.decorator';
 import { CookiesService } from '../common/cookies.service';
+import { AUTH_LIMITS } from '../common/throttler.config';
 
 @Controller('auth')
 export class AuthController {
@@ -45,8 +46,8 @@ export class AuthController {
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  // 100 por hora por IP (el guard global ThrottlerGuard aplica igualmente).
-  @Throttle({ default: { limit: 100, ttl: 60 * 60 * 1000 } })
+  // 100 por hora por IP por defecto (THROTTLE_REGISTER_LIMIT para los e2e).
+  @Throttle({ default: AUTH_LIMITS.register })
   register(@Body() dto: RegisterDto) {
     return this.auth.register(dto);
   }
@@ -57,7 +58,7 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
+  @Throttle({ default: AUTH_LIMITS.login })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.login(dto);
     this.cookies.setAuthCookies(res, result);
@@ -70,7 +71,7 @@ export class AuthController {
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 10, ttl: 60 * 1000 } })
+  @Throttle({ default: AUTH_LIMITS.refresh })
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const refreshToken = req.cookies?.['refresh_token'];
     if (!refreshToken) {
@@ -106,7 +107,7 @@ export class AuthController {
   @Public()
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 3, ttl: 60 * 60 * 1000 } })
+  @Throttle({ default: AUTH_LIMITS.forgotPassword })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.auth.forgotPassword(dto.email);
   }
@@ -178,7 +179,7 @@ export class AuthController {
   @Public()
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 3, ttl: 60 * 60 * 1000 } })
+  @Throttle({ default: AUTH_LIMITS.resendVerification })
   resendVerification(@Body() dto: ForgotPasswordDto) {
     return this.auth.resendVerificationEmail(dto.email);
   }

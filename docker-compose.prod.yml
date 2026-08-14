@@ -136,13 +136,34 @@ services:
       retries: 3
       start_period: 10s
 
+  # Job one-shot de migraciones: aplica `prisma migrate deploy` y sale. Corre
+  # antes de que el backend sirva (depends_on service_completed_successfully).
+  # Así el CLI de Prisma (que pesa ~200MB con Studio) NO viaja en la imagen
+  # runtime del backend — la imagen queda drásticamente más chica.
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: migrate
+    container_name: inventariopro-migrate
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-inventariopro}?schema=public
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: runtime
     container_name: inventariopro-backend
     restart: always
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:

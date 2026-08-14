@@ -101,15 +101,15 @@ docker compose -f docker-compose.prod.yml ps
 ## 5. Migrar la base de datos
 
 ```bash
-# Una vez levantado, ejecuta las migraciones dentro del contenedor del backend
-docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
+# Las migraciones las aplica el job one-shot 'migrate' antes de que el backend
+# sirva (depends_on service_completed_successfully). Para aplicarlas a mano:
+docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm migrate
 ```
 
-> El comando es **idempotente** y además ya se ejecuta solo: el contenedor del
-> backend corre `npx prisma migrate deploy && node dist/main.js` en cada
-> arranque, así que un `up -d` con código nuevo aplica las migraciones
-> pendientes antes de servir. Este paso solo hace falta si quieres aplicarlas
-> sin reiniciar el backend.
+> El comando es **idempotente** y además ya se ejecuta solo: en cada
+> `up -d --build` con código nuevo, el job `migrate` aplica las migraciones
+> pendientes y solo entonces arranca el backend (la imagen runtime del backend
+> no incluye el CLI de Prisma, por eso las migraciones viven en su propio job).
 
 ## 6. HTTPS automático
 
@@ -499,7 +499,7 @@ docker compose -f docker-compose.prod.yml logs -f monitor
 cd /opt/inventariopro
 git pull
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
-docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
+# Las migraciones ya las aplica el job 'migrate' (one-shot) del compose.
 ```
 
 ## 10. Troubleshooting

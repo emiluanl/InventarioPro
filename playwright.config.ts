@@ -66,6 +66,14 @@ export default defineConfig({
         // Forzamos SMTP_HOST vacío para caer en el modo dev (enlaces en log).
         SMTP_HOST: '',
         STORAGE_PROVIDER: 'local',
+        // Los límites de auth por defecto (5 login/15min, 3 forgot/hora…) se
+        // agotan cuando N tests corren en paralelo desde localhost. Subimos
+        // los límites SOLO para el backend e2e (env temporal del proceso).
+        THROTTLE_LOGIN_LIMIT: '1000',
+        THROTTLE_REGISTER_LIMIT: '1000',
+        THROTTLE_REFRESH_LIMIT: '1000',
+        THROTTLE_FORGOT_LIMIT: '1000',
+        THROTTLE_RESEND_LIMIT: '1000',
       },
     },
     {

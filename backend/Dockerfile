@@ -49,19 +49,16 @@ ENV NODE_ENV=production
 # openssl en runtime: los engines de Prisma hacen dlopen de libssl en caliente.
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Parte del node_modules de producción limpio (stage deps) y añade SOLO el CLI
-# de prisma. Se instala aislado en /tmp con un package.json mínimo (sin el
-# lock del proyecto — que marca prisma como devOptional y npm no lo instala —
-# y sin las devDeps, que npm reinstalaría con el package.json del proyecto).
-COPY --from=deps /app/node_modules ./node_modules
-COPY package.json ./
-RUN mkdir -p /tmp/prisma-cli && cd /tmp/prisma-cli && \
-    echo '{"name":"prisma-cli","private":true,"dependencies":{"prisma":"7.9.1"}}' > package.json && \
-    npm install --no-audit --no-fund --no-package-lock && \
-    cp -r node_modules/. /app/node_modules/
+# Solo lo que `migrate deploy` necesita: el CLI de prisma (que en v7 arrastra
+# @prisma/studio-core como dependencia obligatoria) y dotenv (lo importa
+# prisma.config.ts). Nada de las deps de la app (nest, express, @prisma/client).
+# --no-package-lock: sin el lock del proyecto (que marca prisma como
+# devOptional y npm no lo instalaría); instalar en el WORKDIR crea un
+# package.json privado con solo estas dos deps.
+RUN npm install --omit=dev --no-audit --no-fund --no-package-lock prisma@7.9.1 dotenv
+
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-COPY package.json ./
 
 # Usuario no-root
 RUN groupadd -r app && useradd -r -g app app

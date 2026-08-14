@@ -24,11 +24,15 @@
 #     se acepta como fallback (config antigua). Vacío = solo logs + exit codes.
 # =============================================================================
 
-FROM postgres:16-alpine
+# Base ligera: el contenedor SOLO ejecuta pg_dump/pg_restore (clientes), no
+# el servidor Postgres — así que no hace falta la imagen postgres completa
+# (~420MB). alpine + postgresql16-client + rclone ≈ ~95MB en vez de ~570MB.
+FROM alpine:3.20
 
 # tzdata: para que la hora del cron respete TZ (alpine sin tzdata = UTC fijo).
 # rclone: copia remota de los dumps (S3, SFTP, WebDAV, etc.).
-RUN apk add --no-cache tzdata rclone
+# postgresql16-client: pg_dump / pg_restore (misma versión mayor que el server).
+RUN apk add --no-cache tzdata rclone postgresql16-client
 
 COPY backup.sh /usr/local/bin/backup
 COPY check.sh /usr/local/bin/check

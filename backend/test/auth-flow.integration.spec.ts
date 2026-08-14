@@ -16,8 +16,12 @@
 // No se necesita base de datos: PrismaService se sustituye por mocks.
 // =============================================================================
 
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { ThrottlerStorage } from '@nestjs/throttler';
@@ -460,5 +464,87 @@ describe('Flujo completo de auth (integración)', () => {
     const bad = await http().post('/api/auth/verify-email').send({ token: 'token-inexistente' });
     expect(bad.status).toBe(400);
     expect(bad.body.message).toContain('inválido o expirado');
+  });
+
+  // ===========================================================================
+  // FALLBACK DE APP_BASE_URL (EmailService real, sin override)
+  // ===========================================================================
+  // El resto de la suite mockea EmailService para capturar tokens. Aquí en
+  // cambio compilamos un submódulo con el EmailService REAL y un ConfigService
+  // SIN APP_BASE_URL: el registro por HTTP debe generar el enlace de
+  // verificación con el fallback :3010 (el frontend dev). Verificamos la
+  // salida de DEV_EMAIL_LOG, la vía observable del modo dev.
+  describe('EmailService real: fallback de APP_BASE_URL en el registro', () => {
+    let app: INestApplication;
+    let emailLogDir: string;
+    let emailLogFile: string;
+    let throttlerStorage: TestThrottleStorage;
+    let db: Db;
+    let prisma: MockPrisma;
+
+    beforeAll(async () => {
+      process.env.JWT_ACCESS_SECRET = 'test-access-secret-32chars-minimum';
+      process.env.NODE_ENV = 'test';
+
+      db = { user: null, refreshTokens: 0 };
+      prisma = buildPrismaMock();
+      wireDbMocks(prisma, db);
+
+      const storage = { delete: jest.fn().mockResolvedValue(undefined) };
+      throttlerStorage = new TestThrottleStorage();
+
+      emailLogDir = mkdtempSync(join(tmpdir(), 'auth-flow-email-'));
+      emailLogFile = join(emailLogDir, 'emails.log');
+
+      const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+        .overrideProvider(PrismaService)
+        .useValue(prisma)
+        .overrideProvider(StorageService)
+        .useValue(storage)
+        .overrideProvider(ThrottlerStorage)
+        .useValue(throttlerStorage)
+        // ConfigService SIN APP_BASE_URL: fuerza el fallback del EmailService.
+        .overrideProvider(ConfigService)
+        .useValue({
+          get: (key: string) => {
+            const map: Record<string, string> = {
+              JWT_ACCESS_SECRET: 'test-access-secret-32chars-minimum',
+              JWT_ACCESS_TTL: '15m',
+              JWT_REFRESH_TTL: '7d',
+              DEV_EMAIL_LOG: emailLogFile,
+            };
+            return map[key];
+          },
+        })
+        .compile();
+
+      app = moduleRef.createNestApplication();
+      app.setGlobalPrefix('api');
+      app.use(cookieParser());
+      app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+      await app.init();
+    });
+
+    afterAll(async () => {
+      await app.close();
+      rmSync(emailLogDir, { recursive: true, force: true });
+    });
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      throttlerStorage.reset();
+    });
+
+    it('el registro genera el enlace de verificación con el fallback :3010', async () => {
+      const reg = await request(app.getHttpServer())
+        .post('/api/auth/register')
+        .send({ email: 'fallback@example.com', password: 'Password123', nombre: 'Fallo' });
+      expect(reg.status).toBe(201);
+
+      const log = readFileSync(emailLogFile, 'utf8');
+      expect(log).toContain(
+        'VERIFY|fallback@example.com|http://localhost:3010/verify-email?token=',
+      );
+    });
   });
 });

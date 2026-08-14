@@ -20,7 +20,7 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ onClose }: ChatPanelProps): JSX.Element {
-  const { data: conversations } = useConversations();
+  const { data: conversations, isLoading: conversationsLoading } = useConversations();
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
 
   // Mientras no se elija una conversación explícitamente, usamos la más
@@ -86,16 +86,23 @@ export function ChatPanel({ onClose }: ChatPanelProps): JSX.Element {
 
       {/* Mensajes */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
-        {isLoading && <p className="text-center text-xs text-gray-500">Cargando mensajes…</p>}
+        {/* Mientras cargan las conversaciones (o los mensajes de la activa). */}
+        {((conversationsLoading && !activeConversationId) ||
+          (isLoading && activeConversationId)) && (
+          <p className="text-center text-xs text-gray-500">Cargando mensajes…</p>
+        )}
 
-        {messages && messages.length === 0 && (
+        {/* Sin conversaciones cargadas aún no aplica: el saludo solo cuando
+            sabemos que no hay ninguna, o cuando la activa está vacía. */}
+        {(!conversationsLoading && !activeConversationId) ||
+          (messages && messages.length === 0) ? (
           <div className="flex h-full flex-col items-center justify-center text-center text-sm text-gray-600">
             <p className="font-medium">¡Hola! Soy tu asistente.</p>
             <p className="mt-1 text-xs">
               Prueba: "¿Qué compré en enero?" o "Registra una licuadora Oster que compré ayer por $150".
             </p>
           </div>
-        )}
+        ) : null}
 
         {messages?.map((m) => (
           <ChatMessageBubble key={m.id} message={m} />

@@ -76,6 +76,16 @@ pendiente:
 residual es el mismo para cualquier setup single-laptop (pérdida física), pero
 los dumps ya viven también fuera del disco local.
 
+## 🚀 Local-first (app portable + nube opcional) — PROPUESTA
+
+Plan técnico detallado en [`docs/LOCAL-FIRST.md`](../../docs/LOCAL-FIRST.md):
+convertir el proyecto a local-first con **SQLite embebido** (app de doble
+clic, cada persona con sus datos en su disco, sin límites centrales) más el
+modo nube actual como opción. La viabilidad del schema a SQLite ya está
+verificada (9 modelos + 5 enums + Decimal son compatibles; solo hay que
+quitar las anotaciones `@db.*` y regenerar migraciones). No iniciado — espera
+una ventana de trabajo enfocada (~3-4 semanas nivel A).
+
 ## ✅ Aplicado
 
 - **Rediseño dark-first estilo Musk** (tokens + paleta + componentes UI +

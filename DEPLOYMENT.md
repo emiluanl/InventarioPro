@@ -100,6 +100,10 @@ docker compose -f docker-compose.prod.yml ps
 
 ### Deploy automatizado (GitHub Actions)
 
+> 📘 **Guía paso a paso**: [docs/DEPLOY-SETUP.md](docs/DEPLOY-SETUP.md) —
+> creación del servidor staging, instalación de Docker, clave SSH,
+> configuración de secrets y prueba del primer deploy.
+
 El workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) hace
 `git pull` + `docker compose up -d --build` en el servidor vía SSH (el mismo
 flujo de esta sección). **Soporta dos entornos** — `staging` y `production` —

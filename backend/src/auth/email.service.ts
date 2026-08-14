@@ -24,7 +24,7 @@ export class EmailService {
   constructor(private readonly config: ConfigService) {
     this.fromAddress =
       this.config.get<string>('SMTP_FROM') ?? 'InventarioPro <noreply@example.com>';
-    this.baseUrl = this.config.get<string>('APP_BASE_URL') ?? 'http://localhost:3000';
+    this.baseUrl = this.config.get<string>('APP_BASE_URL') ?? 'http://localhost:3010';
 
     const host = this.config.get<string>('SMTP_HOST');
     const port = Number(this.config.get<string>('SMTP_PORT') ?? 587);

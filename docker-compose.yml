@@ -55,6 +55,7 @@ services:
       # El frontend dev publica en :3010 para no chocar con el de producción
       # (que usa :3000). Ver README "Con Docker".
       CORS_ORIGIN: http://localhost:3010
+      APP_BASE_URL: http://localhost:3010
       DATABASE_URL: postgresql://inventariopro:inventariopro@postgres:5432/inventariopro?schema=public
       REDIS_HOST: redis
       REDIS_PORT: 6379

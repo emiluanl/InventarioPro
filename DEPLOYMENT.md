@@ -562,6 +562,28 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 # Las migraciones ya las aplica el job 'migrate' (one-shot) del compose.
 ```
 
+### Verificación de salud post-deploy (o tras reiniciar Docker)
+
+El script [`scripts/verify-prod-health.sh`](scripts/verify-prod-health.sh)
+comprueba en un solo comando que el stack prod esté sano después de un
+reinicio de Docker Desktop o de un deploy:
+
+1. Docker arriba y los 7 servicios de prod presentes.
+2. Healthchecks de cada contenedor (`running` + `healthy`).
+3. API responde con BD y Redis arriba (`/api/health`).
+4. El job `migrate` re-ejecuta de forma idempotente (exit 0 si no hay
+   migraciones pendientes).
+5. Conteos mínimos de `users`/`products`/`categories` en la BD real (los
+   umbrales se ajustan con `EXPECT_USERS=`, `EXPECT_PRODUCTS=`,
+   `EXPECT_CATEGORIES=`).
+
+```bash
+npm run verify:prod              # verificación completa
+npm run verify:prod -- --quick   # solo healthchecks + API (omite migrate y datos)
+```
+
+> Pensado también para CI: sale con exit 0 solo si todo está OK.
+
 ## 10. Troubleshooting
 
 | Problema | Solución |

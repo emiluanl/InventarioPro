@@ -197,15 +197,18 @@ adicional) y escribe los dumps en `./backups` del host:
 #   TZ=America/Argentina/Buenos_Aires
 #   WATCHDOG_SCHEDULE="7 * * * *"   (watchdog cada hora)
 #   STALE_AFTER_MIN=1560             (26 h: alarma si el último dump es viejo)
-#   MONITOR_PING_URL="https://hc-ping.com/<check-id>"  (heartbeat/alarma, ver §8)
+#   BACKUP_PING_URL="https://hc-ping.com/<check-backups>"  (heartbeat del backup, ver §8)
+#   MONITOR_PING_URL="https://hc-ping.com/<check-api>"     (monitor de la API; fallback
+#                                                            legacy del backup si el anterior va vacío)
 
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 ```
 
 > Además del backup diario, el contenedor ejecuta un **watchdog** (`check.sh`)
 > cada hora que comprueba la antigüedad del último dump y, si supera
-> `STALE_AFTER_MIN` (26 h), lo registra en los logs, avisa a `MONITOR_PING_URL`
-> (si está configurada) y deja de pasar el healthcheck de Docker.
+> `STALE_AFTER_MIN` (26 h), lo registra en los logs, avisa a `BACKUP_PING_URL`
+> (si está configurada; `MONITOR_PING_URL` solo como fallback legacy) y deja de
+> pasar el healthcheck de Docker.
 
 ### Verificar que funciona
 
@@ -429,12 +432,13 @@ compartirse):
 
 El contenedor `backup` trae dos mecanismos integrados:
 
-- **Heartbeat**: `backup.sh` hace `GET <MONITOR_PING_URL>` cuando el backup
-  termina bien y `GET <MONITOR_PING_URL>/fail` si falla (convención
+- **Heartbeat**: `backup.sh` hace `GET <BACKUP_PING_URL>` cuando el backup
+  termina bien y `GET <BACKUP_PING_URL>/fail` si falla (convención
   healthchecks.io). Es el latido de "los backups están funcionando".
+  (`MONITOR_PING_URL` solo se usa como fallback si el anterior va vacío.)
 - **Watchdog**: `check.sh` (cron cada hora) comprueba que el último dump tenga
   menos de `STALE_AFTER_MIN` minutos (26 h por defecto). Si está viejo o no
-  hay ningún dump, hace `GET <MONITOR_PING_URL>/fail` y falla el healthcheck
+  hay ningún dump, hace `GET <BACKUP_PING_URL>/fail` y falla el healthcheck
   de Docker (`docker ps` lo muestra como *unhealthy*). Sin dumps aún (primer
   arranque) el healthcheck se considera sano.
 

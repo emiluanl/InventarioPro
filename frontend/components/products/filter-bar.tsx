@@ -80,7 +80,7 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
   };
 
   return (
-    <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+    <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-100 p-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div className="lg:col-span-2">
           <Input
@@ -96,7 +96,7 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
             applyFilters();
           }}
           className={cn(
-            'rounded-md border border-gray-300 bg-white px-3 py-2 text-sm',
+            'rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm',
             'focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500',
           )}
         >
@@ -112,7 +112,7 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
             applyFilters();
           }}
           className={cn(
-            'rounded-md border border-gray-300 bg-white px-3 py-2 text-sm',
+            'rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm',
             'focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500',
           )}
         >
@@ -128,7 +128,7 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
             applyFilters();
           }}
           className={cn(
-            'rounded-md border border-gray-300 bg-white px-3 py-2 text-sm',
+            'rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm',
             'focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500',
           )}
         >
@@ -141,14 +141,14 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-gray-600">Ordenar por</span>
+          <span className="text-gray-700">Ordenar por</span>
           <select
             value={sortBy}
             onChange={(e) => {
               setSortBy(e.target.value);
               applyFilters();
             }}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm"
+            className="rounded-md border border-gray-300 bg-gray-100 px-2 py-1 text-sm"
           >
             <option value="fecha_compra">Fecha de compra</option>
             <option value="nombre">Nombre</option>
@@ -162,7 +162,7 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
               setSortOrder(e.target.value);
               applyFilters();
             }}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm"
+            className="rounded-md border border-gray-300 bg-gray-100 px-2 py-1 text-sm"
           >
             <option value="desc">Descendente</option>
             <option value="asc">Ascendente</option>
@@ -172,14 +172,14 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
           </Button>
         </div>
 
-        <div className="flex items-center gap-1 rounded-md border border-gray-300 bg-white p-1">
+        <div className="flex items-center gap-1 rounded-md border border-gray-300 bg-gray-100 p-1">
           <button
             type="button"
             onClick={() => onViewChange('grid')}
             aria-pressed={view === 'grid'}
             className={cn(
               'rounded px-2 py-1 text-xs',
-              view === 'grid' ? 'bg-accent-100 text-accent-800' : 'text-gray-600 hover:bg-gray-100',
+              view === 'grid' ? 'bg-accent-500/20 text-accent-300' : 'text-gray-700 hover:bg-gray-100',
             )}
           >
             Tarjetas
@@ -190,7 +190,7 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
             aria-pressed={view === 'list'}
             className={cn(
               'rounded px-2 py-1 text-xs',
-              view === 'list' ? 'bg-accent-100 text-accent-800' : 'text-gray-600 hover:bg-gray-100',
+              view === 'list' ? 'bg-accent-500/20 text-accent-300' : 'text-gray-700 hover:bg-gray-100',
             )}
           >
             Lista

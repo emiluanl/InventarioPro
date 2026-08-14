@@ -69,17 +69,17 @@ export default function SettingsPage(): JSX.Element {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Configuración</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Cuenta: <span className="font-medium text-gray-800">{user?.email}</span>
+        <p className="mt-1 text-sm text-gray-700">
+          Cuenta: <span className="font-medium text-gray-900">{user?.email}</span>
         </p>
       </div>
 
       {/* --------------------------------------------------------------------- */}
       {/* CAMBIO DE CONTRASEÑA                                                  */}
       {/* --------------------------------------------------------------------- */}
-      <section className="rounded-lg border border-gray-200 bg-white p-6">
+      <section className="rounded-lg border border-gray-200 bg-gray-100 p-6">
         <h2 className="text-lg font-semibold text-gray-900">Cambiar contraseña</h2>
-        <p className="mt-1 text-sm text-gray-600">
+        <p className="mt-1 text-sm text-gray-700">
           Al cambiarla se cerrarán todas tus sesiones (incluida la actual).
         </p>
 
@@ -118,7 +118,7 @@ export default function SettingsPage(): JSX.Element {
               {...register('new_password')}
               error={errors.new_password?.message}
             />
-            <p className="text-xs text-gray-500">Mínimo 8 caracteres, con letras y números.</p>
+            <p className="text-xs text-gray-600">Mínimo 8 caracteres, con letras y números.</p>
             {errors.new_password?.message && (
               <p className="mt-1 text-xs text-red-600">{errors.new_password.message}</p>
             )}
@@ -147,9 +147,9 @@ export default function SettingsPage(): JSX.Element {
       {/* --------------------------------------------------------------------- */}
       {/* ELIMINACIÓN DE CUENTA                                                 */}
       {/* --------------------------------------------------------------------- */}
-      <section className="rounded-lg border border-red-200 bg-red-50 p-6">
-        <h2 className="text-lg font-semibold text-red-900">Zona de peligro</h2>
-        <p className="mt-1 text-sm text-red-700">
+      <section className="rounded-lg border border-red-500/30 bg-red-500/10 p-6">
+        <h2 className="text-lg font-semibold text-red-300">Zona de peligro</h2>
+        <p className="mt-1 text-sm text-red-300/80">
           Eliminar tu cuenta borra de forma permanente tu usuario, productos, adjuntos,
           notificaciones y conversaciones. Esta acción no se puede deshacer.
         </p>

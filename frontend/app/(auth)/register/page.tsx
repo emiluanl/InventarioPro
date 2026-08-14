@@ -38,7 +38,7 @@ export default function RegisterPage(): JSX.Element {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Crear cuenta</h1>
-        <p className="mt-1 text-sm text-gray-600">
+        <p className="mt-1 text-sm text-gray-700">
           Empieza a registrar tus productos y garantías.
         </p>
       </div>
@@ -77,7 +77,7 @@ export default function RegisterPage(): JSX.Element {
             {...register('password')}
             error={errors.password?.message}
           />
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-600">
             Mínimo 8 caracteres, con letras y números.
           </p>
         </div>
@@ -87,9 +87,9 @@ export default function RegisterPage(): JSX.Element {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-gray-600">
+      <p className="text-center text-sm text-gray-700">
         ¿Ya tienes cuenta?{' '}
-        <Link href="/login" className="font-medium text-accent-600 hover:text-accent-700">
+        <Link href="/login" className="font-medium text-accent-400 hover:text-accent-300">
           Inicia sesión
         </Link>
       </p>

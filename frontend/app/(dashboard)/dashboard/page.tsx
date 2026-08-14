@@ -58,9 +58,9 @@ function DashboardInner(): JSX.Element {
     <div className="space-y-6">
       <header className="space-y-2">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-gray-900">Mis productos</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Mis productos</h1>
           {data && data.items.length > 0 && (
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-700">
               {data.pagination.total} producto{data.pagination.total === 1 ? '' : 's'} ·{' '}
               <span className="font-medium">
                 {formatCurrency(totalValue.toFixed(2), 'USD')}
@@ -79,7 +79,7 @@ function DashboardInner(): JSX.Element {
       {isLoading && <DashboardSkeleton view={view} />}
 
       {isError && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
           {error.message}
         </div>
       )}
@@ -113,9 +113,9 @@ function ProductsTable({
   onDelete: (id: string) => void;
 }): JSX.Element {
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-gray-100">
       <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50 text-left text-xs font-medium uppercase text-gray-500">
+        <thead className="bg-gray-50 text-left text-xs font-medium uppercase text-gray-600">
           <tr>
             <th className="px-4 py-2">Producto</th>
             <th className="px-4 py-2">Categoría</th>
@@ -127,22 +127,22 @@ function ProductsTable({
         </thead>
         <tbody className="divide-y divide-gray-100 text-sm">
           {products.map((p) => (
-            <tr key={p.id} className="hover:bg-gray-50">
+            <tr key={p.id} className="hover:bg-gray-200">
               <td className="px-4 py-2">
                 <Link
                   href={`/products/${p.id}`}
-                  className="font-medium text-gray-900 hover:text-accent-700"
+                  className="font-medium text-gray-900 hover:text-accent-300"
                 >
                   {p.nombre}
                 </Link>
-                {p.marca && <p className="text-xs text-gray-500">{p.marca}</p>}
+                {p.marca && <p className="text-xs text-gray-600">{p.marca}</p>}
               </td>
-              <td className="px-4 py-2 text-gray-700">{p.categoria?.nombre ?? '—'}</td>
+              <td className="px-4 py-2 text-gray-800">{p.categoria?.nombre ?? '—'}</td>
               <td className="px-4 py-2 font-medium text-gray-900">
                 {formatCurrency(p.precio, p.moneda)}
               </td>
-              <td className="px-4 py-2 text-gray-700">{p.tiempo_posesion}</td>
-              <td className="px-4 py-2 text-gray-700">{PRODUCT_STATUS_LABELS[p.estado]}</td>
+              <td className="px-4 py-2 text-gray-800">{p.tiempo_posesion}</td>
+              <td className="px-4 py-2 text-gray-800">{PRODUCT_STATUS_LABELS[p.estado]}</td>
               <td className="px-4 py-2 text-right">
                 <button
                   type="button"
@@ -197,13 +197,13 @@ function Pagination({
         type="button"
         onClick={() => go(Math.max(1, current - 1))}
         disabled={current === 1}
-        className="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm disabled:opacity-50"
+        className="rounded-md border border-gray-300 bg-gray-100 px-3 py-1 text-sm disabled:opacity-50"
       >
         ← Anterior
       </button>
       {pages.map((p, i) =>
         p === '…' ? (
-          <span key={`dots-${i}`} className="px-2 text-gray-400">
+          <span key={`dots-${i}`} className="px-2 text-gray-500">
             …
           </span>
         ) : (
@@ -214,7 +214,7 @@ function Pagination({
             className={`rounded-md px-3 py-1 text-sm ${
               p === current
                 ? 'bg-accent-600 text-white'
-                : 'border border-gray-300 bg-white hover:bg-gray-50'
+                : 'border border-gray-300 bg-gray-100 hover:bg-gray-200'
             }`}
           >
             {p}
@@ -225,7 +225,7 @@ function Pagination({
         type="button"
         onClick={() => go(Math.min(last, current + 1))}
         disabled={current === last}
-        className="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm disabled:opacity-50"
+        className="rounded-md border border-gray-300 bg-gray-100 px-3 py-1 text-sm disabled:opacity-50"
       >
         Siguiente →
       </button>

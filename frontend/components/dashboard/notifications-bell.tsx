@@ -37,7 +37,7 @@ export function NotificationsBell(): JSX.Element {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Notificaciones"
-        className="relative rounded-md p-1.5 text-gray-600 transition hover:bg-gray-100 hover:text-gray-900"
+        className="relative rounded-md p-1.5 text-gray-700 transition hover:bg-gray-100 hover:text-gray-900"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -54,14 +54,14 @@ export function NotificationsBell(): JSX.Element {
         <>
           {/* Backdrop transparente: click fuera cierra el panel. */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div className="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-gray-200 bg-white shadow-xl">
+          <div className="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-gray-200 bg-gray-100 shadow-xl">
             <header className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
               <h3 className="text-sm font-semibold text-gray-900">Notificaciones</h3>
               {unreadCount > 0 && (
                 <button
                   type="button"
                   onClick={() => void markAll.mutateAsync()}
-                  className="text-xs font-medium text-accent-600 hover:underline"
+                  className="text-xs font-medium text-accent-400 hover:underline"
                 >
                   Marcar todas leídas
                 </button>
@@ -70,7 +70,7 @@ export function NotificationsBell(): JSX.Element {
 
             <ul className="max-h-96 overflow-y-auto">
               {(!notifications || notifications.length === 0) && (
-                <li className="px-4 py-8 text-center text-sm text-gray-500">
+                <li className="px-4 py-8 text-center text-sm text-gray-600">
                   No tienes notificaciones.
                 </li>
               )}
@@ -80,22 +80,22 @@ export function NotificationsBell(): JSX.Element {
                     type="button"
                     onClick={() => onOpenNotification(n.id, n.product_id)}
                     className={cn(
-                      'flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-gray-50',
+                      'flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-gray-200',
                       !n.leido && 'bg-accent-50',
                     )}
                   >
                     <span
                       className={cn(
                         'mt-1.5 h-2 w-2 shrink-0 rounded-full',
-                        n.leido ? 'bg-gray-200' : 'bg-accent-600',
+                        n.leido ? 'bg-gray-300' : 'bg-accent-600',
                       )}
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-xs font-medium text-gray-400">
+                      <span className="block text-xs font-medium text-gray-500">
                         {NOTIFICATION_TYPE_LABELS[n.tipo]}
                       </span>
-                      <span className="block text-sm text-gray-800">{n.mensaje}</span>
-                      <span className="block text-xs text-gray-400">
+                      <span className="block text-sm text-gray-900">{n.mensaje}</span>
+                      <span className="block text-xs text-gray-500">
                         {formatRelativeTime(n.created_at)}
                       </span>
                     </span>
@@ -108,8 +108,8 @@ export function NotificationsBell(): JSX.Element {
             <footer className="border-t border-gray-100 bg-gray-50/60 px-4 py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-800">Avisos fuera de la app</p>
-                  <p className="text-xs text-gray-500">Garantías por vencer o vencidas</p>
+                  <p className="text-sm font-medium text-gray-900">Avisos fuera de la app</p>
+                  <p className="text-xs text-gray-600">Garantías por vencer o vencidas</p>
                 </div>
                 {push.supported ? (
                   <button
@@ -127,13 +127,13 @@ export function NotificationsBell(): JSX.Element {
                   >
                     <span
                       className={cn(
-                        'inline-block h-4 w-4 transform rounded-full bg-white shadow transition',
+                        'inline-block h-4 w-4 transform rounded-full bg-gray-900 shadow transition',
                         push.enabled ? 'translate-x-4' : 'translate-x-0.5',
                       )}
                     />
                   </button>
                 ) : (
-                  <span className="text-xs text-gray-400">No soportado</span>
+                  <span className="text-xs text-gray-500">No soportado</span>
                 )}
               </div>
               {push.error && <p className="mt-1.5 text-xs text-red-600">{push.error}</p>}

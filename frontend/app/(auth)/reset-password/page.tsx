@@ -60,7 +60,7 @@ function ResetPasswordForm(): JSX.Element {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Nueva contraseña</h1>
-        <p className="mt-1 text-sm text-gray-600">Elige una contraseña nueva.</p>
+        <p className="mt-1 text-sm text-gray-700">Elige una contraseña nueva.</p>
       </div>
 
       {success && <Alert variant="success">{success}</Alert>}

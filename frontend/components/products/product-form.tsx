@@ -136,7 +136,7 @@ export function ProductForm({ mode, initialProduct }: ProductFormProps): JSX.Ele
         <select
           id="categoria_id"
           {...register('categoria_id')}
-          className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500"
+          className="block w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500"
         >
           <option value="">Sin categoría</option>
           {categories?.map((c) => (
@@ -164,7 +164,7 @@ export function ProductForm({ mode, initialProduct }: ProductFormProps): JSX.Ele
           id="descripcion"
           rows={3}
           {...register('descripcion')}
-          className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500"
+          className="block w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500"
         />
       </div>
 
@@ -188,7 +188,7 @@ export function ProductForm({ mode, initialProduct }: ProductFormProps): JSX.Ele
           <select
             id="tipo_compra"
             {...register('tipo_compra')}
-            className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500"
+            className="block w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500"
           >
             {TIPOS.map((t) => (
               <option key={t} value={t}>{PURCHASE_TYPE_LABELS[t]}</option>
@@ -238,7 +238,7 @@ export function ProductForm({ mode, initialProduct }: ProductFormProps): JSX.Ele
             type="date"
             {...register('fecha_vencimiento_garantia')}
           />
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-600">
             Se calcula automáticamente si defines duración.
           </p>
         </div>
@@ -251,7 +251,7 @@ export function ProductForm({ mode, initialProduct }: ProductFormProps): JSX.Ele
           <select
             id="estado"
             {...register('estado')}
-            className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500"
+            className="block w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500"
           >
             {ESTADOS.map((e) => (
               <option key={e} value={e}>{PRODUCT_STATUS_LABELS[e]}</option>
@@ -271,7 +271,7 @@ export function ProductForm({ mode, initialProduct }: ProductFormProps): JSX.Ele
           id="notas"
           rows={3}
           {...register('notas')}
-          className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500"
+          className="block w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500"
         />
       </div>
 

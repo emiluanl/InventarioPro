@@ -61,7 +61,7 @@ export function ChatPanel({ onClose }: ChatPanelProps): JSX.Element {
   };
 
   return (
-    <div className="fixed bottom-24 right-4 z-50 flex h-[560px] w-[380px] flex-col rounded-2xl border border-gray-200 bg-white shadow-xl sm:right-6">
+    <div className="fixed bottom-24 right-4 z-50 flex h-[560px] w-[380px] flex-col rounded-2xl border border-gray-200 bg-gray-100 shadow-xl sm:right-6">
       {/* Header */}
       <header className="flex items-center justify-between rounded-t-2xl border-b border-gray-200 bg-accent-600 px-4 py-3 text-white">
         <div className="flex items-center gap-2">
@@ -86,10 +86,10 @@ export function ChatPanel({ onClose }: ChatPanelProps): JSX.Element {
 
       {/* Mensajes */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
-        {isLoading && <p className="text-center text-xs text-gray-400">Cargando mensajes…</p>}
+        {isLoading && <p className="text-center text-xs text-gray-500">Cargando mensajes…</p>}
 
         {messages && messages.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center text-center text-sm text-gray-500">
+          <div className="flex h-full flex-col items-center justify-center text-center text-sm text-gray-600">
             <p className="font-medium">¡Hola! Soy tu asistente.</p>
             <p className="mt-1 text-xs">
               Prueba: "¿Qué compré en enero?" o "Registra una licuadora Oster que compré ayer por $150".
@@ -132,7 +132,7 @@ export function ChatPanel({ onClose }: ChatPanelProps): JSX.Element {
         <button
           type="button"
           onClick={() => setConversationId(undefined)}
-          className="border-t border-gray-200 px-3 py-1.5 text-center text-xs text-gray-600 hover:bg-gray-50"
+          className="border-t border-gray-200 px-3 py-1.5 text-center text-xs text-gray-700 hover:bg-gray-200"
         >
           + Nueva conversación
         </button>

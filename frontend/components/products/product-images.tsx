@@ -74,11 +74,11 @@ export function ProductImages({ productId, attachments }: ProductImagesProps): J
       {serverError && <Alert variant="error">{serverError}</Alert>}
 
       {/* Uploader */}
-      <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed border-gray-300 bg-white p-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed border-gray-300 bg-gray-100 p-4">
         <select
           value={tipo}
           onChange={(e) => setTipo(e.target.value as AttachmentType)}
-          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+          className="rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm"
         >
           <option value="FOTO">Foto</option>
           <option value="RECIBO">Recibo</option>
@@ -113,7 +113,7 @@ export function ProductImages({ productId, attachments }: ProductImagesProps): J
       {/* Galería de fotos */}
       {fotos.length > 0 && (
         <div>
-          <h3 className="mb-2 text-sm font-medium text-gray-700">Fotos</h3>
+          <h3 className="mb-2 text-sm font-medium text-gray-800">Fotos</h3>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
             {fotos.map((a) => (
               <div
@@ -148,23 +148,23 @@ export function ProductImages({ productId, attachments }: ProductImagesProps): J
       {/* Recibos / facturas */}
       {recibos.length > 0 && (
         <div>
-          <h3 className="mb-2 text-sm font-medium text-gray-700">Recibos y facturas</h3>
+          <h3 className="mb-2 text-sm font-medium text-gray-800">Recibos y facturas</h3>
           <ul className="space-y-2">
             {recibos.map((a) => (
               <li
                 key={a.id}
-                className="flex items-center justify-between rounded-md border border-gray-200 bg-white p-3"
+                className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-100 p-3"
               >
                 <div className="min-w-0">
                   <a
                     href={resolveFileUrl(a.url)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="truncate font-medium text-gray-900 hover:text-accent-700"
+                    className="truncate font-medium text-gray-900 hover:text-accent-300"
                   >
                     {a.nombre ?? resolveFileUrl(a.url).split('/').pop() ?? 'archivo'}
                   </a>
-                  <p className="text-xs text-gray-500">{a.tipo}</p>
+                  <p className="text-xs text-gray-600">{a.tipo}</p>
                 </div>
                 <button
                   type="button"

@@ -4,19 +4,19 @@ exports[`UI components (snapshot) > Alert: error, success e info 1`] = `
 <div>
   <div>
     <div
-      class="rounded-md border px-4 py-3 text-sm border-red-200 bg-red-50 text-red-800"
+      class="rounded-md border px-4 py-3 text-sm backdrop-blur-sm border-red-400/30 bg-red-400/10 text-red-300"
       role="alert"
     >
       Algo salió mal
     </div>
     <div
-      class="rounded-md border px-4 py-3 text-sm border-green-200 bg-green-50 text-green-800"
+      class="rounded-md border px-4 py-3 text-sm backdrop-blur-sm border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
       role="alert"
     >
       Todo bien
     </div>
     <div
-      class="rounded-md border px-4 py-3 text-sm border-blue-200 bg-blue-50 text-blue-800"
+      class="rounded-md border px-4 py-3 text-sm backdrop-blur-sm border-accent-400/30 bg-accent-400/10 text-accent-400"
       role="alert"
     >
       Información
@@ -29,27 +29,27 @@ exports[`UI components (snapshot) > Button: variantes y carga 1`] = `
 <div>
   <div>
     <button
-      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm bg-accent-600 text-white hover:bg-accent-700 active:bg-accent-800"
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-accent-500 text-white hover:bg-accent-400 hover:shadow-glow active:bg-accent-600"
     >
       Primario
     </button>
     <button
-      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm bg-gray-100 text-gray-900 hover:bg-gray-200 active:bg-gray-300"
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-gray-200 text-gray-900 hover:bg-gray-300 active:bg-gray-400/60"
     >
       Secundario
     </button>
     <button
-      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm bg-transparent text-gray-700 hover:bg-gray-100 active:bg-gray-200"
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-transparent text-gray-700 hover:bg-gray-300/60 hover:text-gray-900 active:bg-gray-300"
     >
       Ghost
     </button>
     <button
-      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 active:bg-red-800"
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-red-500/90 text-white hover:bg-red-400 hover:shadow-[0_0_16px_rgba(239,68,68,0.25)] active:bg-red-600"
     >
       Peligro
     </button>
     <button
-      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm bg-accent-600 text-white hover:bg-accent-700 active:bg-accent-800"
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-accent-500 text-white hover:bg-accent-400 hover:shadow-glow active:bg-accent-600"
       disabled=""
     >
       <svg
@@ -75,7 +75,7 @@ exports[`UI components (snapshot) > Button: variantes y carga 1`] = `
       Cargando
     </button>
     <button
-      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed px-2.5 py-1 text-xs bg-accent-600 text-white hover:bg-accent-700 active:bg-accent-800"
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-2.5 py-1 text-xs bg-accent-500 text-white hover:bg-accent-400 hover:shadow-glow active:bg-accent-600"
     >
       Chico
     </button>
@@ -87,15 +87,15 @@ exports[`UI components (snapshot) > Input: normal, con error y disabled 1`] = `
 <div>
   <div>
     <input
-      class="block w-full rounded-md border px-3 py-2 text-sm bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:opacity-50 disabled:cursor-not-allowed border-gray-300 focus:border-accent-500"
+      class="block w-full rounded-md border bg-gray-100 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 transition-all duration-150 ease-out focus:outline-none focus:ring-2 focus:ring-accent-400/50 disabled:opacity-40 disabled:cursor-not-allowed border-gray-300 hover:border-gray-400 focus:border-accent-500"
       placeholder="Normal"
     />
     <input
-      class="block w-full rounded-md border px-3 py-2 text-sm bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed border-red-500 focus:ring-red-500"
+      class="block w-full rounded-md border bg-gray-100 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 transition-all duration-150 ease-out focus:outline-none focus:ring-2 disabled:opacity-40 disabled:cursor-not-allowed border-red-400/70 focus:border-red-400 focus:ring-red-400/40"
       placeholder="Con error"
     />
     <input
-      class="block w-full rounded-md border px-3 py-2 text-sm bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:opacity-50 disabled:cursor-not-allowed border-gray-300 focus:border-accent-500"
+      class="block w-full rounded-md border bg-gray-100 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 transition-all duration-150 ease-out focus:outline-none focus:ring-2 focus:ring-accent-400/50 disabled:opacity-40 disabled:cursor-not-allowed border-gray-300 hover:border-gray-400 focus:border-accent-500"
       disabled=""
       placeholder="Deshabilitado"
     />
@@ -108,11 +108,11 @@ exports[`UI components (snapshot) > Skeleton: base y con tamaño 1`] = `
   <div>
     <div
       aria-hidden="true"
-      class="animate-pulse rounded-md border border-gray-200 bg-gray-100"
+      class="animate-pulse rounded-md border border-gray-300/60 bg-gray-200/60"
     />
     <div
       aria-hidden="true"
-      class="animate-pulse rounded-md border border-gray-200 bg-gray-100 h-40 w-64"
+      class="animate-pulse rounded-md border border-gray-300/60 bg-gray-200/60 h-40 w-64"
     />
   </div>
 </div>

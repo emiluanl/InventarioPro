@@ -8,15 +8,15 @@ interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Placeholder de carga (shimmer). Usa la superficie + borde del tema para
- * que se adapte cuando el frontend pase a dark-first.
+ * Placeholder de carga (shimmer). Usa la superficie + borde del tema dark:
+ * se funde con el fondo sin ruido visual.
  */
 export function Skeleton({ className, ...props }: SkeletonProps): React.JSX.Element {
   return (
     <div
       aria-hidden
       className={cn(
-        'animate-pulse rounded-md border border-gray-200 bg-gray-100',
+        'animate-pulse rounded-md border border-gray-300/60 bg-gray-200/60',
         className,
       )}
       {...props}

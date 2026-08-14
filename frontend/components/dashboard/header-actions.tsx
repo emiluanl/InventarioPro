@@ -10,7 +10,7 @@ export function HeaderActions(): JSX.Element {
 
   return (
     <div className="flex items-center gap-3">
-      <span className="hidden text-sm text-gray-600 sm:inline">{user?.email}</span>
+      <span className="hidden text-sm text-gray-700 sm:inline">{user?.email}</span>
       <Button
         variant="secondary"
         size="sm"

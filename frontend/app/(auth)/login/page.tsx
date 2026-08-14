@@ -41,8 +41,8 @@ function LoginForm(): JSX.Element {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Inicia sesión</h1>
-        <p className="mt-1 text-sm text-gray-600">
+        <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Inicia sesión</h1>
+        <p className="mt-1 text-sm text-gray-700">
           Accede a tu inventario personal.
         </p>
       </div>
@@ -73,7 +73,7 @@ function LoginForm(): JSX.Element {
             <Label htmlFor="password">Contraseña</Label>
             <Link
               href="/forgot-password"
-              className="text-sm text-accent-600 hover:text-accent-700"
+              className="text-sm text-accent-400 hover:text-accent-300"
             >
               ¿La olvidaste?
             </Link>
@@ -92,9 +92,9 @@ function LoginForm(): JSX.Element {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-gray-600">
+      <p className="text-center text-sm text-gray-700">
         ¿No tienes cuenta?{' '}
-        <Link href="/register" className="font-medium text-accent-600 hover:text-accent-700">
+        <Link href="/register" className="font-medium text-accent-400 hover:text-accent-300">
           Regístrate
         </Link>
       </p>
@@ -104,7 +104,7 @@ function LoginForm(): JSX.Element {
 
 export default function LoginPage(): JSX.Element {
   return (
-    <Suspense fallback={<div className="space-y-6"><h1 className="text-2xl font-semibold text-gray-900">Inicia sesión</h1><p className="text-sm text-gray-600">Cargando…</p></div>}>
+    <Suspense fallback={<div className="space-y-6"><h1 className="text-2xl font-semibold text-gray-900">Inicia sesión</h1><p className="text-sm text-gray-700">Cargando…</p></div>}>
       <LoginForm />
     </Suspense>
   );

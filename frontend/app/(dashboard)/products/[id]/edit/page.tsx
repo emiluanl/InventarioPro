@@ -42,7 +42,7 @@ export default function EditProductPage({ params }: PageProps): JSX.Element {
       <h1 className="text-2xl font-semibold text-gray-900">
         Editar: {product.nombre}
       </h1>
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="rounded-lg border border-gray-200 bg-gray-100 p-6 shadow-sm">
         <ProductForm mode="edit" initialProduct={product} />
       </div>
     </div>

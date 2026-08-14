@@ -13,16 +13,16 @@ export default function DashboardLayout({
 }): JSX.Element {
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
+      <header className="border-b border-gray-200 bg-gray-100">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <Link href="/dashboard" className="text-lg font-semibold text-gray-900">
-            Inventario<span className="text-accent-600">Pro</span>
+            Inventario<span className="text-accent-400">Pro</span>
           </Link>
           <nav className="flex items-center gap-4 text-sm">
-            <Link href="/reports" className="font-medium text-gray-600 hover:text-accent-700">
+            <Link href="/reports" className="font-medium text-gray-700 hover:text-accent-300">
               Reportes
             </Link>
-            <Link href="/settings" className="font-medium text-gray-600 hover:text-accent-700">
+            <Link href="/settings" className="font-medium text-gray-700 hover:text-accent-300">
               Configuración
             </Link>
             <Link

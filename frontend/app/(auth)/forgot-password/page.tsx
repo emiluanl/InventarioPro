@@ -40,7 +40,7 @@ export default function ForgotPasswordPage(): JSX.Element {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Recuperar contraseña</h1>
-        <p className="mt-1 text-sm text-gray-600">
+        <p className="mt-1 text-sm text-gray-700">
           Te enviaremos un enlace para restablecerla.
         </p>
       </div>
@@ -66,8 +66,8 @@ export default function ForgotPasswordPage(): JSX.Element {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-gray-600">
-        <Link href="/login" className="font-medium text-accent-600 hover:text-accent-700">
+      <p className="text-center text-sm text-gray-700">
+        <Link href="/login" className="font-medium text-accent-400 hover:text-accent-300">
           Volver a iniciar sesión
         </Link>
       </p>

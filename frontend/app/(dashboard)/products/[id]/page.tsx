@@ -60,13 +60,13 @@ export default function ProductDetailPage({ params }: PageProps): JSX.Element {
         <div>
           <Link
             href="/dashboard"
-            className="text-sm text-accent-600 hover:text-accent-700"
+            className="text-sm text-accent-400 hover:text-accent-300"
           >
             ← Mis productos
           </Link>
           <h1 className="mt-1 text-2xl font-semibold text-gray-900">{product.nombre}</h1>
           {product.marca && (
-            <p className="mt-1 text-gray-600">
+            <p className="mt-1 text-gray-700">
               {product.marca}
               {product.modelo && ` · ${product.modelo}`}
             </p>
@@ -75,7 +75,7 @@ export default function ProductDetailPage({ params }: PageProps): JSX.Element {
         <div className="flex gap-2">
           <Link
             href={`/products/${product.id}/edit`}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
+            className="rounded-md border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm font-medium hover:bg-gray-200"
           >
             Editar
           </Link>
@@ -99,8 +99,8 @@ export default function ProductDetailPage({ params }: PageProps): JSX.Element {
         <Stat label="Precio" value={formatCurrency(product.precio, product.moneda)} />
       </div>
 
-      <section className="rounded-lg border border-gray-200 bg-white p-6">
-        <h2 className="text-sm font-medium uppercase text-gray-500">Detalles</h2>
+      <section className="rounded-lg border border-gray-200 bg-gray-100 p-6">
+        <h2 className="text-sm font-medium uppercase text-gray-600">Detalles</h2>
         <dl className="mt-4 grid gap-3 sm:grid-cols-2">
           <Row label="Categoría" value={product.categoria?.nombre ?? '—'} />
           <Row label="Estado" value={PRODUCT_STATUS_LABELS[product.estado]} />
@@ -118,8 +118,8 @@ export default function ProductDetailPage({ params }: PageProps): JSX.Element {
         </dl>
       </section>
 
-      <section className="rounded-lg border border-gray-200 bg-white p-6">
-        <h2 className="mb-4 text-sm font-medium uppercase text-gray-500">
+      <section className="rounded-lg border border-gray-200 bg-gray-100 p-6">
+        <h2 className="mb-4 text-sm font-medium uppercase text-gray-600">
           Adjuntos ({product.attachments?.length ?? 0})
         </h2>
         <ProductImages productId={product.id} attachments={product.attachments ?? []} />
@@ -130,8 +130,8 @@ export default function ProductDetailPage({ params }: PageProps): JSX.Element {
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }): JSX.Element {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <p className="text-xs uppercase text-gray-500">{label}</p>
+    <div className="rounded-lg border border-gray-200 bg-gray-100 p-4">
+      <p className="text-xs uppercase text-gray-600">{label}</p>
       <div className="mt-1 text-base font-medium text-gray-900">{value}</div>
     </div>
   );
@@ -148,7 +148,7 @@ function Row({
 }): JSX.Element {
   return (
     <div className={fullWidth ? 'sm:col-span-2' : ''}>
-      <dt className="text-xs uppercase text-gray-500">{label}</dt>
+      <dt className="text-xs uppercase text-gray-600">{label}</dt>
       <dd className="mt-1 text-sm text-gray-900">{value}</dd>
     </div>
   );

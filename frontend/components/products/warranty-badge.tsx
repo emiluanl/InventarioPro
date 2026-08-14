@@ -10,10 +10,11 @@ interface WarrantyBadgeProps {
   daysUntilExpiry?: number | null;
 }
 
+// Variantes dark: fondo tintado oscuro + texto claro (legibles sobre #141417).
 const COLORS: Record<WarrantyStatus, string> = {
-  vigente: 'bg-green-100 text-green-800 border-green-200',
-  por_vencer: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  vencida: 'bg-red-100 text-red-800 border-red-200',
+  vigente: 'bg-green-500/15 text-green-300 border-green-500/30',
+  por_vencer: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30',
+  vencida: 'bg-red-500/15 text-red-300 border-red-500/30',
 };
 
 export function WarrantyBadge({
@@ -23,7 +24,7 @@ export function WarrantyBadge({
 }: WarrantyBadgeProps): JSX.Element | null {
   if (!status) {
     return (
-      <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+      <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
         Sin garantía
       </span>
     );

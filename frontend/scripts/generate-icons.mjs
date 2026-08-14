@@ -1,7 +1,7 @@
 // =============================================================================
 // generate-icons.mjs - genera los iconos PNG/ICO de la PWA (sin dependencias)
 // =============================================================================
-// Dibuja una "caja de paquete" blanca sobre el color accent (#2563eb) con
+// Dibuja una "caja de paquete" blanca sobre el color accent (#0a84ff) con
 // cálculo de píxeles y un encoder PNG mínimo (zlib + CRC32, color type 6).
 //
 // Uso: node scripts/generate-icons.mjs
@@ -18,7 +18,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ACCENT = [0x25, 0x63, 0xeb]; // accent-600
+const ACCENT = [0x0a, 0x84, 0xff]; // accent-500 (eléctrico)
 const WHITE = [0xff, 0xff, 0xff];
 const SPLASH_BG = [0xf9, 0xfa, 0xfb]; // gray-50, coincide con background_color del manifest
 

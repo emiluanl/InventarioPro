@@ -35,7 +35,7 @@ export function ChatMessageBubble({ message }: ChatMessageBubbleProps): JSX.Elem
 export function ChatTypingIndicator(): JSX.Element {
   return (
     <div className="flex justify-start">
-      <div className="inline-flex items-center gap-1 rounded-2xl bg-gray-100 px-3 py-2 text-sm text-gray-600">
+      <div className="inline-flex items-center gap-1 rounded-2xl bg-gray-100 px-3 py-2 text-sm text-gray-700">
         <Dot delay={0} />
         <Dot delay={150} />
         <Dot delay={300} />

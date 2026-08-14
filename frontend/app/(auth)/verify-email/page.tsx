@@ -57,7 +57,7 @@ function VerifyEmailForm(): JSX.Element {
     return (
       <div className="space-y-4 text-center">
         <h1 className="text-2xl font-semibold text-gray-900">Verificando tu email…</h1>
-        <p className="text-sm text-gray-600">Estamos confirmando tu cuenta. Un momento.</p>
+        <p className="text-sm text-gray-700">Estamos confirmando tu cuenta. Un momento.</p>
       </div>
     );
   }
@@ -97,13 +97,13 @@ function VerifyEmailForm(): JSX.Element {
       <Alert variant="error">
         {error ?? 'El enlace de verificación es inválido o expiró.'}
       </Alert>
-      <p className="text-sm text-gray-600">
+      <p className="text-sm text-gray-700">
         El enlace es válido por 24 horas. Si expiró, puedes pedir uno nuevo
         escribiendo tu email abajo.
       </p>
 
       <div className="space-y-3 rounded-md border border-gray-200 p-4">
-        <p className="text-sm font-medium text-gray-700">Reenviar enlace de verificación</p>
+        <p className="text-sm font-medium text-gray-800">Reenviar enlace de verificación</p>
         <div className="flex gap-2">
           <Input
             type="email"

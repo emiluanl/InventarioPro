@@ -27,16 +27,16 @@ export default function ReportsPage(): JSX.Element {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Reportes de gasto</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="mt-1 text-sm text-gray-700">
             ¿Cuánto gastaste en cada categoría? Respuesta con datos reales de tu inventario.
           </p>
         </div>
-        <label className="flex items-center gap-2 text-sm text-gray-600">
+        <label className="flex items-center gap-2 text-sm text-gray-700">
           <span>Año</span>
           <select
             value={year === null ? 'all' : String(year)}
             onChange={(e) => setYear(e.target.value === 'all' ? null : Number(e.target.value))}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
+            className="rounded-md border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
           >
             <option value="all">Todos los años</option>
             {yearOptions.map((y) => (
@@ -51,18 +51,18 @@ export default function ReportsPage(): JSX.Element {
       {isLoading && <ReportsSkeleton />}
 
       {isError && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
           {error.message}
         </div>
       )}
 
       {isEmpty && (
-        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-12 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent-100 text-xl text-accent-700">
+        <div className="rounded-lg border border-dashed border-gray-300 bg-gray-100 p-12 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent-500/15 text-xl text-accent-300">
             💸
           </div>
           <h2 className="mt-4 text-lg font-medium text-gray-900">Sin gastos en este periodo</h2>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="mt-1 text-sm text-gray-700">
             Registra productos para empezar a ver tu historial de gasto.
           </p>
           <Link
@@ -88,13 +88,13 @@ export default function ReportsPage(): JSX.Element {
 
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Por categoría */}
-            <section className="rounded-lg border border-gray-200 bg-white p-5">
+            <section className="rounded-lg border border-gray-200 bg-gray-100 p-5">
               <h2 className="text-sm font-semibold text-gray-900">Por categoría</h2>
               <CategoryBreakdown categories={data.by_category} currency={data.currency} total={data.total} />
             </section>
 
             {/* Por mes */}
-            <section className="rounded-lg border border-gray-200 bg-white p-5">
+            <section className="rounded-lg border border-gray-200 bg-gray-100 p-5">
               <h2 className="text-sm font-semibold text-gray-900">Por mes</h2>
               <MonthChart months={data.by_month} currency={data.currency} />
             </section>
@@ -102,15 +102,15 @@ export default function ReportsPage(): JSX.Element {
 
           {/* Por moneda (solo si hay más de una) */}
           {data.by_currency.length > 1 && (
-            <section className="rounded-lg border border-gray-200 bg-white p-5">
+            <section className="rounded-lg border border-gray-200 bg-gray-100 p-5">
               <h2 className="text-sm font-semibold text-gray-900">Por moneda</h2>
               <ul className="mt-3 space-y-1 text-sm">
                 {data.by_currency.map((c) => (
                   <li key={c.moneda} className="flex items-center justify-between">
-                    <span className="text-gray-700">{c.moneda}</span>
+                    <span className="text-gray-800">{c.moneda}</span>
                     <span className="font-medium text-gray-900">
                       {formatCurrency(c.total.toFixed(2), c.moneda)}
-                      <span className="ml-2 text-xs font-normal text-gray-400">
+                      <span className="ml-2 text-xs font-normal text-gray-500">
                         {c.cantidad} compra{c.cantidad === 1 ? '' : 's'}
                       </span>
                     </span>
@@ -127,8 +127,8 @@ export default function ReportsPage(): JSX.Element {
 
 function SummaryCard({ label, value }: { label: string; value: string }): JSX.Element {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
+    <div className="rounded-lg border border-gray-200 bg-gray-100 p-5">
+      <p className="text-xs font-medium uppercase tracking-wide text-gray-600">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
     </div>
   );
@@ -150,10 +150,10 @@ function CategoryBreakdown({
         return (
           <li key={c.categoria_id ?? 'sin-categoria'}>
             <div className="flex items-center justify-between text-sm">
-              <span className="font-medium text-gray-800">{c.nombre}</span>
-              <span className="text-gray-600">
+              <span className="font-medium text-gray-900">{c.nombre}</span>
+              <span className="text-gray-700">
                 {formatCurrency(c.total.toFixed(2), currency)}
-                <span className="ml-2 text-xs text-gray-400">
+                <span className="ml-2 text-xs text-gray-500">
                   {c.cantidad} {c.cantidad === 1 ? 'compra' : 'compras'}
                 </span>
               </span>
@@ -187,7 +187,7 @@ function MonthChart({
         const height = max > 0 ? (m.total / max) * 100 : 0;
         return (
           <div key={m.mes} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-            <span className="text-[10px] text-gray-500" title={formatCurrency(m.total.toFixed(2), currency)}>
+            <span className="text-[10px] text-gray-600" title={formatCurrency(m.total.toFixed(2), currency)}>
               {m.total > 0 ? formatCurrency(m.total.toFixed(2), currency).replace(/[,.]\d{2}.*/, '') : ''}
             </span>
             <div
@@ -199,7 +199,7 @@ function MonthChart({
               role="img"
               aria-label={`${m.label}: ${formatCurrency(m.total.toFixed(2), currency)}`}
             />
-            <span className="text-[10px] text-gray-400">{m.label}</span>
+            <span className="text-[10px] text-gray-500">{m.label}</span>
           </div>
         );
       })}

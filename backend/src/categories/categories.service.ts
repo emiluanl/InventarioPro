@@ -6,6 +6,7 @@ import { Injectable, ConflictException, NotFoundException } from '@nestjs/common
 import { Prisma, Category } from '../generated/prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../common/redis.service';
 
 export interface CreateCategoryDto {
   nombre: string;
@@ -19,16 +20,39 @@ export interface UpdateCategoryDto {
 
 @Injectable()
 export class CategoriesService {
-  constructor(private readonly prisma: PrismaService) {}
+  // TTL del caché de categorías: son casi estáticas, 5 min es seguro.
+  private static readonly CACHE_TTL = 300;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {}
 
   /** Devuelve las categorías del sistema (user_id null) + las del usuario. */
   async listForUser(userId: string): Promise<Category[]> {
-    return this.prisma.category.findMany({
+    const key = `cache:categories:${userId}`;
+
+    const cached = await this.redis.get(key);
+    if (cached) {
+      return JSON.parse(cached) as Category[];
+    }
+
+    const categories = await this.prisma.category.findMany({
       where: {
         OR: [{ user_id: null }, { user_id: userId }],
       },
       orderBy: [{ user_id: 'asc' }, { nombre: 'asc' }],
     });
+
+    // RedisService.get/set son no-op si Redis no está disponible: en ese caso
+    // el caché simplemente no aplica y cada llamada va a la BD.
+    await this.redis.set(key, JSON.stringify(categories), CategoriesService.CACHE_TTL);
+    return categories;
+  }
+
+  /** Invalida el caché de categorías del usuario (tras crear/editar/borrar). */
+  private async invalidateCache(userId: string): Promise<void> {
+    await this.redis.del(`cache:categories:${userId}`);
   }
 
   /** Solo las categorías personalizadas del usuario. */
@@ -47,29 +71,34 @@ export class CategoriesService {
       throw new ConflictException('Ya tienes una categoría con ese nombre.');
     }
 
-    return this.prisma.category.create({
+    const category = await this.prisma.category.create({
       data: {
         user_id: userId,
         nombre: dto.nombre,
         icono: dto.icono ?? null,
       },
     });
+    await this.invalidateCache(userId);
+    return category;
   }
 
   async update(userId: string, id: string, dto: UpdateCategoryDto): Promise<Category> {
     await this.assertOwned(userId, id);
-    return this.prisma.category.update({
+    const category = await this.prisma.category.update({
       where: { id },
       data: {
         ...(dto.nombre !== undefined && { nombre: dto.nombre }),
         ...(dto.icono !== undefined && { icono: dto.icono }),
       },
     });
+    await this.invalidateCache(userId);
+    return category;
   }
 
   async remove(userId: string, id: string): Promise<{ message: string }> {
     await this.assertOwned(userId, id);
     await this.prisma.category.delete({ where: { id } });
+    await this.invalidateCache(userId);
     return { message: 'Categoría eliminada.' };
   }
 

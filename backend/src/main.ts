@@ -12,19 +12,24 @@ import cookieParser from 'cookie-parser';
 import * as path from 'node:path';
 
 import { AppModule } from './app.module';
+import { JsonLogger } from './common/json-logger.service';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
 
+  // En producción los logs salen como JSON de una línea (fáciles de grepear y
+  // agregar); en desarrollo mantienen el formato legible de texto.
   const config = app.get(ConfigService);
+  const isProduction = (config.get<string>('NODE_ENV') ?? 'development') === 'production';
+  app.useLogger(new JsonLogger(isProduction));
+
   const logger = new Logger('Bootstrap');
 
   const port = Number(config.get<string>('PORT') ?? 3001);
   const apiPrefix = config.get<string>('API_PREFIX') ?? 'api';
   const corsOrigin = config.get<string>('CORS_ORIGIN') ?? 'http://localhost:3000';
-  const isProduction = (config.get<string>('NODE_ENV') ?? 'development') === 'production';
 
   // Seguridad HTTP: cabeceras estándar + CSP estricta en producción.
   app.use(

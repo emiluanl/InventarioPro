@@ -13,6 +13,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { Prisma, Product, ProductStatus, PurchaseType } from '../generated/prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../common/redis.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsQueryDto, SortBy, SortOrder } from './dto/products-query.dto';
@@ -57,12 +58,56 @@ export interface CsvImportResult {
 export class ProductsService {
   private readonly logger = new Logger(ProductsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  // TTL del caché de listados: los productos cambian con frecuencia, 60s es
+  // un buen equilibrio entre ahorro de queries y frescura de datos.
+  private static readonly LIST_CACHE_TTL = 60;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {}
 
   // ===========================================================================
   // LIST - paginado, filtrable, buscable, ordenable
   // ===========================================================================
   async list(userId: string, query: ProductsQueryDto): Promise<PaginatedResponse<ProductResponse>> {
+    // Clave estable: solo los campos que afectan el resultado (ignoramos el
+    // orden de las propiedades del objeto serializado con JSON.stringify).
+    const cacheKey = `cache:products:list:${userId}:${this.hashQuery(query)}`;
+
+    const cached = await this.redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached) as PaginatedResponse<ProductResponse>;
+    }
+
+    const result = await this.queryList(userId, query);
+
+    // RedisService.get/set son no-op si Redis no está disponible.
+    await this.redis.set(cacheKey, JSON.stringify(result), ProductsService.LIST_CACHE_TTL);
+    return result;
+  }
+
+  /** Invalida el caché de listados del usuario (tras crear/editar/borrar/importar). */
+  private async invalidateListCache(userId: string): Promise<void> {
+    await this.redis.delPattern(`cache:products:list:${userId}:*`);
+  }
+
+  /** Hash simple y estable de la query (filtros + paginación + orden). */
+  private hashQuery(query: ProductsQueryDto): string {
+    const canonical = JSON.stringify(query, Object.keys(query).sort());
+    let hash = 0;
+    for (let i = 0; i < canonical.length; i++) {
+      hash = (hash << 5) - hash + canonical.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash).toString(36);
+  }
+
+  /** Ejecuta la consulta real (sin caché). */
+  private async queryList(
+    userId: string,
+    query: ProductsQueryDto,
+  ): Promise<PaginatedResponse<ProductResponse>> {
     const { page, per_page, warranty_status, sort_by, sort_order } = query;
 
     const where = this.buildListWhere(userId, query);
@@ -171,6 +216,7 @@ export class ProductsService {
     });
 
     this.logger.log(`Producto creado: ${product.id} por usuario ${userId}`);
+    await this.invalidateListCache(userId);
     return this.toResponse(product);
   }
 
@@ -225,6 +271,7 @@ export class ProductsService {
       },
     });
 
+    await this.invalidateListCache(userId);
     return this.toResponse(product);
   }
 
@@ -240,6 +287,7 @@ export class ProductsService {
     });
 
     this.logger.log(`Producto ${productId} marcado como borrado por usuario ${userId}`);
+    await this.invalidateListCache(userId);
     return { message: 'Producto eliminado.' };
   }
 
@@ -371,6 +419,7 @@ export class ProductsService {
 
     if (imported.length > 0) {
       this.logger.log(`Import CSV: ${imported.length} productos para usuario ${userId}`);
+      await this.invalidateListCache(userId);
     }
     return {
       imported: imported.length,

@@ -7,6 +7,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 
 import { ProductsService } from '../src/products/products.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { RedisService } from '../src/common/redis.service';
 import { SortBy, SortOrder } from '../src/products/dto/products-query.dto';
 import { PurchaseType } from '../src/generated/prisma/client';
 import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';
@@ -14,12 +15,23 @@ import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';
 describe('ProductsService', () => {
   let service: ProductsService;
   let prisma: MockPrisma;
+  let redis: { get: jest.Mock; set: jest.Mock; del: jest.Mock; delPattern: jest.Mock };
 
   beforeEach(async () => {
     prisma = buildPrismaMock();
+    redis = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue(undefined),
+      del: jest.fn().mockResolvedValue(undefined),
+      delPattern: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ProductsService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        ProductsService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: RedisService, useValue: redis },
+      ],
     }).compile();
 
     service = module.get<ProductsService>(ProductsService);

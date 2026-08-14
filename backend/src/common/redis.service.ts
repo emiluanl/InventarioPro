@@ -82,4 +82,21 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (!this.client) return;
     await this.client.del(key);
   }
+
+  /**
+   * Borra todas las claves que coinciden con un patrón (SCAN + DEL, sin
+   * bloquear el servidor como KEYS). No-op si Redis no está disponible.
+   */
+  async delPattern(pattern: string): Promise<void> {
+    if (!this.client) return;
+    const stream = this.client.scanStream({ match: pattern, count: 100 });
+    const pipeline = this.client.pipeline();
+
+    for await (const keys of stream) {
+      if (keys.length > 0) {
+        pipeline.del(...keys);
+      }
+    }
+    await pipeline.exec();
+  }
 }

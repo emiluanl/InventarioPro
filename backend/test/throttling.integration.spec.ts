@@ -21,6 +21,7 @@ import request from 'supertest';
 
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { RedisService } from '../src/common/redis.service';
 import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';
 
 jest.setTimeout(60000);
@@ -39,6 +40,14 @@ describe('Rate limiting por endpoint (integración)', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prisma)
+      // RedisService en no-op: el test del /health (8x200) no debe depender de
+      // un Redis real en localhost (el .env de dev lo configura y el PING del
+      // healthcheck devolvería 503 en un entorno sin Redis).
+      .overrideProvider(RedisService)
+      .useValue({
+        isEnabled: jest.fn().mockReturnValue(false),
+        getClient: jest.fn(),
+      })
       .compile();
 
     app = moduleRef.createNestApplication();

@@ -10,6 +10,7 @@ import { WarrantyBadge } from '@/components/products/warranty-badge';
 import { ProductImages } from '@/components/products/product-images';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
+import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { PRODUCT_STATUS_LABELS, PURCHASE_TYPE_LABELS } from '@/lib/types';
 
@@ -37,7 +38,7 @@ export default function ProductDetailPage({ params }: PageProps): JSX.Element {
   if (isLoading) {
     return (
       <div className="mx-auto max-w-4xl">
-        <div className="h-64 animate-pulse rounded-lg border border-gray-200 bg-gray-100" />
+        <Skeleton className="h-64" />
       </div>
     );
   }

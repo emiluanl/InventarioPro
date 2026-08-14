@@ -1,0 +1,119 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`UI components (snapshot) > Alert: error, success e info 1`] = `
+<div>
+  <div>
+    <div
+      class="rounded-md border px-4 py-3 text-sm border-red-200 bg-red-50 text-red-800"
+      role="alert"
+    >
+      Algo salió mal
+    </div>
+    <div
+      class="rounded-md border px-4 py-3 text-sm border-green-200 bg-green-50 text-green-800"
+      role="alert"
+    >
+      Todo bien
+    </div>
+    <div
+      class="rounded-md border px-4 py-3 text-sm border-blue-200 bg-blue-50 text-blue-800"
+      role="alert"
+    >
+      Información
+    </div>
+  </div>
+</div>
+`;
+
+exports[`UI components (snapshot) > Button: variantes y carga 1`] = `
+<div>
+  <div>
+    <button
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm bg-accent-600 text-white hover:bg-accent-700 active:bg-accent-800"
+    >
+      Primario
+    </button>
+    <button
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm bg-gray-100 text-gray-900 hover:bg-gray-200 active:bg-gray-300"
+    >
+      Secundario
+    </button>
+    <button
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm bg-transparent text-gray-700 hover:bg-gray-100 active:bg-gray-200"
+    >
+      Ghost
+    </button>
+    <button
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 active:bg-red-800"
+    >
+      Peligro
+    </button>
+    <button
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm bg-accent-600 text-white hover:bg-accent-700 active:bg-accent-800"
+      disabled=""
+    >
+      <svg
+        class="h-4 w-4 animate-spin"
+        fill="none"
+        viewBox="0 0 24 24"
+      >
+        <circle
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="currentColor"
+          stroke-opacity="0.25"
+          stroke-width="4"
+        />
+        <path
+          d="M4 12a8 8 0 018-8"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-width="4"
+        />
+      </svg>
+      Cargando
+    </button>
+    <button
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed px-2.5 py-1 text-xs bg-accent-600 text-white hover:bg-accent-700 active:bg-accent-800"
+    >
+      Chico
+    </button>
+  </div>
+</div>
+`;
+
+exports[`UI components (snapshot) > Input: normal, con error y disabled 1`] = `
+<div>
+  <div>
+    <input
+      class="block w-full rounded-md border px-3 py-2 text-sm bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:opacity-50 disabled:cursor-not-allowed border-gray-300 focus:border-accent-500"
+      placeholder="Normal"
+    />
+    <input
+      class="block w-full rounded-md border px-3 py-2 text-sm bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed border-red-500 focus:ring-red-500"
+      placeholder="Con error"
+    />
+    <input
+      class="block w-full rounded-md border px-3 py-2 text-sm bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:opacity-50 disabled:cursor-not-allowed border-gray-300 focus:border-accent-500"
+      disabled=""
+      placeholder="Deshabilitado"
+    />
+  </div>
+</div>
+`;
+
+exports[`UI components (snapshot) > Skeleton: base y con tamaño 1`] = `
+<div>
+  <div>
+    <div
+      aria-hidden="true"
+      class="animate-pulse rounded-md border border-gray-200 bg-gray-100"
+    />
+    <div
+      aria-hidden="true"
+      class="animate-pulse rounded-md border border-gray-200 bg-gray-100 h-40 w-64"
+    />
+  </div>
+</div>
+`;

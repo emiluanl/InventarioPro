@@ -9,6 +9,7 @@ import { ProductCard } from '@/components/products/product-card';
 import { FilterBar } from '@/components/products/filter-bar';
 import { EmptyState } from '@/components/products/empty-state';
 import { CsvActions } from '@/components/products/csv-actions';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { Product, ProductsFilters } from '@/lib/types';
 import { PRODUCT_STATUS_LABELS } from '@/lib/types';
 import { formatCurrency } from '@/lib/format';
@@ -237,15 +238,12 @@ function DashboardSkeleton({ view }: { view: 'grid' | 'list' }): JSX.Element {
     return (
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div
-            key={i}
-            className="h-40 animate-pulse rounded-lg border border-gray-200 bg-gray-100"
-          />
+          <Skeleton key={i} className="h-40" />
         ))}
       </div>
     );
   }
-  return <div className="h-64 animate-pulse rounded-lg border border-gray-200 bg-gray-100" />;
+  return <Skeleton className="h-64" />;
 }
 
 export default function DashboardPage(): JSX.Element {
@@ -253,9 +251,9 @@ export default function DashboardPage(): JSX.Element {
     <Suspense
       fallback={
         <div className="space-y-6">
-          <div className="h-8 w-48 animate-pulse rounded bg-gray-200" />
-          <div className="h-32 animate-pulse rounded-lg bg-gray-100" />
-          <div className="h-64 animate-pulse rounded-lg bg-gray-100" />
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-64" />
         </div>
       }
     >

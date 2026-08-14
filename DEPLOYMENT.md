@@ -102,23 +102,52 @@ docker compose -f docker-compose.prod.yml ps
 
 El workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) hace
 `git pull` + `docker compose up -d --build` en el servidor vía SSH (el mismo
-flujo de esta sección). Se dispara al pushear a `main` o manualmente desde la
-pestaña Actions.
+flujo de esta sección). **Soporta dos entornos** — `staging` y `production` —
+y se dispara al pushear a `main` (producción) o manualmente desde la pestaña
+Actions eligiendo el entorno.
 
-Para activarlo, configura estos **secrets** en GitHub
-(`Settings → Secrets and variables → Actions`):
+#### 1. Crear un entorno de staging (recomendado antes de tocar prod)
 
-| Secret | Descripción |
-|---|---|
-| `DEPLOY_HOST` | IP o dominio del servidor |
-| `DEPLOY_USER` | Usuario SSH con permisos sobre Docker |
-| `DEPLOY_SSH_KEY` | Clave privada SSH (PEM, sin passphrase) |
-| `DEPLOY_PORT` | Puerto SSH (opcional, por defecto 22) |
-| `DEPLOY_DIR` (variable) | Ruta del repo en el servidor (por defecto `~/InventarioPro`) |
+El workflow puede desplegar a un servidor de pruebas independiente. Necesitas:
+
+1. Un servidor (VPS o máquina) con Docker instalado, accesible por SSH.
+2. Clonar el repo en el servidor: `git clone <repo> ~/InventarioPro-staging`.
+3. Crear ahí el `.env.prod` local (nunca se sube a git) y levantar el stack
+   una vez a mano para validar: `docker compose -f docker-compose.prod.yml
+   --env-file .env.prod up -d --build`.
+
+#### 2. Configurar los secrets en GitHub
+
+`Settings → Secrets and variables → Actions` (secretos de repo o de
+environment). El workflow mapea cada entorno a sus propios secrets:
+
+| Entorno | Secret | Descripción |
+|---|---|---|
+| **staging** | `STAGING_HOST` | IP o dominio del servidor de staging |
+| **staging** | `STAGING_USER` | Usuario SSH con permisos sobre Docker |
+| **staging** | `STAGING_SSH_KEY` | Clave privada SSH (PEM, sin passphrase) |
+| **staging** | `STAGING_PORT` | Puerto SSH (opcional, por defecto 22) |
+| **staging** | `STAGING_DIR` (variable) | Ruta del repo (por defecto `~/InventarioPro-staging`) |
+| **production** | `DEPLOY_HOST` | IP o dominio del servidor de producción |
+| **production** | `DEPLOY_USER` | Usuario SSH con permisos sobre Docker |
+| **production** | `DEPLOY_SSH_KEY` | Clave privada SSH (PEM, sin passphrase) |
+| **production** | `DEPLOY_PORT` | Puerto SSH (opcional, por defecto 22) |
+| **production** | `DEPLOY_DIR` (variable) | Ruta del repo (por defecto `~/InventarioPro`) |
+
+#### 3. Probar en staging
+
+1. En GitHub, ve a la pestaña **Actions** → **Deploy** → **Run workflow**.
+2. Elige `staging` en el desplegable y lanza el job.
+3. El workflow hace `git pull` + `docker compose up -d --build` en staging y
+   verifica el healthcheck del backend al final.
+4. Solo cuando staging valide, repite con `production`.
 
 > El job `migrate` del compose aplica las migraciones automáticamente antes de
 > que el backend sirva; el workflow verifica el healthcheck al final. El
-> `.env.prod` vive solo en el servidor y nunca se sube a git.
+> `.env.prod` vive solo en el servidor y nunca se sube a git. Para protección
+> extra, puedes crear *environments* en
+> `Settings → Environments` y exigir aprobación manual antes de desplegar a
+> producción.
 
 ## 5. Migrar la base de datos
 

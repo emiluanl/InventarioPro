@@ -104,6 +104,13 @@ jobs:
             git pull --ff-only origin main
             # El env-file es local al servidor (NUNCA subir a git).
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
-            # Verificación rápida: healthcheck del backend por la red interna.
+            # Verificación: el healthcheck del backend debe quedar healthy.
+            # (docker inspect imprime el estado pero NO falla si es unhealthy;
+            # el chequeo explícito sí hace fallar el job en ese caso.)
             sleep 15
-            docker inspect --format '{{.State.Health.Status}}' inventariopro-backend
+            STATUS=$(docker inspect --format '{{.State.Health.Status}}' inventariopro-backend)
+            echo "Backend health: $STATUS"
+            if [ "$STATUS" != "healthy" ]; then
+              echo "::error::Backend no quedó healthy tras el deploy: $STATUS"
+              exit 1
+            fi

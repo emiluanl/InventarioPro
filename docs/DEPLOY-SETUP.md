@@ -6,8 +6,9 @@ Guía paso a paso para dejar operativo el workflow
 
 > **Resumen del flujo** (detalles en [DEPLOYMENT.md](../DEPLOYMENT.md)):
 > el workflow despliega a `staging` o `production`, cada uno con sus propios
-> secrets (`STAGING_*` y `DEPLOY_*`). Se dispara manualmente eligiendo el
-> entorno, o automáticamente al pushear a `main` (producción).
+> secrets (`STAGING_*` y `DEPLOY_*`). Hoy se dispara **solo manualmente**
+> eligiendo el entorno (el push a `main` está desactivado temporalmente,
+> ver §5); cuando se reactive, el push a `main` desplegará a producción.
 
 ---
 
@@ -77,25 +78,36 @@ ssh -i ~/.ssh/inventariopro_deploy deploy@<IP_STAGING>
 git clone https://github.com/emiluanl/InventarioPro-2.0.git ~/InventarioPro-staging
 cd ~/InventarioPro-staging
 
-# Copia el ejemplo y rellena TODAS las variables (ver tabla abajo).
+# El .env.prod mezcla las variables del backend + las del compose (Postgres,
+# Redis, dominio público). Empieza desde el ejemplo del backend:
 cp backend/.env.example .env.prod
 nano .env.prod
 ```
 
-> ⚠️ El `.env.prod` **nunca se sube a git** (está en `.gitignore`). Es local
-> al servidor. Si usas staging y producción, cada servidor tiene el suyo.
+> ⚠️ **`backend/.env.example` NO cubre todo el `.env.prod`**: faltan las
+> variables del compose — `POSTGRES_USER`, `POSTGRES_PASSWORD`,
+> `PUBLIC_API_URL` y, si usas Redis con contraseña, `REDIS_PASSWORD`. Sin
+> ellas el primer `docker compose up` falla con `:?required`. Añádelas
+> manualmente (ver §1.5). El `.env.prod` **nunca se sube a git** (está en
+> `.gitignore`); es local al servidor. Si usas staging y producción, cada
+> servidor tiene el suyo.
 
 ### 1.5. Variables mínimas del `.env.prod`
 
-El compose exige estas (`:?required`):
+El compose exige estas (`:?required` en `docker-compose.prod.yml`):
 
 | Variable | Ejemplo | Notas |
 |---|---|---|
-| `POSTGRES_USER` | `inventariopro` | usuario de la BD |
-| `POSTGRES_PASSWORD` | `genera-una-fuerte` | `openssl rand -base64 24` |
-| `JWT_ACCESS_SECRET` | `genera-una-fuerte` | firma de tokens |
+| `POSTGRES_USER` | `inventariopro` | usuario de la BD (no está en `backend/.env.example`, añadir) |
+| `POSTGRES_PASSWORD` | `genera-una-fuerte` | `openssl rand -base64 24` (no está en el example, añadir) |
+| `REDIS_PASSWORD` | `genera-una-fuerte` | Redis arranca con `--requirepass`; misma clave en backend y healthcheck |
+| `JWT_ACCESS_SECRET` | `genera-una-fuerte` | firma de tokens (`openssl rand -hex 32`) |
 | `APP_BASE_URL` | `https://app.tudominio.com` | base de los enlaces de email |
 | `CORS_ORIGIN` | `https://app.tudominio.com` | exacto, sin barra final |
+| `PUBLIC_API_URL` | `https://app.tudominio.com/api` | se inlinea en el bundle del frontend (build-time) |
+
+> La guía `backend/.env.example` tiene `REDIS_PASSWORD`, `JWT_ACCESS_SECRET`,
+> `APP_BASE_URL` y `CORS_ORIGIN`; añade a mano las otras tres.
 
 Y las opcionales según el stack (con su default):
 

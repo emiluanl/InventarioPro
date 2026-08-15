@@ -18,6 +18,8 @@ import {
   type JSX,
 } from 'react';
 
+import Link from 'next/link';
+
 import { cn } from '@/lib/utils';
 import { useLayoutMode, type LayoutMode } from '@/lib/layout-mode';
 import { useTheme, type ThemeMode } from '@/lib/theme-mode';
@@ -67,7 +69,12 @@ function DeviceIcon({ mode }: { mode: 'mobile' | 'desktop' }): JSX.Element {
   );
 }
 
-/** Cierra el menú al hacer clic afuera o presionar Escape. */
+/**
+ * Cierra el menú al: hacer clic afuera (mousedown), presionar Escape, o cuando
+ * el FOCO sale del contenedor (Tab/Shift+Tab desde el último/primer elemento,
+ * o clic en otro control) — esto último da accesibilidad completa por teclado
+ * sin depender solo del puntero.
+ */
 function useDismissOnOutside(
   open: boolean,
   setOpen: (open: boolean) => void,
@@ -81,11 +88,21 @@ function useDismissOnOutside(
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') setOpen(false);
     };
+    // Al perder el foco hacia FUERA del contenedor (menú abierto) se cierra.
+    // focusout burbujea y e.relatedTarget es el elemento que recibe el foco.
+    const onFocusOut = (e: FocusEvent): void => {
+      const next = e.relatedTarget as Node | null;
+      if (rootRef.current && (!next || !rootRef.current.contains(next))) {
+        setOpen(false);
+      }
+    };
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('focusout', onFocusOut);
     return () => {
       document.removeEventListener('mousedown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('focusout', onFocusOut);
     };
   }, [open, setOpen, rootRef]);
 }
@@ -126,8 +143,12 @@ function LayoutModeBadgeInner({ isDesktopViewport }: { isDesktopViewport: boolea
     (next: LayoutMode) => {
       setMode(next);
       setOpen(false);
+      // Restaura el foco al badge (el ítem elegido se desmonta al cerrar; se
+      // consulta el DOM en ese momento porque el re-render puede remontarlo).
+      const trigger = rootRef.current?.querySelector('button[aria-haspopup]');
+      if (trigger instanceof HTMLElement) trigger.focus();
     },
-    [setMode],
+    [setMode, rootRef],
   );
 
   return (
@@ -144,7 +165,7 @@ function LayoutModeBadgeInner({ isDesktopViewport }: { isDesktopViewport: boolea
         }
         onClick={() => setOpen(true)}
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors',
+          'inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors',
           forced
             ? 'border-accent-500/40 bg-accent-500/10 text-accent-700 hover:bg-accent-500/20'
             : 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200',
@@ -190,6 +211,18 @@ function LayoutModeBadgeInner({ isDesktopViewport }: { isDesktopViewport: boolea
               </button>
             );
           })}
+
+          {/* Separador + acceso directo a Configuración → Vista (el mismo
+              selector que aquí, por si se prefiere desde la página). */}
+          <div role="separator" className="my-1 border-t border-gray-200" />
+          <Link
+            href="/settings"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-accent-700 hover:bg-gray-100"
+          >
+            <span className="w-4 shrink-0">⚙</span>
+            Configuración → Vista
+          </Link>
         </div>
       )}
     </div>
@@ -216,8 +249,12 @@ function ThemeBadgeInner(): JSX.Element {
     (next: ThemeMode) => {
       setTheme(next);
       setOpen(false);
+      // Restaura el foco al badge (el ítem elegido se desmonta al cerrar; se
+      // consulta el DOM en ese momento porque el re-render puede remontarlo).
+      const trigger = rootRef.current?.querySelector('button[aria-haspopup]');
+      if (trigger instanceof HTMLElement) trigger.focus();
     },
-    [setTheme],
+    [setTheme, rootRef],
   );
 
   const label = theme === 'light' ? 'Claro' : 'Oscuro';
@@ -231,7 +268,7 @@ function ThemeBadgeInner(): JSX.Element {
         aria-expanded={open}
         title="Cambiar tema oscuro/claro"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-100 px-2.5 py-0.5 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-200"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border border-gray-300 bg-gray-100 px-2.5 py-0.5 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-200"
       >
         {theme === 'light' ? (
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

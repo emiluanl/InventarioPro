@@ -173,6 +173,12 @@ test.describe('badge interactivo del modo de layout', () => {
     await expect(menu.getByRole('menuitemradio', { name: /Móvil/ })).not.toBeChecked();
     await expect(menu.getByRole('menuitemradio', { name: /Escritorio/ })).not.toBeChecked();
 
+    // El menú ofrece acceso directo a Configuración → Vista.
+    await expect(menu.getByRole('link', { name: /Configuración → Vista/ })).toHaveAttribute(
+      'href',
+      '/settings',
+    );
+
     // Elegir "Móvil": el chrome cambia al instante y el badge lo refleja.
     await menu.getByRole('menuitemradio', { name: /Móvil/ }).click();
     await expect(menu).toBeHidden();

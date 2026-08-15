@@ -10,23 +10,25 @@ const config: Config = {
     extend: {
       colors: {
         // =====================================================================
-        // Paleta neutral DARK-FIRST (estilo Musk/Grok/X): los valores gray-*
-        // están invertidos para que los componentes existentes (bg-gray-100,
-        // text-gray-900, border-gray-200...) queden oscuros sin tocarlos uno
-        // a uno. La escala va de fondo (bajo) a texto (alto).
+        // Paleta neutral por TEMA: los valores gray-* son variables CSS
+        // (--tw-gray-50 … 950) que se redefinen en globals.css según la clase
+        // `.light` del <html>. Así los componentes existentes (bg-gray-100,
+        // text-gray-900, border-gray-200…) se adaptan a oscuro/claro sin
+        // tocarlos uno a uno. El sufijo /<alpha> funciona gracias a
+        // `rgb(var(--…) / <alpha-value>)`.
         // =====================================================================
         gray: {
-          50: '#0a0a0b', // fondo más claro dentro del tema (aún oscuro)
-          100: '#141417', // superficie base (cards, inputs, selects)
-          200: '#1c1c1f', // superficie elevada (hover, dropdowns)
-          300: '#2a2a30', // borde por defecto (1px, sutil) / superficie hover
-          400: '#33333a', // borde hover / separadores fuertes
-          500: '#7a7a82', // texto terciario / metadatos (contraste ≥ 3:1)
-          600: '#9b9ba3', // texto secundario
-          700: '#b6b6bf', // texto secundario alto
-          800: '#d6d6dd', // texto principal suave
-          900: '#f5f5f7', // texto principal (casi blanco)
-          950: '#ffffff', // textos que necesitan blanco puro
+          50: 'rgb(var(--tw-gray-50) / <alpha-value>)',
+          100: 'rgb(var(--tw-gray-100) / <alpha-value>)',
+          200: 'rgb(var(--tw-gray-200) / <alpha-value>)',
+          300: 'rgb(var(--tw-gray-300) / <alpha-value>)',
+          400: 'rgb(var(--tw-gray-400) / <alpha-value>)',
+          500: 'rgb(var(--tw-gray-500) / <alpha-value>)',
+          600: 'rgb(var(--tw-gray-600) / <alpha-value>)',
+          700: 'rgb(var(--tw-gray-700) / <alpha-value>)',
+          800: 'rgb(var(--tw-gray-800) / <alpha-value>)',
+          900: 'rgb(var(--tw-gray-900) / <alpha-value>)',
+          950: 'rgb(var(--tw-gray-950) / <alpha-value>)',
         },
         // Acento eléctrico: azul brillante estilo Starlink/#0A84FF (Apple).
         // Escala monótona (50 = más claro, 900 = más oscuro), como Tailwind:

@@ -2,6 +2,8 @@ import type { JSX } from 'react';
 
 import Link from 'next/link';
 
+import { PrefsBadges } from '@/components/dashboard/prefs-badges';
+
 export default function AuthLayout({
   children,
 }: {
@@ -9,6 +11,11 @@ export default function AuthLayout({
 }): JSX.Element {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12 bg-gray-50">
+      {/* Badges de preferencias (modo de layout y tema) también en login/registro:
+          el usuario puede forzar el layout o cambiar el tema antes de entrar. */}
+      <div className="absolute top-4 right-4">
+        <PrefsBadges />
+      </div>
       <Link href="/" className="mb-8 text-2xl font-semibold text-gray-900">
         Inventario<span className="text-accent-400">Pro</span>
       </Link>

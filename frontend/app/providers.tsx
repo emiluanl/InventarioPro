@@ -5,6 +5,7 @@ import { useState, type JSX, type ReactNode } from 'react';
 
 import { AuthProvider } from '@/hooks/use-auth';
 import { LayoutModeProvider } from '@/lib/layout-mode';
+import { ThemeProvider } from '@/lib/theme-mode';
 
 export function Providers({ children }: { children: ReactNode }): JSX.Element {
   const [queryClient] = useState(
@@ -22,9 +23,11 @@ export function Providers({ children }: { children: ReactNode }): JSX.Element {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <LayoutModeProvider>
-        <AuthProvider>{children}</AuthProvider>
-      </LayoutModeProvider>
+      <ThemeProvider>
+        <LayoutModeProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </LayoutModeProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

@@ -108,6 +108,160 @@ test('móvil: sin overflow, nav inferior, filtros plegables y tarjetas en la lis
 });
 
 // -----------------------------------------------------------------------------
+// Badge en el LOGIN: visible antes de entrar y la elección persiste al loguearse.
+// -----------------------------------------------------------------------------
+test.describe('badge del modo de layout en el login', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('se ve en /login, cambia el modo y persiste al entrar al dashboard', async ({
+    page,
+  }) => {
+    const email = randomEmail('lgd');
+    await registerAndVerify(page.request, email);
+
+    // Sin loguear: el badge está visible en la pantalla de login.
+    await page.goto('/login');
+    await expect(page.getByLabel('Modo de layout: Escritorio')).toBeVisible();
+
+    // Forzar el modo móvil desde el login.
+    await page.getByLabel('Modo de layout: Escritorio').click();
+    await page
+      .getByRole('menu', { name: 'Cambiar modo de layout' })
+      .getByRole('menuitemradio', { name: /Móvil/ })
+      .click();
+    await expect(page.getByLabel('Modo de layout: Móvil · forzado')).toBeVisible();
+
+    // Al entrar, el layout forzado se mantiene (persistencia en localStorage).
+    await login(page, email);
+    await expect(page.getByLabel('Modo de layout: Móvil · forzado')).toBeVisible();
+    await expect(
+      page.getByRole('navigation', { name: 'Navegación móvil' }),
+    ).toBeVisible();
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Badge interactivo: clic abre el menú y cambia el modo sin ir a Configuración.
+// -----------------------------------------------------------------------------
+test.describe('badge interactivo del modo de layout', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('el menú cambia el modo al instante y el badge refleja el nuevo', async ({
+    page,
+  }) => {
+    const email = randomEmail('bdg');
+    await registerAndVerify(page.request, email);
+    await login(page, email);
+    await page.goto('/dashboard');
+
+    const bottomNav = page.getByRole('navigation', { name: 'Navegación móvil' });
+    const headerDesktopNav = page
+      .locator('header')
+      .getByRole('link', { name: 'Reportes' });
+
+    // Antes: escritorio automático, badge con el modo efectivo.
+    await expect(bottomNav).toBeHidden();
+    await expect(headerDesktopNav).toBeVisible();
+    const badge = page.getByLabel('Modo de layout: Escritorio');
+    await expect(badge).toBeVisible();
+
+    // Clic en el badge: se abre el menú con las tres opciones.
+    await badge.click();
+    const menu = page.getByRole('menu', { name: 'Cambiar modo de layout' });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('menuitemradio', { name: /Automático/ })).toBeChecked();
+    await expect(menu.getByRole('menuitemradio', { name: /Móvil/ })).not.toBeChecked();
+    await expect(menu.getByRole('menuitemradio', { name: /Escritorio/ })).not.toBeChecked();
+
+    // Elegir "Móvil": el chrome cambia al instante y el badge lo refleja.
+    await menu.getByRole('menuitemradio', { name: /Móvil/ }).click();
+    await expect(menu).toBeHidden();
+    await expect(page.getByLabel('Modo de layout: Móvil · forzado')).toBeVisible();
+    await expect(bottomNav).toBeVisible();
+    await expect(headerDesktopNav).toBeHidden();
+
+    // De vuelta a "Automático": se restaura el escritorio (viewport grande).
+    await page.getByLabel('Modo de layout: Móvil · forzado').click();
+    await page
+      .getByRole('menu', { name: 'Cambiar modo de layout' })
+      .getByRole('menuitemradio', { name: /Automático/ })
+      .click();
+    await expect(page.getByLabel('Modo de layout: Escritorio')).toBeVisible();
+    await expect(bottomNav).toBeHidden();
+    await expect(headerDesktopNav).toBeVisible();
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Tema oscuro/claro: badge con menú en la cabecera + persistencia.
+// -----------------------------------------------------------------------------
+test.describe('tema oscuro/claro', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('el badge del tema cambia a claro, persiste al recargar y vuelve a oscuro', async ({
+    page,
+  }) => {
+    const email = randomEmail('thm');
+    await registerAndVerify(page.request, email);
+    await login(page, email);
+    await page.goto('/dashboard');
+
+    // Por defecto el tema es oscuro (sin clase .light).
+    await expect(page.getByLabel('Tema: Oscuro')).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.classList.contains('light')),
+    ).toBe(false);
+
+    // Abrir el menú del badge y elegir "Claro".
+    await page.getByLabel('Tema: Oscuro').click();
+    const menu = page.getByRole('menu', { name: 'Cambiar tema' });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('menuitemradio', { name: /Oscuro/ })).toBeChecked();
+    await menu.getByRole('menuitemradio', { name: /Claro/ }).click();
+
+    // El badge cambia y la clase .light se aplica al <html>.
+    await expect(page.getByLabel('Tema: Claro')).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.classList.contains('light')),
+    ).toBe(true);
+
+    // Persiste al recargar (localStorage + script anti-flash del layout).
+    await page.reload();
+    await expect(page.getByLabel('Tema: Claro')).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.classList.contains('light')),
+    ).toBe(true);
+
+    // Volver a "Oscuro" restaura el tema predeterminado.
+    await page.getByLabel('Tema: Claro').click();
+    await page
+      .getByRole('menu', { name: 'Cambiar tema' })
+      .getByRole('menuitemradio', { name: /Oscuro/ })
+      .click();
+    await expect(page.getByLabel('Tema: Oscuro')).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.classList.contains('light')),
+    ).toBe(false);
+  });
+
+  test('el selector de Configuración también cambia el tema', async ({ page }) => {
+    const email = randomEmail('thc');
+    await registerAndVerify(page.request, email);
+    await login(page, email);
+    await page.goto('/settings');
+
+    const select = page.getByLabel('Tema de la app');
+    await expect(select).toHaveValue('dark');
+    await select.selectOption('light');
+
+    await expect(page.getByLabel('Tema: Claro')).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.classList.contains('light')),
+    ).toBe(true);
+  });
+});
+
+// -----------------------------------------------------------------------------
 // Propuesta B: toggle manual para forzar el layout móvil en pantallas grandes.
 // -----------------------------------------------------------------------------
 test.describe('toggle forzado de móvil en escritorio (Propuesta B)', () => {

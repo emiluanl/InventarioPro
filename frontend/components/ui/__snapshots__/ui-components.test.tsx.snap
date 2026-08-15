@@ -29,27 +29,27 @@ exports[`UI components (snapshot) > Button: variantes y carga 1`] = `
 <div>
   <div>
     <button
-      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-accent-500 text-white hover:bg-accent-400 hover:shadow-glow active:bg-accent-600"
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-accent-500 text-white hover:bg-accent-400 hover:shadow-glow active:bg-accent-600"
     >
       Primario
     </button>
     <button
-      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-gray-200 text-gray-900 hover:bg-gray-300 active:bg-gray-400/60"
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-gray-200 text-gray-900 hover:bg-gray-300 active:bg-gray-400/60"
     >
       Secundario
     </button>
     <button
-      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-transparent text-gray-700 hover:bg-gray-300/60 hover:text-gray-900 active:bg-gray-300"
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-transparent text-gray-700 hover:bg-gray-300/60 hover:text-gray-900 active:bg-gray-300"
     >
       Ghost
     </button>
     <button
-      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-red-500/90 text-white hover:bg-red-400 hover:shadow-[0_0_16px_rgba(239,68,68,0.25)] active:bg-red-600"
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-red-500/90 text-white hover:bg-red-400 hover:shadow-[0_0_16px_rgba(239,68,68,0.25)] active:bg-red-600"
     >
       Peligro
     </button>
     <button
-      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-accent-500 text-white hover:bg-accent-400 hover:shadow-glow active:bg-accent-600"
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-accent-500 text-white hover:bg-accent-400 hover:shadow-glow active:bg-accent-600"
       disabled=""
     >
       <svg
@@ -75,7 +75,7 @@ exports[`UI components (snapshot) > Button: variantes y carga 1`] = `
       Cargando
     </button>
     <button
-      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-2.5 py-1 text-xs bg-accent-500 text-white hover:bg-accent-400 hover:shadow-glow active:bg-accent-600"
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-2.5 py-1 text-xs bg-accent-500 text-white hover:bg-accent-400 hover:shadow-glow active:bg-accent-600"
     >
       Chico
     </button>

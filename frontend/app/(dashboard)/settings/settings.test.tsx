@@ -16,16 +16,19 @@ vi.mock('@/hooks/use-auth', () => ({
 
 import { useAuth } from '@/hooks/use-auth';
 import { LayoutModeProvider } from '@/lib/layout-mode';
+import { ThemeProvider } from '@/lib/theme-mode';
 import SettingsPage from './page';
 
 const mockUseAuth = vi.mocked(useAuth);
 
-/** Renderiza la página dentro del provider que requiere (LayoutMode). */
+/** Renderiza la página dentro de los providers que requiere (LayoutMode y Tema). */
 function renderSettings(): void {
   render(
-    <LayoutModeProvider>
-      <SettingsPage />
-    </LayoutModeProvider>,
+    <ThemeProvider>
+      <LayoutModeProvider>
+        <SettingsPage />
+      </LayoutModeProvider>
+    </ThemeProvider>,
   );
 }
 
@@ -46,6 +49,10 @@ function mockAuthState(overrides: Record<string, unknown> = {}): void {
 beforeEach(() => {
   vi.clearAllMocks();
   mockAuthState();
+  // El tema se persiste en localStorage y la clase .light se aplica al <html>:
+  // dejamos ambos limpios para que cada test parta del tema oscuro.
+  window.localStorage.clear();
+  document.documentElement.classList.remove('light');
 });
 
 describe('SettingsPage', () => {
@@ -53,8 +60,23 @@ describe('SettingsPage', () => {
     renderSettings();
     expect(screen.getByRole('heading', { name: 'Configuración' })).toBeInTheDocument();
     expect(screen.getByText('test@example.com')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Tema' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Cambiar contraseña' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Zona de peligro' })).toBeInTheDocument();
+  });
+
+  it('cambia el tema a claro y aplica la clase .light en el <html>', async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    const select = screen.getByLabelText('Tema de la app');
+    expect(select).toHaveValue('dark');
+
+    await user.selectOptions(select, 'light');
+
+    expect(select).toHaveValue('light');
+    expect(document.documentElement.classList.contains('light')).toBe(true);
+    expect(window.localStorage.getItem('inventariopro:theme')).toBe('light');
   });
 
   it('muestra un error si las contraseñas nuevas no coinciden', async () => {

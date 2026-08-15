@@ -5,49 +5,99 @@
 /* =============================================================================
    Estilos globales — tema DARK-FIRST (estilo Musk/Grok/X/Starlink)
    ==========================================================================
-   Tokens del tema: el rediseño se controla desde aquí y desde la paleta
-   gray/accent de tailwind.config.ts. Los componentes no hardcodean colores;
-   usan tokens o las escalas del tema.
+   El tema oscuro es el predeterminado; el claro se activa con la clase `.light`
+   en el <html> (la gestiona ThemeProvider desde lib/theme-mode). La escala
+   gray de Tailwind son variables --tw-gray-* que cambian según el tema, así los
+   componentes se adaptan sin tocar sus clases.
    ========================================================================== */
 
 @layer base {
+  /* --------------------------------------------------------------------------
+     Tema OSCURO (predeterminado): grises invertidos estilo Musk/Grok/X.
+     La escala va de fondo (bajo) a texto (alto).
+     -------------------------------------------------------------------------- */
   :root {
+    --tw-gray-50: 10 10 11; /* fondo más claro dentro del tema (aún oscuro) */
+    --tw-gray-100: 20 20 23; /* superficie base (cards, inputs, selects) */
+    --tw-gray-200: 28 28 31; /* superficie elevada (hover, dropdowns) */
+    --tw-gray-300: 42 42 48; /* borde por defecto (1px, sutil) / hover */
+    --tw-gray-400: 51 51 58; /* borde hover / separadores fuertes */
+    --tw-gray-500: 122 122 130; /* texto terciario / metadatos */
+    --tw-gray-600: 155 155 163; /* texto secundario */
+    --tw-gray-700: 182 182 191; /* texto secundario alto */
+    --tw-gray-800: 214 214 221; /* texto principal suave */
+    --tw-gray-900: 245 245 247; /* texto principal (casi blanco) */
+    --tw-gray-950: 255 255 255; /* textos que necesitan blanco puro */
+
     /* Fondo y superficies (tonal: se separan por valor, no por bordes duros). */
     --bg: #0a0a0b;
     --surface: #141417;
     --surface-raised: #1c1c1f;
     --border: #26262a;
     --border-hover: #3a3a40;
-    /* Texto. */
     --text: #f5f5f7;
     --text-secondary: #9e9ea6;
     --text-muted: #6e6e73;
-    /* Acento eléctrico. */
+    /* Acento eléctrico (igual en ambos temas). */
     --accent: #0a84ff;
     --accent-hover: #0071e3;
+  }
+
+  /* --------------------------------------------------------------------------
+     Tema CLARO: escala gray estándar (fondo blanco → texto casi negro).
+     Los mismos componentes (bg-gray-100, text-gray-900…) quedan legibles.
+     -------------------------------------------------------------------------- */
+  .light {
+    --tw-gray-50: 249 250 251; /* fondo de la página (gris muy claro) */
+    --tw-gray-100: 255 255 255; /* superficie base (blanco) */
+    --tw-gray-200: 243 244 246; /* superficie elevada / filas en hover */
+    --tw-gray-300: 229 231 235; /* borde por defecto */
+    --tw-gray-400: 209 213 219; /* borde hover / separadores */
+    --tw-gray-500: 107 114 128; /* texto terciario / metadatos */
+    --tw-gray-600: 75 85 99; /* texto secundario */
+    --tw-gray-700: 55 65 81; /* texto secundario alto */
+    --tw-gray-800: 31 41 55; /* texto principal suave */
+    --tw-gray-900: 17 24 39; /* texto principal (casi negro) */
+    --tw-gray-950: 3 7 18; /* textos que necesitan negro puro */
+
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-raised: #f9fafb;
+    --border: #e5e7eb;
+    --border-hover: #d1d5db;
+    --text: #111827;
+    --text-secondary: #4b5563;
+    --text-muted: #6b7280;
+    /* Acento: el eléctrico se oscurece levemente para mantener contraste sobre blanco. */
+    --accent: #0071e3;
+    --accent-hover: #0066d6;
   }
 
   html {
     font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
       Roboto, sans-serif;
-    /* Scrollbar oscura, coherente con el tema. */
+    /* Scrollbar y controles nativos coherentes con el tema activo. */
     color-scheme: dark;
   }
 
+  html.light {
+    color-scheme: light;
+  }
+
   body {
-    @apply bg-[#0a0a0b] text-gray-900 antialiased;
+    @apply bg-[var(--bg)] text-gray-900 antialiased;
     background:
       radial-gradient(1200px 600px at 50% -10%, rgba(10, 132, 255, 0.06), transparent 60%),
-      #0a0a0b;
+      var(--bg);
   }
 
   /* Focus rings luminosos (micro-interacción clave del estilo). */
   *:focus-visible {
-    @apply outline-none ring-2 ring-accent-400/60 ring-offset-2 ring-offset-[#0a0a0b];
+    @apply outline-none ring-2 ring-accent-400/60 ring-offset-2 ring-offset-[var(--bg)];
   }
 
   ::selection {
     background: rgba(10, 132, 255, 0.35);
-    color: #f5f5f7;
+    color: var(--text);
   }
 }

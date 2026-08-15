@@ -12,6 +12,7 @@ import { changePasswordSchema, type ChangePasswordInput } from '@/lib/validation
 import { useAuth } from '@/hooks/use-auth';
 import { extractErrorMessage } from '@/lib/api';
 import { useLayoutMode, type LayoutMode } from '@/lib/layout-mode';
+import { useTheme, type ThemeMode } from '@/lib/theme-mode';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,6 +29,20 @@ function LayoutModeSelect(): JSX.Element {
       <option value="auto">Automático (según pantalla)</option>
       <option value="mobile">Forzado móvil</option>
       <option value="desktop">Forzado escritorio</option>
+    </select>
+  );
+}
+
+function ThemeSelect(): JSX.Element {
+  const { theme, setTheme } = useTheme();
+  return (
+    <select
+      value={theme}
+      onChange={(e) => setTheme(e.target.value as ThemeMode)}
+      className="mt-1 w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm"
+    >
+      <option value="dark">Oscuro (predeterminado)</option>
+      <option value="light">Claro</option>
     </select>
   );
 }
@@ -105,6 +120,23 @@ export default function SettingsPage(): JSX.Element {
         <label className="mt-4 block max-w-xs">
           <span className="text-sm font-medium text-gray-800">Modo de vista</span>
           <LayoutModeSelect />
+        </label>
+      </section>
+
+      {/* --------------------------------------------------------------------- */}
+      {/* TEMA (oscuro / claro)                                                 */}
+      {/* --------------------------------------------------------------------- */}
+      <section className="rounded-lg border border-gray-200 bg-gray-100 p-6">
+        <h2 className="text-lg font-semibold text-gray-900">Tema</h2>
+        <p className="mt-1 text-sm text-gray-700">
+          Elige la apariencia de la app. “Oscuro” es el tema predeterminado
+          (estilo Grok/X); “Claro” usa superficies blancas y texto oscuro.
+          La elección se guarda en este navegador.
+        </p>
+
+        <label className="mt-4 block max-w-xs">
+          <span className="text-sm font-medium text-gray-800">Tema de la app</span>
+          <ThemeSelect />
         </label>
       </section>
 

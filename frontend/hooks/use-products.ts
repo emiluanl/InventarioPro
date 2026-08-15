@@ -39,6 +39,12 @@ export function useProducts(
       );
       return data;
     },
+    // Siempre refetch al montar (aunque el dato esté "fresco" por staleTime
+    // 60s): un resultado cacheado viejo (p. ej. de otro usuario o de un
+    // momento sin sesión) no debe mostrarse como "inventario vacío" sin
+    // verificar contra el backend. El listado es una query barata y la
+    // frescura importa más que el cache hit.
+    refetchOnMount: 'always',
     placeholderData: (previousData) => previousData,
   });
 }

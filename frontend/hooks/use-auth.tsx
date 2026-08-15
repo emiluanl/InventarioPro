@@ -15,6 +15,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { api, extractErrorMessage, SESSION_EXPIRED_EVENT } from '@/lib/api';
 import type {
@@ -59,6 +60,15 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const router = useRouter();
   const pathname = usePathname();
+  const queryClient = useQueryClient();
+
+  // El caché de React Query NO debe sobrevivir un cambio de sesión: las claves
+  // de productos no incluyen el usuario, así que un resultado cacheado (vacío
+  // o de OTRA cuenta) se mostraría al siguiente usuario durante el staleTime
+  // (60s) sin refetch. Se limpia al entrar, al salir y si la sesión muere.
+  const clearQueryCache = useCallback((): void => {
+    queryClient.clear();
+  }, [queryClient]);
 
   // Cargar sesión al arrancar
   useEffect(() => {
@@ -100,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   useEffect(() => {
     const onSessionExpired = (): void => {
       setUser(null);
+      clearQueryCache();
       const isPublic = PUBLIC_ROUTES.some((r) => pathname?.startsWith(r));
       if (!isPublic) {
         router.replace('/login');
@@ -107,15 +118,16 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     };
     window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
-  }, [router, pathname]);
+  }, [router, pathname, clearQueryCache]);
 
   const login = useCallback(
     async (input: LoginInput): Promise<void> => {
       const { data } = await api.post<AuthUser>('/auth/login', input);
+      clearQueryCache();
       setUser(data);
       router.replace('/dashboard');
     },
-    [router],
+    [router, clearQueryCache],
   );
 
   const register = useCallback(
@@ -133,9 +145,10 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     } catch {
       // Aunque falle, limpiamos el estado local.
     }
+    clearQueryCache();
     setUser(null);
     router.replace('/login');
-  }, [router]);
+  }, [router, clearQueryCache]);
 
   const forgotPassword = useCallback(
     async (input: ForgotPasswordInput): Promise<string> => {
@@ -209,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
         const { data } = await api.delete<{ message: string }>('/auth/account', {
           data: { password },
         });
+        clearQueryCache();
         setUser(null);
         router.replace('/login');
         return data.message;
@@ -216,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
         throw new Error(extractErrorMessage(err));
       }
     },
-    [router],
+    [router, clearQueryCache],
   );
 
   const value = useMemo<AuthContextValue>(

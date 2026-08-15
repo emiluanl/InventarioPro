@@ -103,7 +103,8 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
           type="button"
           onClick={() => setFiltersOpen((v) => !v)}
           aria-expanded={filtersOpen}
-          className="flex items-center gap-2 rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-200"
+          // min-h-11: touch target ≥ 44px en móvil (Apple HIG).
+          className="flex min-h-11 items-center gap-2 rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-200"
         >
           <svg
             width="16"
@@ -227,7 +228,13 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
             <option value="desc">Descendente</option>
             <option value="asc">Ascendente</option>
           </select>
-          <Button variant="ghost" size="sm" onClick={reset}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={reset}
+            // min-h-11: touch target ≥ 44px en móvil (Apple HIG).
+            className="min-h-11"
+          >
             Limpiar
           </Button>
         </div>
@@ -238,7 +245,8 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
             onClick={() => onViewChange('grid')}
             aria-pressed={view === 'grid'}
             className={cn(
-              'rounded px-2 py-1 text-xs',
+              // min-h-11 min-w-11: touch targets ≥ 44px en móvil (Apple HIG).
+              'min-h-11 min-w-11 rounded px-2 py-1 text-xs',
               view === 'grid' ? 'bg-accent-500/20 text-accent-300' : 'text-gray-700 hover:bg-gray-100',
             )}
           >
@@ -249,7 +257,8 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
             onClick={() => onViewChange('list')}
             aria-pressed={view === 'list'}
             className={cn(
-              'rounded px-2 py-1 text-xs',
+              // min-h-11 min-w-11: touch targets ≥ 44px en móvil (Apple HIG).
+              'min-h-11 min-w-11 rounded px-2 py-1 text-xs',
               view === 'list' ? 'bg-accent-500/20 text-accent-300' : 'text-gray-700 hover:bg-gray-100',
             )}
           >

@@ -50,15 +50,17 @@ for (const device of DEVICES) {
         expect(overflow).toBeLessThanOrEqual(1);
 
         // 2) Touch targets ≥ 44px en los controles clave del móvil: header
-        //    (badges, campana, salir), barra inferior, FAB del chat y botones
-        //    de Exportar/Importar CSV. Los 0×0 son los de la cabecera oculta.
+        //    (badges, campana, salir), barra inferior, FAB del chat, botones
+        //    de Exportar/Importar CSV y controles del panel de filtros
+        //    (Filtros, Limpiar, Tarjetas, Lista). Los 0×0 son los de la
+        //    cabecera oculta.
         const sizes = await page.evaluate(() => {
           const targets = [
             ...document.querySelectorAll(
               'header button, nav a, [aria-label="Abrir chat con asistente"]',
             ),
             ...[...document.querySelectorAll('main button')].filter((el) =>
-              /CSV/i.test(el.textContent || ''),
+              /CSV|Filtros|Limpiar|Tarjetas|Lista/i.test(el.textContent || ''),
             ),
           ];
           return targets.map((el) => {

@@ -30,7 +30,7 @@ interface FilterBarProps {
 export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
   const router = useRouter();
   const params = useSearchParams();
-  const { forced } = useLayoutMode();
+  const { forcedMobile, forcedDesktop } = useLayoutMode();
 
   const [search, setSearch] = useState<string>(params?.get('search') ?? '');
   const [estado, setEstado] = useState<string>(params?.get('estado') ?? '');
@@ -91,9 +91,13 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
   return (
     <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-100 p-4">
       {/* Botón que despliega/pliega los filtros: solo en móvil (<lg) o con el
-          modo móvil forzado (toggle de Configuración). */}
+          modo móvil forzado. Con el modo escritorio forzado no aparece (los
+          filtros quedan siempre visibles, como en pantalla grande). */}
       <div
-        className={cn('flex items-center justify-between', forced ? '' : 'lg:hidden')}
+        className={cn(
+          'flex items-center justify-between',
+          forcedMobile ? '' : forcedDesktop ? 'hidden' : 'lg:hidden',
+        )}
       >
         <button
           type="button"
@@ -125,13 +129,15 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
       <div
         className={cn(
           'grid gap-3 sm:grid-cols-2 lg:grid-cols-5',
-          forced
-            ? filtersOpen
-              ? 'grid'
-              : 'hidden'
-            : filtersOpen
-              ? 'grid'
-              : 'hidden lg:grid',
+          forcedDesktop
+            ? 'grid'
+            : forcedMobile
+              ? filtersOpen
+                ? 'grid'
+                : 'hidden'
+              : filtersOpen
+                ? 'grid'
+                : 'hidden lg:grid',
         )}
       >
         <div className="lg:col-span-2">

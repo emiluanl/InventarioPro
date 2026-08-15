@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 function DashboardInner(): JSX.Element {
   const params = useSearchParams();
   const [view, setView] = useState<'grid' | 'list'>('grid');
-  const { forced } = useLayoutMode();
+  const { forcedMobile, forcedDesktop } = useLayoutMode();
 
   const filters: ProductsFilters = useMemo(
     () => ({
@@ -93,14 +93,25 @@ function DashboardInner(): JSX.Element {
         <>
           {view === 'grid' ? (
             <div
-              className={cn('grid gap-4', forced ? '' : 'sm:grid-cols-2 lg:grid-cols-3')}
+              className={cn(
+                'grid gap-4',
+                // Con móvil forzado, 1 columna siempre; si no, el grid responsivo
+                // (con escritorio forzado se conserva el multi-columna en anchos
+                // donde cabe).
+                forcedMobile ? '' : 'sm:grid-cols-2 lg:grid-cols-3',
+              )}
             >
               {data.items.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
             </div>
           ) : (
-            <ProductsTable products={data.items} onDelete={handleDelete} forced={forced} />
+            <ProductsTable
+              products={data.items}
+              onDelete={handleDelete}
+              forcedMobile={forcedMobile}
+              forcedDesktop={forcedDesktop}
+            />
           )}
 
           <Pagination pagination={data.pagination} />
@@ -113,19 +124,28 @@ function DashboardInner(): JSX.Element {
 function ProductsTable({
   products,
   onDelete,
-  forced = false,
+  forcedMobile = false,
+  forcedDesktop = false,
 }: {
   products: Product[];
   onDelete: (id: string) => void;
   /** true con el modo móvil forzado: tarjetas compactas aunque haya espacio. */
-  forced?: boolean;
+  forcedMobile?: boolean;
+  /** true con el modo escritorio forzado: tabla siempre, sin tarjetas móviles. */
+  forcedDesktop?: boolean;
 }): JSX.Element {
   return (
     <>
       {/* En móvil la tabla desborda el ancho del teléfono: se reemplaza por
           tarjetas compactas. La tabla queda para ≥md (tablet/escritorio), o
-          siempre con el modo móvil forzado. */}
-      <div className={cn('space-y-2', forced ? '' : 'md:hidden')}>
+          siempre con el modo móvil forzado; con el escritorio forzado se
+          invierte: tabla siempre y tarjetas ocultas. */}
+      <div
+        className={cn(
+          'space-y-2',
+          forcedDesktop ? 'hidden' : forcedMobile ? '' : 'md:hidden',
+        )}
+      >
         {products.map((p) => (
           <div
             key={p.id}
@@ -168,7 +188,7 @@ function ProductsTable({
       <div
         className={cn(
           'overflow-x-auto rounded-lg border border-gray-200 bg-gray-100',
-          forced ? 'hidden' : 'hidden md:block',
+          forcedDesktop ? '' : forcedMobile ? 'hidden' : 'hidden md:block',
         )}
       >
       <table className="min-w-full divide-y divide-gray-200">

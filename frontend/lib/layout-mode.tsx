@@ -1,13 +1,15 @@
 'use client';
 
 // =============================================================================
-// Modo de layout (Propuesta B): forzar el layout MÓVIL en pantallas grandes.
+// Modo de layout: forzar el layout MÓVIL o de ESCRITORIO sin importar la pantalla.
 // =============================================================================
 // Por defecto ('auto') el layout se adapta al ancho (móvil <lg, escritorio ≥lg).
 // Con 'mobile' se fuerza SIEMPRE el layout móvil (barra inferior, cabecera
 // compacta, filtros plegados, tarjetas en la lista) aunque la pantalla sea
-// grande. Se persiste en localStorage (useSyncExternalStore: sin effects,
-// sin mismatch de SSR y sincronizado entre pestañas).
+// grande. Con 'desktop' se fuerza SIEMPRE el layout de escritorio (cabecera
+// superior, filtros abiertos, tabla) aunque la pantalla sea chica. Se persiste
+// en localStorage (useSyncExternalStore: sin effects, sin mismatch de SSR y
+// sincronizado entre pestañas).
 // =============================================================================
 
 import {
@@ -19,7 +21,7 @@ import {
   type ReactNode,
 } from 'react';
 
-export type LayoutMode = 'auto' | 'mobile';
+export type LayoutMode = 'auto' | 'mobile' | 'desktop';
 
 const STORAGE_KEY = 'inventariopro:layout';
 
@@ -27,14 +29,17 @@ interface LayoutModeContextValue {
   mode: LayoutMode;
   setMode: (mode: LayoutMode) => void;
   /** true si el layout móvil está FORZADO (toggle manual), sea cual sea el viewport. */
-  forced: boolean;
+  forcedMobile: boolean;
+  /** true si el layout de escritorio está FORZADO (toggle manual). */
+  forcedDesktop: boolean;
 }
 
 const LayoutModeContext = createContext<LayoutModeContextValue | undefined>(undefined);
 
 function readStoredMode(): LayoutMode {
   if (typeof window === 'undefined') return 'auto';
-  return window.localStorage.getItem(STORAGE_KEY) === 'mobile' ? 'mobile' : 'auto';
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  return stored === 'mobile' || stored === 'desktop' ? stored : 'auto';
 }
 
 /** Se notifica en otras pestañas (evento storage) y en la misma (dispatch propio). */
@@ -54,7 +59,9 @@ export function LayoutModeProvider({ children }: { children: ReactNode }): JSX.E
   }, []);
 
   return (
-    <LayoutModeContext.Provider value={{ mode, setMode, forced: mode === 'mobile' }}>
+    <LayoutModeContext.Provider
+      value={{ mode, setMode, forcedMobile: mode === 'mobile', forcedDesktop: mode === 'desktop' }}
+    >
       {children}
     </LayoutModeContext.Provider>
   );

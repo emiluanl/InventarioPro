@@ -8,7 +8,7 @@ import { ChatPanel } from './chat-panel';
 
 export function ChatWidget(): JSX.Element {
   const [open, setOpen] = useState<boolean>(false);
-  const { forced } = useLayoutMode();
+  const { forcedMobile, forcedDesktop } = useLayoutMode();
 
   return (
     <>
@@ -19,9 +19,10 @@ export function ChatWidget(): JSX.Element {
         aria-label="Abrir chat con asistente"
         className={cn(
           // En móvil flota por ENCIMA de la barra de navegación inferior (también
-          // cuando el modo móvil está forzado en pantalla grande).
+          // cuando el modo móvil está forzado en pantalla grande). Con el modo
+          // escritorio forzado queda abajo, sin barra inferior que evitar.
           'fixed bottom-20 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-accent-600 text-white shadow-lg transition hover:bg-accent-700 sm:right-6',
-          forced ? '' : 'lg:bottom-4',
+          forcedDesktop ? 'bottom-4' : forcedMobile ? '' : 'lg:bottom-4',
           'focus:outline-none focus:ring-4 focus:ring-accent-300',
         )}
       >

@@ -42,9 +42,11 @@ const isActive = (pathname: string, href: string): boolean =>
 interface MobileNavProps {
   /** true con el modo móvil FORZADO: la barra se muestra aunque la pantalla sea grande. */
   forced?: boolean;
+  /** true con el modo ESCRITORIO forzado: la barra se oculta aunque la pantalla sea chica. */
+  hidden?: boolean;
 }
 
-export function MobileNav({ forced = false }: MobileNavProps): JSX.Element {
+export function MobileNav({ forced = false, hidden = false }: MobileNavProps): JSX.Element {
   const pathname = usePathname();
 
   return (
@@ -53,7 +55,7 @@ export function MobileNav({ forced = false }: MobileNavProps): JSX.Element {
       className={cn(
         'fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-gray-100/95 backdrop-blur',
         'pb-[env(safe-area-inset-bottom)]',
-        forced ? '' : 'lg:hidden',
+        forced ? '' : hidden ? 'hidden' : 'lg:hidden',
       )}
     >
       <div className="mx-auto flex max-w-lg items-stretch px-2">

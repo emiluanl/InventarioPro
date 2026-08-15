@@ -16,20 +16,38 @@ import { ChatWidget } from '@/components/chat/chat-widget';
  *   - auto:    la cabecera/nav responden al ancho (móvil <lg, escritorio ≥lg).
  *   - mobile:  SIEMPRE layout móvil (toggle manual en Configuración), aunque la
  *              pantalla sea grande: nav inferior, cabecera compacta, padding.
+ *   - desktop: SIEMPRE layout de escritorio (toggle manual), aunque la pantalla
+ *              sea chica: cabecera superior, filtros abiertos, tabla. El header
+ *              envuelve (flex-wrap) para no desbordar en anchos pequeños.
  */
 export function DashboardShell({ children }: { children: ReactNode }): JSX.Element {
-  const { forced } = useLayoutMode();
+  const { forcedMobile, forcedDesktop } = useLayoutMode();
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-gray-100">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+        <div
+          className={cn(
+            'mx-auto flex max-w-6xl items-center justify-between px-4 py-3',
+            forcedDesktop && 'flex-wrap gap-x-4 gap-y-2',
+          )}
+        >
           <Link href="/dashboard" className="text-lg font-semibold text-gray-900">
             Inventario<span className="text-accent-400">Pro</span>
           </Link>
 
-          {/* Navegación de escritorio: solo sin forzar y en pantallas ≥lg */}
-          <nav className={cn('items-center gap-4 text-sm', forced ? 'hidden' : 'hidden lg:flex')}>
+          {/* Navegación de escritorio: con 'desktop' forzado siempre visible
+              (envuelve en pantallas chicas); en automático, solo ≥lg. */}
+          <nav
+            className={cn(
+              'items-center gap-4 text-sm',
+              forcedMobile
+                ? 'hidden'
+                : forcedDesktop
+                  ? 'flex flex-wrap gap-y-2'
+                  : 'hidden lg:flex',
+            )}
+          >
             <Link href="/reports" className="font-medium text-gray-700 hover:text-accent-300">
               Reportes
             </Link>
@@ -46,11 +64,11 @@ export function DashboardShell({ children }: { children: ReactNode }): JSX.Eleme
             <HeaderActions />
           </nav>
 
-          {/* Cabecera compacta de móvil: siempre en modo forzado; si no, <lg */}
+          {/* Cabecera compacta de móvil: siempre con 'mobile' forzado; si no, <lg */}
           <div
             className={cn(
               'flex items-center gap-2',
-              forced ? '' : 'lg:hidden',
+              forcedMobile ? '' : forcedDesktop ? 'hidden' : 'lg:hidden',
             )}
           >
             <NotificationsBell />
@@ -59,17 +77,17 @@ export function DashboardShell({ children }: { children: ReactNode }): JSX.Eleme
         </div>
       </header>
 
-      {/* pb-24: espacio para la barra inferior; en escritorio (sin forzar) el padding normal */}
+      {/* pb-24: espacio para la barra inferior; en escritorio (forzado o ≥lg) el padding normal */}
       <main
         className={cn(
           'mx-auto max-w-6xl px-4 py-6',
-          forced ? 'pb-24' : 'pb-24 lg:py-8 lg:pb-8',
+          forcedDesktop ? 'lg:py-8 lg:pb-8' : 'pb-24 lg:py-8 lg:pb-8',
         )}
       >
         {children}
       </main>
 
-      <MobileNav forced={forced} />
+      <MobileNav forced={forcedMobile} hidden={forcedDesktop} />
       <ChatWidget />
     </div>
   );

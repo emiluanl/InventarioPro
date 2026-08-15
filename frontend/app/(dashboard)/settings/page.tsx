@@ -11,7 +11,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { changePasswordSchema, type ChangePasswordInput } from '@/lib/validations/auth';
 import { useAuth } from '@/hooks/use-auth';
 import { extractErrorMessage } from '@/lib/api';
-import { useLayoutMode } from '@/lib/layout-mode';
+import { useLayoutMode, type LayoutMode } from '@/lib/layout-mode';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,11 +22,12 @@ function LayoutModeSelect(): JSX.Element {
   return (
     <select
       value={mode}
-      onChange={(e) => setMode(e.target.value as 'auto' | 'mobile')}
+      onChange={(e) => setMode(e.target.value as LayoutMode)}
       className="mt-1 w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm"
     >
       <option value="auto">Automático (según pantalla)</option>
       <option value="mobile">Forzado móvil</option>
+      <option value="desktop">Forzado escritorio</option>
     </select>
   );
 }
@@ -97,7 +98,8 @@ export default function SettingsPage(): JSX.Element {
         <p className="mt-1 text-sm text-gray-700">
           Elige el modo de layout. “Automático” se adapta al tamaño de la pantalla
           (móvil o escritorio); “Forzado móvil” usa la barra de navegación inferior y
-          la vista compacta aunque estés en una pantalla grande.
+          la vista compacta aunque estés en una pantalla grande; “Forzado escritorio”
+          usa la cabecera superior y la tabla aunque estés en una pantalla chica.
         </p>
 
         <label className="mt-4 block max-w-xs">

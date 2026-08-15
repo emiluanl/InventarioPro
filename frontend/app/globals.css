@@ -101,3 +101,24 @@
     color: var(--text);
   }
 }
+
+/* --------------------------------------------------------------------------
+   Transición suave al cambiar de tema (oscuro ↔ claro).
+   Los colores son variables CSS (--tw-gray-*, --bg, …) que cambian con la
+   clase `.light`; para que el cambio no sea un corte seco, ThemeProvider
+   agrega `theme-transition` al <html> SOLO durante el cambio y la quita al
+   terminar (400 ms). Así las interacciones normales (hover, focus) no
+   arrastran transiciones globales.
+   -------------------------------------------------------------------------- */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition:
+    background-color 0.35s ease,
+    border-color 0.35s ease,
+    color 0.35s ease,
+    fill 0.35s ease,
+    stroke 0.35s ease,
+    box-shadow 0.35s ease !important;
+}

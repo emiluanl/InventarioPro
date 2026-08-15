@@ -176,6 +176,9 @@ describe('badge del tema', () => {
     expect(screen.getByLabelText('Tema: Claro')).toBeInTheDocument();
     expect(document.documentElement.classList.contains('light')).toBe(true);
     expect(window.localStorage.getItem('inventariopro:theme')).toBe('light');
+    // Transición suave: la clase temporal está activa durante el cambio (el
+    // fade la quita solo a los 400 ms).
+    expect(document.documentElement.classList.contains('theme-transition')).toBe(true);
   });
 
   it('navega con las flechas y elige la opción activa', async () => {

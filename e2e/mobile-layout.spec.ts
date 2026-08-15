@@ -306,6 +306,23 @@ test.describe('tema oscuro/claro', () => {
       await page.evaluate(() => document.documentElement.classList.contains('light')),
     ).toBe(true);
 
+    // Transición suave: la clase temporal se activa al cambiar (fade de
+    // colores, no un corte seco) y se limpia sola al terminar el fade.
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.documentElement.classList.contains('theme-transition'),
+        ),
+      )
+      .toBe(true);
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.documentElement.classList.contains('theme-transition'),
+        ),
+      )
+      .toBe(false);
+
     // Persiste al recargar (localStorage + script anti-flash del layout).
     await page.reload();
     await expect(page.getByLabel('Tema: Claro')).toBeVisible();

@@ -111,8 +111,20 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
   // Aplica la clase en el <html> (y color-scheme) según el tema efectivo.
   useEffect(() => {
     const root = document.documentElement;
+    // Transición suave del cambio: `theme-transition` (ver globals.css) se
+    // activa SOLO durante el cambio — se agrega antes de togglear `.light` y
+    // se quita al terminar el fade (400 ms) para no ralentizar las
+    // interacciones normales (hover, focus).
+    root.classList.add('theme-transition');
     root.classList.toggle('light', isLight);
-    return () => root.classList.remove('light');
+    const t = window.setTimeout(() => {
+      root.classList.remove('theme-transition');
+    }, 400);
+    return () => {
+      window.clearTimeout(t);
+      root.classList.remove('theme-transition');
+      root.classList.remove('light');
+    };
   }, [isLight]);
 
   return (

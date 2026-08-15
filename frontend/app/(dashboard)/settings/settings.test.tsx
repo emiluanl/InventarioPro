@@ -101,9 +101,12 @@ describe('SettingsPage', () => {
     await user.selectOptions(select, 'system');
 
     expect(select).toHaveValue('system');
-    // matchMedia stub: prefers-color-scheme dark = false → tema claro activo.
+    // matchMedia stub: prefers-color-scheme dark = false → tema claro activo,
+    // y la opción del select muestra el resultado efectivo.
     expect(document.documentElement.classList.contains('light')).toBe(true);
     expect(window.localStorage.getItem('inventariopro:theme')).toBe('system');
+    const opt = select.querySelector('option[value="system"]');
+    expect(opt?.textContent).toContain('→ Claro');
   });
 
   it('muestra un error si las contraseñas nuevas no coinciden', async () => {

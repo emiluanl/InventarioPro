@@ -34,7 +34,7 @@ function LayoutModeSelect(): JSX.Element {
 }
 
 function ThemeSelect(): JSX.Element {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, isLight } = useTheme();
   return (
     <select
       value={theme}
@@ -43,7 +43,13 @@ function ThemeSelect(): JSX.Element {
     >
       <option value="dark">Oscuro (predeterminado)</option>
       <option value="light">Claro</option>
-      <option value="system">Sistema (según el dispositivo)</option>
+      {/* Con 'Sistema' activo, la opción muestra el resultado EFECTIVO que
+          resolvió el SO (ej. '→ Oscuro'), igual que el badge de la cabecera. */}
+      <option value="system">
+        {theme === 'system'
+          ? `Sistema (según el dispositivo) → ${isLight ? 'Claro' : 'Oscuro'}`
+          : 'Sistema (según el dispositivo)'}
+      </option>
     </select>
   );
 }

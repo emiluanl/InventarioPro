@@ -376,6 +376,10 @@ test.describe('tema oscuro/claro', () => {
       await select.selectOption('system');
       // El badge muestra el resultado efectivo: con el SO en oscuro, 'Sistema · Oscuro'.
       await expect(page.getByLabel('Tema: Sistema · Oscuro')).toBeVisible();
+      // El selector de Configuración también revela el tema efectivo.
+      await expect(page.getByLabel('Tema de la app').locator('option:checked')).toHaveText(
+        /→ Oscuro/,
+      );
       expect(
         await page.evaluate(() => document.documentElement.classList.contains('light')),
       ).toBe(false);

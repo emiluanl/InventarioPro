@@ -468,6 +468,47 @@ test.describe('tema oscuro/claro', () => {
       await ctx.close();
     }
   });
+
+  test('el selector y el badge coinciden en el tema efectivo (Oscuro, Claro, Sistema)', async ({
+    browser,
+  }) => {
+    // SO en oscuro: 'Sistema' resuelve a Oscuro, así que el efectivo esperado
+    // de cada modo es determinista y comparable entre las dos superficies.
+    const ctx = await browser.newContext({ colorScheme: 'dark' });
+    const page = await ctx.newPage();
+    try {
+      const email = randomEmail('thc');
+      await registerAndVerify(page.request, email);
+      await login(page, email);
+      await page.goto('/settings');
+
+      const select = page.getByLabel('Tema de la app');
+      const isLight = (): Promise<boolean> =>
+        page.evaluate(() => document.documentElement.classList.contains('light'));
+
+      // Oscuro (predeterminado): badge y selector muestran el mismo efectivo.
+      await select.selectOption('dark');
+      await expect(page.getByLabel('Tema: Oscuro')).toBeVisible();
+      await expect(select.locator('option:checked')).toHaveText('Oscuro (predeterminado)');
+      expect(await isLight()).toBe(false);
+
+      // Claro: ambas superficies coinciden y .light se aplica.
+      await select.selectOption('light');
+      await expect(page.getByLabel('Tema: Claro')).toBeVisible();
+      await expect(select.locator('option:checked')).toHaveText('Claro');
+      expect(await isLight()).toBe(true);
+
+      // Sistema (SO oscuro): ambas revelan el mismo efectivo '→ Oscuro'.
+      await select.selectOption('system');
+      await expect(page.getByLabel('Tema: Sistema · Oscuro')).toBeVisible();
+      await expect(select.locator('option:checked')).toHaveText(
+        'Sistema (según el dispositivo) → Oscuro',
+      );
+      expect(await isLight()).toBe(false);
+    } finally {
+      await ctx.close();
+    }
+  });
 });
 
 // -----------------------------------------------------------------------------

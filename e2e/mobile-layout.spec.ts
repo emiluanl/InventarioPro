@@ -49,6 +49,41 @@ async function gridColumns(page: import('@playwright/test').Page): Promise<numbe
   });
 }
 
+/**
+ * Espera a que la barra inferior esté ESTABLE antes de hacer clic en ella.
+ * El flake de arranque en frío era un clic a "Reportes" que caía justo cuando
+ * el nav se remontaba (hidratación + resolución del modo de layout): el
+ * mousedown caía en un nodo y el mouseup en el reemplazo, el navegador no
+ * sintetizaba el click y la URL nunca cambiaba. Esta espera muestrea el nodo
+ * y su geometría y recién avanza cuando dos muestras consecutivas son
+ * idénticas (nada remontándose ni moviéndose).
+ */
+async function waitForStableBottomNav(
+  page: import('@playwright/test').Page,
+): Promise<void> {
+  await expect(
+    page.locator('nav[aria-label="Navegación móvil"] a[href="/reports"]'),
+  ).toBeVisible();
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector<HTMLAnchorElement>(
+        'nav[aria-label="Navegación móvil"] a[href="/reports"]',
+      );
+      if (!el) return false;
+      const w = window as unknown as { __stableNav?: { node: Node; box: string } };
+      const r = el.getBoundingClientRect();
+      const box = `${r.left}|${r.top}|${r.width}|${r.height}`;
+      const prev = w.__stableNav;
+      // Dos muestras consecutivas con el MISMO nodo y la misma geometría → estable.
+      if (prev && prev.node === el && prev.box === box) return true;
+      w.__stableNav = { node: el, box };
+      return false;
+    },
+    undefined,
+    { polling: 200, timeout: 10_000 },
+  );
+}
+
 test('móvil: sin overflow, nav inferior, filtros plegables y tarjetas en la lista', async ({
   page,
 }) => {
@@ -102,6 +137,9 @@ test('móvil: sin overflow, nav inferior, filtros plegables y tarjetas en la lis
   await expectNoHorizontalOverflow(page);
 
   // 5) La barra inferior navega a Reportes (y no hay overflow ahí tampoco).
+  //    Espera a que el nav esté estable: el clic frío a veces caía en medio de
+  //    un remount del nav y no navegaba (flake de arranque en frío).
+  await waitForStableBottomNav(page);
   await bottomNav.getByRole('link', { name: 'Reportes' }).click();
   await expect(page).toHaveURL(/\/reports/);
   await expectNoHorizontalOverflow(page);
@@ -535,7 +573,9 @@ test.describe('tablet 768px (md): transición tarjetas → tabla (Propuesta D)',
     await expect(page.locator('table').getByText('Tablet Lenovo')).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
-    // Reportes desde la barra inferior, sin desborde.
+    // Reportes desde la barra inferior, sin desborde. Espera a que el nav esté
+    // estable (mismo anti-flake de arranque en frío que el test móvil).
+    await waitForStableBottomNav(page);
     await bottomNav.getByRole('link', { name: 'Reportes' }).click();
     await expect(page).toHaveURL(/\/reports/);
     await expectNoHorizontalOverflow(page);

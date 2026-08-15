@@ -134,38 +134,42 @@ describe('NotificationsService', () => {
 
     beforeEach(() => {
       prisma.product.findMany.mockResolvedValue(products as never);
-      prisma.notification.findFirst.mockResolvedValue(null);
-      // El create devuelve la notificación creada (el service usa su mensaje
-      // y product_id para el push).
-      prisma.notification.create.mockImplementation(
-        async ({ data }: { data: Record<string, unknown> }) => ({
-          id: 'n1',
-          ...data,
-        }),
-      );
+      // Dedupe: sin avisos existentes por defecto (una sola query de findMany).
+      prisma.notification.findMany.mockResolvedValue([]);
+      // createMany devuelve el conteo de filas insertadas.
+      prisma.notification.createMany.mockImplementation(async ({ data }: { data: unknown[] }) => ({
+        count: data.length,
+      }));
     });
 
     it('crea GARANTIA_POR_VENCER y GARANTIA_VENCIDA, y omite vigentes/sin garantía', async () => {
       const result = await service.checkWarranties(now);
 
       expect(result).toEqual({ created: 2, checked: 4 });
-      expect(prisma.notification.create).toHaveBeenCalledTimes(2);
-      expect(prisma.notification.create).toHaveBeenCalledWith({
-        data: {
-          user_id: 'u1',
-          tipo: NotificationType.GARANTIA_POR_VENCER,
-          mensaje: 'La garantía de «Laptop» vence en 7 días.',
-          product_id: 'p1',
-        },
+      expect(prisma.notification.createMany).toHaveBeenCalledTimes(1);
+      expect(prisma.notification.createMany).toHaveBeenCalledWith({
+        data: [
+          {
+            user_id: 'u1',
+            tipo: NotificationType.GARANTIA_POR_VENCER,
+            mensaje: 'La garantía de «Laptop» vence en 7 días.',
+            product_id: 'p1',
+          },
+          {
+            user_id: 'u2',
+            tipo: NotificationType.GARANTIA_VENCIDA,
+            mensaje: 'La garantía de «Cafetera» venció hace 3 días.',
+            product_id: 'p2',
+          },
+        ],
       });
-      expect(prisma.notification.create).toHaveBeenCalledWith({
-        data: {
-          user_id: 'u2',
-          tipo: NotificationType.GARANTIA_VENCIDA,
-          mensaje: 'La garantía de «Cafetera» venció hace 3 días.',
-          product_id: 'p2',
-        },
-      });
+    });
+
+    it('usa UNA query de dedupe y UNA de creación (sin N+1)', async () => {
+      await service.checkWarranties(now);
+
+      expect(prisma.notification.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.notification.createMany).toHaveBeenCalledTimes(1);
     });
 
     it('envía push por cada aviso nuevo, con el tipo y el producto', async () => {
@@ -185,11 +189,22 @@ describe('NotificationsService', () => {
     });
 
     it('no envía push para los avisos deduplicados', async () => {
-      prisma.notification.findFirst.mockResolvedValue({ id: 'existing' } as never);
+      prisma.notification.findMany.mockResolvedValue([
+        {
+          user_id: 'u1',
+          product_id: 'p1',
+          tipo: NotificationType.GARANTIA_POR_VENCER,
+        },
+        {
+          user_id: 'u2',
+          product_id: 'p2',
+          tipo: NotificationType.GARANTIA_VENCIDA,
+        },
+      ] as never);
 
       await service.checkWarranties(now);
 
-      expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(prisma.notification.createMany).not.toHaveBeenCalled();
       expect(push.sendWarrantyPush).not.toHaveBeenCalled();
     });
 
@@ -205,26 +220,31 @@ describe('NotificationsService', () => {
 
       await service.checkWarranties(now);
 
-      expect(prisma.notification.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          mensaje: 'La garantía de «Taza» vence en 1 día.',
-        }),
+      expect(prisma.notification.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            mensaje: 'La garantía de «Taza» vence en 1 día.',
+          }),
+        ],
       });
     });
 
     it('dedupe: no crea un aviso si ya existe para el mismo producto y tipo', async () => {
-      // findFirst devuelve una notificación existente para p1, pero null para p2.
-      prisma.notification.findFirst.mockImplementation(
-        async ({ where }: { where: { product_id?: string } }) =>
-          where.product_id === 'p1' ? { id: 'existing' } : null,
-      );
+      // findMany devuelve una notificación existente para p1, pero nada para p2.
+      prisma.notification.findMany.mockResolvedValue([
+        {
+          user_id: 'u1',
+          product_id: 'p1',
+          tipo: NotificationType.GARANTIA_POR_VENCER,
+        },
+      ] as never);
 
       const result = await service.checkWarranties(now);
 
       expect(result.created).toBe(1); // solo p2 (vencida)
-      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
-      expect(prisma.notification.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ product_id: 'p2' }),
+      expect(prisma.notification.createMany).toHaveBeenCalledTimes(1);
+      expect(prisma.notification.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ product_id: 'p2' })],
       });
     });
 
@@ -232,7 +252,7 @@ describe('NotificationsService', () => {
       prisma.product.findMany.mockResolvedValue([]);
       const result = await service.checkWarranties(now);
       expect(result).toEqual({ created: 0, checked: 0 });
-      expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(prisma.notification.createMany).not.toHaveBeenCalled();
       expect(push.sendWarrantyPush).not.toHaveBeenCalled();
     });
 
@@ -242,7 +262,7 @@ describe('NotificationsService', () => {
       const result = await service.checkWarranties(now);
 
       expect(result.created).toBe(2);
-      expect(prisma.notification.create).toHaveBeenCalledTimes(2);
+      expect(prisma.notification.createMany).toHaveBeenCalledTimes(1);
     });
   });
 });

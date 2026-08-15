@@ -34,6 +34,7 @@
     "@nestjs/passport": "11.0.5",
     "@nestjs/platform-express": "11.1.29",
     "@nestjs/throttler": "6.5.0",
+    "@prisma/adapter-better-sqlite3": "^7.9.1",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@supabase/supabase-js": "2.45.6",
@@ -97,6 +98,8 @@
     "testEnvironment": "node"
   },
   "allowScripts": {
-    "@prisma/engines@7.9.1": true
+    "@prisma/engines@7.9.1": true,
+    "argon2@0.41.1": true,
+    "better-sqlite3@12.11.1": true
   }
 }

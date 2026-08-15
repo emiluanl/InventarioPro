@@ -28,9 +28,11 @@ import { ThrottlerStorage } from '@nestjs/throttler';
 
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { RedisService } from '../src/common/redis.service';
 import { EmailService } from '../src/auth/email.service';
 import { StorageService } from '../src/common/storage.service';
 import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';
+import { redisNoop } from './helpers/redis-noop';
 
 // =============================================================================
 // Storage de throttling con RESET entre tests.
@@ -169,7 +171,9 @@ function wireDbMocks(prisma: MockPrisma, db: Db): void {
     }),
   );
 
-  prisma.refreshToken.update.mockResolvedValue({});
+  // La rotación del refresh usa updateMany con guardia (revocado_at nulo +
+  // no expirado): en el flujo feliz siempre gana (count=1).
+  prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
 
   prisma.user.delete.mockImplementation(() => {
     db.user = null;
@@ -206,6 +210,8 @@ describe('Flujo completo de auth (integración)', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prisma)
+      .overrideProvider(RedisService)
+      .useValue(redisNoop)
       .overrideProvider(EmailService)
       .useValue(email)
       .overrideProvider(StorageService)
@@ -499,6 +505,8 @@ describe('Flujo completo de auth (integración)', () => {
       const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
         .overrideProvider(PrismaService)
         .useValue(prisma)
+        .overrideProvider(RedisService)
+        .useValue(redisNoop)
         .overrideProvider(StorageService)
         .useValue(storage)
         .overrideProvider(ThrottlerStorage)

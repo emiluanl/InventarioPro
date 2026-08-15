@@ -125,50 +125,75 @@ export class NotificationsService implements OnModuleInit {
       },
     });
 
-    let created = 0;
+    // Candidatos que necesitarían un aviso (producto + tipo).
+    const candidates: Array<{
+      user_id: string;
+      product_id: string;
+      nombre: string;
+      expiresAt: Date;
+      status: 'por_vencer' | 'vencida';
+      tipo: NotificationType;
+    }> = [];
     for (const product of products) {
       const status = getWarrantyStatus(product.fecha_vencimiento_garantia, now);
       if (status !== 'por_vencer' && status !== 'vencida') continue;
-
-      const tipo =
-        status === 'por_vencer'
-          ? NotificationType.GARANTIA_POR_VENCER
-          : NotificationType.GARANTIA_VENCIDA;
-
-      // Dedupe: un solo aviso por producto y tipo.
-      const existing = await this.prisma.notification.findFirst({
-        where: { user_id: product.user_id, product_id: product.id, tipo },
-        select: { id: true },
+      candidates.push({
+        user_id: product.user_id,
+        product_id: product.id,
+        nombre: product.nombre,
+        expiresAt: product.fecha_vencimiento_garantia!,
+        status,
+        tipo:
+          status === 'por_vencer'
+            ? NotificationType.GARANTIA_POR_VENCER
+            : NotificationType.GARANTIA_VENCIDA,
       });
-      if (existing) continue;
+    }
+    if (candidates.length === 0) return { created: 0, checked: products.length };
 
-      const notification = await this.prisma.notification.create({
-        data: {
-          user_id: product.user_id,
-          tipo,
-          mensaje: this.buildMessage(
-            product.nombre,
-            product.fecha_vencimiento_garantia!,
-            now,
-            status,
-          ),
-          product_id: product.id,
-        },
+    // Dedupe en UNA query (antes: un findFirst por producto → N+1): un solo
+    // aviso por (usuario, producto, tipo).
+    const existing = await this.prisma.notification.findMany({
+      where: {
+        OR: candidates.map((c) => ({
+          user_id: c.user_id,
+          product_id: c.product_id,
+          tipo: c.tipo,
+        })),
+      },
+      select: { user_id: true, product_id: true, tipo: true },
+    });
+    const existingKeys = new Set(existing.map((n) => `${n.user_id}|${n.product_id}|${n.tipo}`));
+    const toCreate = candidates.filter(
+      (c) => !existingKeys.has(`${c.user_id}|${c.product_id}|${c.tipo}`),
+    );
+
+    // Un solo INSERT por corrida (createMany) en vez de un create por aviso.
+    let created = 0;
+    if (toCreate.length > 0) {
+      const result = await this.prisma.notification.createMany({
+        data: toCreate.map((c) => ({
+          user_id: c.user_id,
+          tipo: c.tipo,
+          mensaje: this.buildMessage(c.nombre, c.expiresAt, now, c.status),
+          product_id: c.product_id,
+        })),
       });
-      created += 1;
+      created = result.count;
+    }
 
-      // Aviso push fuera de la app (si el usuario tiene suscripciones activas
-      // y VAPID configurado). Un fallo del push no debe romper el job.
+    // Aviso push fuera de la app (si el usuario tiene suscripciones activas
+    // y VAPID configurado). Es una llamada de red por usuario: no se puede
+    // batchear. Un fallo del push no debe romper el job.
+    for (const c of toCreate) {
       try {
-        await this.push.sendWarrantyPush(product.user_id, {
-          tipo,
-          mensaje: notification.mensaje,
-          product_id: notification.product_id,
+        await this.push.sendWarrantyPush(c.user_id, {
+          tipo: c.tipo,
+          mensaje: this.buildMessage(c.nombre, c.expiresAt, now, c.status),
+          product_id: c.product_id,
         });
       } catch (err) {
-        this.logger.warn(
-          `Push de garantía falló para ${product.user_id}: ${(err as Error).message}`,
-        );
+        this.logger.warn(`Push de garantía falló para ${c.user_id}: ${(err as Error).message}`);
       }
     }
 

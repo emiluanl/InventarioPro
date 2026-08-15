@@ -169,45 +169,77 @@ describe('AuthService', () => {
   // ===========================================================================
   // REFRESH
   // ===========================================================================
+  const future = new Date(Date.now() + 100000);
+  const past = new Date(Date.now() - 1000);
+  const activeToken = { id: 'rt1', user_id: 'u1', revoked_at: null, expires_at: future };
+
   describe('refresh', () => {
-    it('rota el token y emite uno nuevo', async () => {
+    it('rota el token de forma atómica y emite uno nuevo', async () => {
       prisma.refreshToken.findUnique.mockResolvedValue({
-        id: 'rt1',
-        revoked_at: null,
-        expires_at: new Date(Date.now() + 100000),
+        ...activeToken,
         user: { id: 'u1', email: 'a@b.com' },
       });
-      prisma.refreshToken.update.mockResolvedValue({});
+      // La rotación gana: count=1.
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.refresh('some-token');
 
       expect(result.access_token).toBeDefined();
-      expect(prisma.refreshToken.update).toHaveBeenCalledWith({
-        where: { id: 'rt1' },
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: {
+          token_hash: expect.any(String),
+          revoked_at: null,
+          expires_at: { gt: expect.any(Date) },
+        },
+        data: { revoked_at: expect.any(Date) },
+      });
+      // Un solo intento de rotación; no hay revocación de familia.
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('rechaza un token revocado y revoca TODA la familia de sesiones (reuso)', async () => {
+      prisma.refreshToken.findUnique.mockResolvedValue({
+        id: 'rt1',
+        user_id: 'u1',
+        revoked_at: new Date(),
+        expires_at: future,
+        user: { id: 'u1', email: 'a@b.com' },
+      });
+      // La rotación no gana (ya estaba revocado): count=0.
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.refresh('stolen-token')).rejects.toBeInstanceOf(UnauthorizedException);
+
+      // updateMany #1: intento de rotación. updateMany #2: revocación de TODAS
+      // las sesiones activas del usuario.
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledTimes(2);
+      expect(prisma.refreshToken.updateMany).toHaveBeenLastCalledWith({
+        where: { user_id: 'u1', revoked_at: null },
         data: { revoked_at: expect.any(Date) },
       });
     });
 
-    it('rechaza un token revocado', async () => {
+    it('rechaza un token expirado SIN revocar la familia (no es reuso)', async () => {
       prisma.refreshToken.findUnique.mockResolvedValue({
         id: 'rt1',
-        revoked_at: new Date(),
-        expires_at: new Date(Date.now() + 100000),
-        user: { id: 'u1' },
+        user_id: 'u1',
+        revoked_at: null,
+        expires_at: past,
+        user: { id: 'u1', email: 'a@b.com' },
       });
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 0 });
 
-      await expect(service.refresh('some-token')).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(service.refresh('expired-token')).rejects.toBeInstanceOf(UnauthorizedException);
+
+      // Solo el intento de rotación; la familia NO se toca.
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledTimes(1);
     });
 
-    it('rechaza un token expirado', async () => {
-      prisma.refreshToken.findUnique.mockResolvedValue({
-        id: 'rt1',
-        revoked_at: null,
-        expires_at: new Date(Date.now() - 1000),
-        user: { id: 'u1' },
-      });
+    it('rechaza un token que no existe sin tocar nada', async () => {
+      prisma.refreshToken.findUnique.mockResolvedValue(null);
 
-      await expect(service.refresh('some-token')).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(service.refresh('ghost-token')).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
     });
   });
 

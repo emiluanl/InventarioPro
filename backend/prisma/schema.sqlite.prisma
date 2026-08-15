@@ -1,0 +1,314 @@
+// =============================================================================
+// InventarioPro - Schema de base de datos para MODO LOCAL SIN DOCKER (SQLite)
+// =============================================================================
+// Copia de schema.prisma adaptada a SQLite:
+//   - provider = "sqlite" (los enums se emulan como TEXT + CHECK).
+//   - Sin anotaciones @db.* (Text/Date/Decimal/VarChar son de Postgres; SQLite
+//     los resuelve con sus tipos nativos TEXT/NUMERIC/INTEGER).
+//   - El cliente generado va al MISMO directorio (../src/generated/prisma) que
+//     el de Postgres: al generar con este schema se reemplaza, y el código de
+//     la app no cambia de imports. scripts/start.sh regenera el de Postgres al
+//     salir del modo SQLite para dejar el árbol como estaba.
+//
+// La URL de la BD y las migraciones se eligen en prisma.config.ts según
+// DB_PROVIDER=sqlite. Producción NO usa este schema: ahí va schema.prisma
+// (PostgreSQL) y este archivo solo existe para el arranque local sin Docker.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// =============================================================================
+// ENUMS (SQLite: se almacenan como TEXT con CHECK)
+// =============================================================================
+
+enum ProductStatus {
+  NUEVO
+  USADO
+  EN_REPARACION
+  VENDIDO
+  PERDIDO_ROBADO
+  DADO_DE_BAJA
+
+  @@map("product_status")
+}
+
+enum PurchaseType {
+  FISICO
+  ONLINE
+
+  @@map("purchase_type")
+}
+
+enum AttachmentType {
+  FOTO
+  RECIBO
+  FACTURA
+
+  @@map("attachment_type")
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+  SYSTEM
+
+  @@map("chat_role")
+}
+
+enum NotificationType {
+  GARANTIA_POR_VENCER
+  GARANTIA_VENCIDA
+  RESUMEN_PERIODICO
+  SISTEMA
+
+  @@map("notification_type")
+}
+
+// =============================================================================
+// USERS
+// =============================================================================
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  password_hash   String   @map("password_hash")
+  nombre          String
+  email_verificado Boolean @default(false) @map("email_verificado")
+  avatar_url      String?  @map("avatar_url")
+  created_at      DateTime @default(now()) @map("created_at")
+  updated_at      DateTime @updatedAt @map("updated_at")
+
+  // Tokens de verificación / recuperación de contraseña
+  email_verification_token       String?   @map("email_verification_token")
+  email_verification_expires_at  DateTime? @map("email_verification_expires_at")
+  password_reset_token           String?   @map("password_reset_token")
+  password_reset_expires_at      DateTime? @map("password_reset_expires_at")
+
+  // Refresh tokens activos (soporte de logout con invalidación).
+  refresh_tokens                 RefreshToken[]
+
+  // Relaciones con sus datos
+  products          Product[]
+  categories        Category[]
+  conversations     ChatConversation[]
+  notifications     Notification[]
+  push_subscriptions PushSubscription[]
+
+  @@index([email])
+  @@map("users")
+}
+
+// Tokens de refresh: se almacenan hasheados para que un robo de BD
+// no permita mantener sesiones.
+model RefreshToken {
+  id          String   @id @default(cuid())
+  user_id     String   @map("user_id")
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  token_hash  String   @unique @map("token_hash")
+  expires_at  DateTime @map("expires_at")
+  revoked_at  DateTime? @map("revoked_at")
+  created_at  DateTime @default(now()) @map("created_at")
+
+  @@index([user_id])
+  @@index([token_hash])
+  @@map("refresh_tokens")
+}
+
+// =============================================================================
+// CATEGORIES
+// =============================================================================
+// user_id NULL = categoría del sistema (electrónica, electrodomésticos, etc.).
+// user_id NOT NULL = categoría personalizada del usuario.
+
+model Category {
+  id        String   @id @default(cuid())
+  nombre    String
+  icono     String?
+  user_id   String?  @map("user_id")
+  user      User?    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  created_at DateTime @default(now()) @map("created_at")
+  updated_at DateTime @updatedAt @map("updated_at")
+
+  products  Product[]
+
+  @@index([user_id])
+  @@index([nombre])
+  @@map("categories")
+}
+
+// =============================================================================
+// PRODUCTS
+// =============================================================================
+
+model Product {
+  id                            String        @id @default(cuid())
+  user_id                       String        @map("user_id")
+  user                          User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  categoria_id                  String?       @map("categoria_id")
+  categoria                     Category?     @relation(fields: [categoria_id], references: [id], onDelete: SetNull)
+
+  nombre                        String
+  marca                         String?
+  modelo                        String?
+  descripcion                   String?
+
+  fecha_compra                  DateTime      @map("fecha_compra")
+  lugar_compra                  String?       @map("lugar_compra")
+  tipo_compra                   PurchaseType  @map("tipo_compra")
+
+  precio                        Decimal
+  moneda                        String        @default("USD")
+  metodo_pago                   String?       @map("metodo_pago")
+  numero_serie                  String?       @map("numero_serie")
+
+  duracion_garantia_meses       Int?          @map("duracion_garantia_meses")
+  fecha_vencimiento_garantia    DateTime?     @map("fecha_vencimiento_garantia")
+
+  estado                        ProductStatus @default(NUEVO)
+  notas                         String?
+
+  // Etiquetas como string separado por comas. Para una versión posterior se
+  // puede migrar a una tabla tags propia, pero para MVP es suficiente y
+  // permite búsqueda full-text sin joins.
+  tags                          String?
+
+  created_at                    DateTime      @default(now()) @map("created_at")
+  updated_at                    DateTime      @updatedAt @map("updated_at")
+
+  // Borrado lógico: si está presente, el producto está "eliminado" para el usuario.
+  deleted_at                    DateTime?     @map("deleted_at")
+
+  attachments                   ProductAttachment[]
+
+  // Índices: los filtros más usados del dashboard.
+  @@index([user_id])
+  @@index([user_id, deleted_at])
+  @@index([user_id, fecha_compra])
+  @@index([user_id, categoria_id])
+  @@index([user_id, estado])
+  @@index([user_id, fecha_vencimiento_garantia])
+  @@index([fecha_compra])
+  @@index([categoria_id])
+
+  // Búsqueda por texto simple sobre los campos más relevantes.
+  @@index([nombre])
+  @@index([marca])
+
+  @@map("products")
+}
+
+// =============================================================================
+// PRODUCT ATTACHMENTS (fotos, recibos, facturas)
+// =============================================================================
+
+model ProductAttachment {
+  id          String         @id @default(cuid())
+  product_id  String         @map("product_id")
+  product     Product        @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  tipo        AttachmentType
+  url         String
+  nombre      String?
+  mime_type   String?        @map("mime_type")
+  tamano_bytes Int?          @map("tamano_bytes")
+
+  created_at  DateTime       @default(now()) @map("created_at")
+
+  @@index([product_id])
+  @@index([product_id, tipo])
+  @@map("product_attachments")
+}
+
+// =============================================================================
+// CHAT (con IA)
+// =============================================================================
+
+model ChatConversation {
+  id         String        @id @default(cuid())
+  user_id    String        @map("user_id")
+  user       User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  titulo     String?
+  created_at DateTime      @default(now()) @map("created_at")
+  updated_at DateTime      @updatedAt @map("updated_at")
+
+  messages   ChatMessage[]
+
+  @@index([user_id])
+  @@index([user_id, updated_at])
+  @@map("chat_conversations")
+}
+
+model ChatMessage {
+  id              String            @id @default(cuid())
+  conversation_id String            @map("conversation_id")
+  conversation    ChatConversation  @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  role            ChatRole
+  content         String
+  // Si la IA llamó a una función, dejamos registro de cuál y con qué resultado.
+  // Útil para depuración y para auditoría.
+  function_call   String?           @map("function_call")
+  function_result String?           @map("function_result")
+
+  created_at      DateTime          @default(now()) @map("created_at")
+
+  @@index([conversation_id])
+  @@index([conversation_id, created_at])
+  @@map("chat_messages")
+}
+
+// =============================================================================
+// NOTIFICATIONS
+// =============================================================================
+
+model Notification {
+  id         String           @id @default(cuid())
+  user_id    String           @map("user_id")
+  user       User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  tipo       NotificationType
+  mensaje    String
+  product_id String?          @map("product_id")
+
+  leido      Boolean          @default(false)
+  created_at DateTime         @default(now()) @map("created_at")
+  read_at    DateTime?        @map("read_at")
+
+  @@index([user_id])
+  @@index([user_id, leido])
+  @@index([user_id, created_at])
+  @@index([product_id])
+  @@map("notifications")
+}
+
+// =============================================================================
+// WEB PUSH (suscripciones del navegador para notificaciones fuera de la app)
+// =============================================================================
+
+model PushSubscription {
+  id         String   @id @default(cuid())
+  user_id    String   @map("user_id")
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  // URL del push service (FCM/Web Push). Único para evitar duplicados.
+  endpoint   String   @unique
+  // Claves del navegador (base64url): p256dh (clave pública ECDH) y auth.
+  p256dh     String
+  auth       String
+
+  user_agent String?  @map("user_agent")
+  created_at DateTime @default(now()) @map("created_at")
+  updated_at DateTime @updatedAt @map("updated_at")
+
+  @@index([user_id])
+  @@map("push_subscriptions")
+}

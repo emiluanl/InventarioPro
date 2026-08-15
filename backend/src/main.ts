@@ -6,7 +6,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import * as path from 'node:path';
@@ -75,7 +75,10 @@ async function bootstrap(): Promise<void> {
   });
 
   app.setGlobalPrefix(apiPrefix);
-  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+  // La validación global ya la registra GlobalValidationPipe (APP_PIPE en
+  // app.module.ts: whitelist + forbidNonWhitelisted + transform). No registrar
+  // otro ValidationPipe aquí: validaría dos veces por request con settings
+  // distintos (ambigüedad) y añadiría coste sin beneficio.
 
   await app.listen(port);
   logger.log(`InventarioPro backend escuchando en http://localhost:${port}/${apiPrefix}`);

@@ -1,9 +1,9 @@
 // =============================================================================
 // Tests de import/export CSV de productos
 // =============================================================================
-// Cubre: export (cabeceras, fechas UTC, escapado, filtros, warranty post-query)
-// e import (fila válida, categorías por nombre con cache, errores por fila,
-// auto-cálculo de garantía, CSV vacío, defaults).
+// Cubre: export (cabeceras, fechas UTC, escapado, filtros, warranty en where
+// SQL) e import (fila válida, categorías por nombre con cache, errores por
+// fila, auto-cálculo de garantía, CSV vacío, defaults).
 // =============================================================================
 
 import { Test, type TestingModule } from '@nestjs/testing';
@@ -135,7 +135,7 @@ describe('ProductsService CSV', () => {
       );
     });
 
-    it('filtra por warranty_status post-query', async () => {
+    it('filtra por warranty_status en el where SQL (sin post-filtro)', async () => {
       const today = new Date();
       prisma.product.findMany.mockResolvedValue([
         {
@@ -185,9 +185,18 @@ describe('ProductsService CSV', () => {
         warranty_status: 'por_vencer',
       } as never);
 
+      // El filtro va en el where SQL (mismo criterio que getWarrantyStatus):
+      // por_vencer = vence en los próximos 30 días.
+      const call = prisma.product.findMany.mock.calls[0][0];
+      expect(call.where.fecha_vencimiento_garantia).toEqual({
+        gt: expect.any(Date),
+        lte: expect.any(Date),
+      });
+      // Sin post-filtro: lo que devuelve SQL pasa tal cual (el mock no aplica
+      // el where). Si alguien reintroduce un filtro en JS, este test falla.
       const rows = parseProductsCsv(result.content);
-      expect(rows).toHaveLength(1);
-      expect(rows[0].nombre).toBe('Vence pronto');
+      expect(rows).toHaveLength(2);
+      expect(rows.map((r) => r.nombre)).toEqual(['Vence pronto', 'Sin garantía']);
     });
   });
 
@@ -202,25 +211,25 @@ describe('ProductsService CSV', () => {
     ].join('\n');
 
     beforeEach(() => {
-      prisma.product.create.mockImplementation(
-        async ({ data }: { data: Record<string, unknown> }) => ({
-          id: 'new',
-          ...data,
-        }),
-      );
+      // createMany devuelve el conteo de filas insertadas.
+      prisma.product.createMany.mockImplementation(async ({ data }: { data: unknown[] }) => ({
+        count: data.length,
+      }));
     });
 
     it('importa las filas válidas y normaliza los campos', async () => {
-      prisma.category.findFirst.mockResolvedValue({ id: 'cat-1' });
+      prisma.category.findMany.mockResolvedValue([
+        { id: 'cat-1', nombre: 'Electrodomésticos' },
+      ] as never);
 
       const result = await service.importCsv('u1', csv);
 
       expect(result.imported).toBe(2);
       expect(result.skipped).toBe(0);
       expect(result.errors).toEqual([]);
-      expect(prisma.product.create).toHaveBeenCalledTimes(2);
+      expect(prisma.product.createMany).toHaveBeenCalledTimes(1);
 
-      const first = prisma.product.create.mock.calls[0][0].data;
+      const first = prisma.product.createMany.mock.calls[0][0].data[0];
       expect(first).toEqual(
         expect.objectContaining({
           user_id: 'u1',
@@ -241,7 +250,7 @@ describe('ProductsService CSV', () => {
     });
 
     it('crea la categoría personalizada si no existe y la cachea por import', async () => {
-      prisma.category.findFirst.mockResolvedValue(null);
+      prisma.category.findMany.mockResolvedValue([]);
       prisma.category.create.mockImplementation(
         async ({ data }: { data: Record<string, unknown> }) => ({
           id: 'cat-new',
@@ -257,7 +266,9 @@ describe('ProductsService CSV', () => {
         data: { nombre: 'Electrodomésticos', user_id: 'u1' },
       });
       // Ambas filas usan la misma categoría creada.
-      expect(prisma.product.create.mock.calls[1][0].data.categoria_id).toBe('cat-new');
+      const data = prisma.product.createMany.mock.calls[0][0].data;
+      expect(data[0].categoria_id).toBe('cat-new');
+      expect(data[1].categoria_id).toBe('cat-new');
     });
 
     it('reporta errores por fila sin abortar las filas válidas', async () => {
@@ -270,7 +281,7 @@ describe('ProductsService CSV', () => {
         'Precio malo,2026-01-01,FISICO,abc,NUEVO',
         'Válido 2,2026-02-01,ONLINE,20,USADO',
       ].join('\n');
-      prisma.category.findFirst.mockResolvedValue(null);
+      prisma.category.findMany.mockResolvedValue([]);
       prisma.category.create.mockResolvedValue({ id: 'c', nombre: 'x' });
 
       const result = await service.importCsv('u1', mixed);
@@ -290,12 +301,12 @@ describe('ProductsService CSV', () => {
       const minimal = ['nombre,fecha_compra,tipo_compra,precio', 'Silla,2026-01-01,FISICO,10'].join(
         '\n',
       );
-      prisma.category.findFirst.mockResolvedValue(null);
+      prisma.category.findMany.mockResolvedValue([]);
 
       const result = await service.importCsv('u1', minimal);
 
       expect(result.imported).toBe(1);
-      const data = prisma.product.create.mock.calls[0][0].data;
+      const data = prisma.product.createMany.mock.calls[0][0].data[0];
       expect(data.moneda).toBe('USD');
       expect(data.estado).toBe('NUEVO');
     });
@@ -305,12 +316,12 @@ describe('ProductsService CSV', () => {
       const row = ['nombre,fecha_compra,tipo_compra,precio', 'X,2026-01-01,FISICO,"19,99"'].join(
         '\n',
       );
-      prisma.category.findFirst.mockResolvedValue(null);
+      prisma.category.findMany.mockResolvedValue([]);
 
       const result = await service.importCsv('u1', row);
 
       expect(result.imported).toBe(1);
-      expect(prisma.product.create.mock.calls[0][0].data.precio.toString()).toBe('19.99');
+      expect(prisma.product.createMany.mock.calls[0][0].data[0].precio.toString()).toBe('19.99');
     });
 
     it('lanza BadRequestException si el CSV está vacío o solo tiene cabecera', async () => {
@@ -318,7 +329,7 @@ describe('ProductsService CSV', () => {
       await expect(
         service.importCsv('u1', 'nombre,fecha_compra,tipo_compra,precio\n'),
       ).rejects.toBeInstanceOf(BadRequestException);
-      expect(prisma.product.create).not.toHaveBeenCalled();
+      expect(prisma.product.createMany).not.toHaveBeenCalled();
     });
   });
 });

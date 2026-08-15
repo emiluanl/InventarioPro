@@ -4,6 +4,10 @@
   "private": true,
   "description": "Tests e2e de navegador (Playwright) para InventarioPro",
   "scripts": {
+    "start": "bash scripts/start.sh",
+    "dev": "bash scripts/start.sh",
+    "stop": "bash scripts/stop.sh",
+    "status": "bash scripts/status.sh",
     "test:e2e": "playwright test",
     "test:e2e:local": "bash scripts/e2e-local.sh",
     "test:e2e:headed": "playwright test --headed",

@@ -24,7 +24,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-inventariopro}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backups:/backups
+      - ../backups:/backups
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
       interval: 15s
@@ -93,7 +93,7 @@ services:
     volumes:
       # Mismo directorio del host que monta postgres: los dumps son accesibles
       # desde la máquina y por el contenedor de restauración.
-      - ./backups:/backups
+      - ../backups:/backups
       # Config de rclone (rclone.conf con tus remotes). El directorio existe
       # siempre (contiene el example); sin rclone.conf la copia remota se omite.
       - ./rclone:/root/.config/rclone

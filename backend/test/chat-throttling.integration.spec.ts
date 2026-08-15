@@ -17,7 +17,9 @@ import request from 'supertest';
 
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { RedisService } from '../src/common/redis.service';
 import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';
+import { redisNoop } from './helpers/redis-noop';
 
 jest.setTimeout(60000);
 
@@ -36,6 +38,8 @@ describe('Rate limiting del chat por usuario (integración)', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prisma)
+      .overrideProvider(RedisService)
+      .useValue(redisNoop)
       .compile();
 
     app = moduleRef.createNestApplication();

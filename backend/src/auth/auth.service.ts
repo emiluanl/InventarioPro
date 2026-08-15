@@ -120,6 +120,16 @@ export class AuthService {
   // ===========================================================================
   // REFRESH
   // ===========================================================================
+  // Rotación con detección de REUSO: si un token ya rotado (revocado) se
+  // presenta de nuevo, es señal de robo o replay → se revoca TODA la familia
+  // de sesiones del usuario (todos los refresh tokens activos), invalidando
+  // también el token nuevo que el atacante pudo haber obtenido.
+  //
+  // Trade-off conocido (mismo criterio que Auth0/OWASP): un dispositivo
+  // legítimo que guardó un token viejo también fuerza el re-login de todas
+  // las sesiones al usarlo. El frontend ya serializa los refreshes (single
+  // flight), así que no hay falsos positivos por refreshes paralelos.
+  // ===========================================================================
   async refresh(refreshToken: string): Promise<AuthTokensWithCookies> {
     const tokenHash = this.hashToken(refreshToken);
 
@@ -128,16 +138,40 @@ export class AuthService {
       include: { user: true },
     });
 
-    if (!stored || stored.revoked_at || stored.expires_at < new Date()) {
+    if (!stored) {
       throw new UnauthorizedException('Refresh token inválido o expirado.');
     }
 
-    // Rotación: revocamos el actual y emitimos uno nuevo.
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
+    // Rotación ATÓMICA: el update lleva la guardia (revocado_at nulo + no
+    // expirado), así que de N peticiones concurrentes con el mismo token solo
+    // UNA gana (count=1). Las demás obtienen count=0 y entran en el chequeo
+    // de reuso.
+    const rotated = await this.prisma.refreshToken.updateMany({
+      where: {
+        token_hash: tokenHash,
+        revoked_at: null,
+        expires_at: { gt: new Date() },
+      },
       data: { revoked_at: new Date() },
     });
 
+    if (rotated.count === 0) {
+      // No se pudo rotar: el token expiró (caso normal) o YA FUE ROTADO.
+      if (stored.revoked_at) {
+        // REUSO: este token ya se usó antes. Revocamos todas las sesiones
+        // activas del usuario.
+        await this.prisma.refreshToken.updateMany({
+          where: { user_id: stored.user_id, revoked_at: null },
+          data: { revoked_at: new Date() },
+        });
+        this.logger.warn(
+          `Reuso de refresh token detectado; sesiones revocadas para ${stored.user_id}`,
+        );
+      }
+      throw new UnauthorizedException('Refresh token inválido o expirado.');
+    }
+
+    // Rotación OK: el token anterior quedó revocado; emitimos el par nuevo.
     return this.issueTokens(stored.user.id, stored.user.email);
   }
 

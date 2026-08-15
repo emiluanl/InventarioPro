@@ -154,7 +154,13 @@ export class ReportsService {
     // Moneda dominante: la que acumula más gasto (para formatear el total).
     const currency = byCurrencySorted[0]?.moneda ?? 'USD';
 
-    const years = await this.availableYears(userId);
+    // Años disponibles: sin filtro de año se derivan del mismo scan ya hecho
+    // (evita el segundo findMany que re-escaneaba todos los productos). Solo
+    // con filtro de año hace falta una query extra (los productos consultados
+    // son de un solo año y no bastan para listar los años del usuario).
+    const years = year
+      ? await this.availableYears(userId)
+      : [...new Set(products.map((p) => p.fecha_compra.getUTCFullYear()))].sort((a, b) => b - a);
 
     return {
       year: year ?? null,

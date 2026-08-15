@@ -16,13 +16,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { ProductsQueryDto, SortBy, SortOrder } from './dto/products-query.dto';
+import {
+  ProductsQueryDto,
+  SortBy,
+  SortOrder,
+  WarrantyStatusFilter,
+} from './dto/products-query.dto';
 import { buildProductsCsv, formatCsvDate, parseProductsCsv, type CsvRow } from './csv';
 import {
   calculateOwnershipDuration,
   formatOwnership,
   getWarrantyStatus,
 } from '../common/lib/time-ownership';
+import { ciContains } from '../common/lib/prisma-filters';
 
 export interface ProductResponse extends Omit<Product, 'deleted_at'> {
   tiempo_posesion: string;
@@ -108,7 +114,7 @@ export class ProductsService {
     userId: string,
     query: ProductsQueryDto,
   ): Promise<PaginatedResponse<ProductResponse>> {
-    const { page, per_page, warranty_status, sort_by, sort_order } = query;
+    const { page, per_page, sort_by, sort_order } = query;
 
     const where = this.buildListWhere(userId, query);
     const orderBy: Prisma.ProductOrderByWithRelationInput = this.buildOrderBy(sort_by, sort_order);
@@ -130,12 +136,9 @@ export class ProductsService {
       }),
     ]);
 
-    let items = products.map((p) => this.toResponse(p));
-
-    // Filtro post-query: warranty_status requiere calcular fechas.
-    if (warranty_status) {
-      items = items.filter((p) => p.warranty_status === warranty_status);
-    }
+    // warranty_status ya va en el where SQL (buildListWhere): no hay filtro
+    // post-query, así la paginación (skip/take) y el total son correctos.
+    const items = products.map((p) => this.toResponse(p));
 
     return {
       items,
@@ -315,7 +318,7 @@ export class ProductsService {
       include: { categoria: { select: { nombre: true } } },
     });
 
-    let rows: CsvRow[] = products.map((p) => ({
+    const rows: CsvRow[] = products.map((p) => ({
       nombre: p.nombre,
       categoria: p.categoria?.nombre ?? '',
       marca: p.marca ?? '',
@@ -337,14 +340,7 @@ export class ProductsService {
       tags: p.tags ?? '',
     }));
 
-    // El filtro de warranty_status se aplica post-query (igual que en list).
-    if (query.warranty_status) {
-      rows = rows.filter((row) => {
-        if (!row.fecha_vencimiento_garantia) return false;
-        const status = getWarrantyStatus(new Date(`${row.fecha_vencimiento_garantia}T00:00:00Z`));
-        return status === query.warranty_status;
-      });
-    }
+    // warranty_status ya va en el where SQL (buildListWhere), igual que en list.
 
     const date = formatCsvDate(new Date());
     return {
@@ -368,18 +364,65 @@ export class ProductsService {
       throw new BadRequestException('El CSV está vacío o solo contiene la cabecera.');
     }
 
-    const imported: string[] = [];
     const errors: CsvImportRowError[] = [];
     const createdCategories: string[] = [];
-    const categoryCache = new Map<string, string | null>();
+
+    // Precargar TODAS las categorías (del usuario + sistema) en UNA query.
+    // Antes se hacía un findFirst por fila (N+1): con el mapa, resolver la
+    // categoría de cada fila es O(1) en memoria.
+    const existingCategories = await this.prisma.category.findMany({
+      where: { OR: [{ user_id: userId }, { user_id: null }] },
+      select: { id: true, nombre: true },
+    });
+    const categoryIdByLower = new Map(
+      existingCategories.map((c) => [c.nombre.toLowerCase(), c.id]),
+    );
+
+    // Validación fila a fila (en memoria); los productos válidos se acumulan
+    // para insertarlos por lotes con createMany (antes: 1 create por fila).
+    const toCreate: Array<{
+      user_id: string;
+      nombre: string;
+      categoria_id: string | null;
+      marca: string | null;
+      modelo: string | null;
+      descripcion: string | null;
+      fecha_compra: Date;
+      lugar_compra: string | null;
+      tipo_compra: PurchaseType;
+      precio: Prisma.Decimal;
+      moneda: string;
+      metodo_pago: string | null;
+      numero_serie: string | null;
+      duracion_garantia_meses: number | null;
+      fecha_vencimiento_garantia: Date | null;
+      estado: ProductStatus;
+      notas: string | null;
+      tags: string | null;
+    }> = [];
 
     for (let i = 0; i < rows.length; i++) {
       const rowNumber = i + 2; // +1 por el índice, +1 por la cabecera
       try {
         const data = this.validateCsvRow(rows[i]);
-        const categoriaId = data.categoria
-          ? await this.resolveCategoria(userId, data.categoria, categoryCache, createdCategories)
-          : null;
+
+        let categoriaId: string | null = null;
+        if (data.categoria) {
+          const key = data.categoria.toLowerCase();
+          const cached = categoryIdByLower.get(key);
+          if (cached) {
+            categoriaId = cached;
+          } else {
+            // Solo las categorías NUEVAS requieren un create (suelen ser pocas;
+            // createMany no devuelve ids, así que no se puede batchear).
+            const created = await this.prisma.category.create({
+              data: { nombre: data.categoria, user_id: userId },
+            });
+            createdCategories.push(created.nombre);
+            categoryIdByLower.set(key, created.id);
+            categoriaId = created.id;
+          }
+        }
 
         // Auto-calcular vencimiento de garantía (misma regla que create).
         let fechaVencimiento: Date | null = data.fechaVencimientoGarantia
@@ -390,29 +433,26 @@ export class ProductsService {
           fechaVencimiento.setMonth(fechaVencimiento.getMonth() + data.duracionGarantiaMeses);
         }
 
-        const product = await this.prisma.product.create({
-          data: {
-            user_id: userId,
-            nombre: data.nombre,
-            categoria_id: categoriaId,
-            marca: data.marca,
-            modelo: data.modelo,
-            descripcion: data.descripcion,
-            fecha_compra: data.fechaCompra,
-            lugar_compra: data.lugarCompra,
-            tipo_compra: data.tipoCompra,
-            precio: new Prisma.Decimal(data.precio),
-            moneda: data.moneda,
-            metodo_pago: data.metodoPago,
-            numero_serie: data.numeroSerie,
-            duracion_garantia_meses: data.duracionGarantiaMeses,
-            fecha_vencimiento_garantia: fechaVencimiento,
-            estado: data.estado,
-            notas: data.notas,
-            tags: data.tags,
-          },
+        toCreate.push({
+          user_id: userId,
+          nombre: data.nombre,
+          categoria_id: categoriaId,
+          marca: data.marca,
+          modelo: data.modelo,
+          descripcion: data.descripcion,
+          fecha_compra: data.fechaCompra,
+          lugar_compra: data.lugarCompra,
+          tipo_compra: data.tipoCompra,
+          precio: new Prisma.Decimal(data.precio),
+          moneda: data.moneda,
+          metodo_pago: data.metodoPago,
+          numero_serie: data.numeroSerie,
+          duracion_garantia_meses: data.duracionGarantiaMeses,
+          fecha_vencimiento_garantia: fechaVencimiento,
+          estado: data.estado,
+          notas: data.notas,
+          tags: data.tags,
         });
-        imported.push(product.id);
       } catch (err) {
         errors.push({
           row: rowNumber,
@@ -421,12 +461,21 @@ export class ProductsService {
       }
     }
 
-    if (imported.length > 0) {
-      this.logger.log(`Import CSV: ${imported.length} productos para usuario ${userId}`);
+    // Inserción por lotes: 1 query cada 200 productos en vez de 1 por fila.
+    const BATCH = 200;
+    let imported = 0;
+    for (let i = 0; i < toCreate.length; i += BATCH) {
+      const batch = toCreate.slice(i, i + BATCH);
+      const result = await this.prisma.product.createMany({ data: batch });
+      imported += result.count;
+    }
+
+    if (imported > 0) {
+      this.logger.log(`Import CSV: ${imported} productos para usuario ${userId}`);
       await this.invalidateListCache(userId);
     }
     return {
-      imported: imported.length,
+      imported,
       skipped: errors.length,
       errors,
       created_categories: createdCategories,
@@ -438,7 +487,8 @@ export class ProductsService {
   // ===========================================================================
   /** Construye el where del listado (filtros + búsqueda), compartido por list y export. */
   private buildListWhere(userId: string, query: ProductsQueryDto): Prisma.ProductWhereInput {
-    const { search, category_id, estado, tipo_compra, fecha_desde, fecha_hasta } = query;
+    const { search, category_id, estado, tipo_compra, fecha_desde, fecha_hasta, warranty_status } =
+      query;
 
     const where: Prisma.ProductWhereInput = {
       user_id: userId,
@@ -455,13 +505,32 @@ export class ProductsService {
       if (fecha_hasta) where.fecha_compra.lte = new Date(fecha_hasta);
     }
 
+    // warranty_status en SQL (no post-query): sin esto, el filtro se aplicaría
+    // DESPUÉS de skip/take y la paginación sería incorrecta (total/pages mal y
+    // productos de páginas posteriores que nunca aparecen). Mismo criterio que
+    // getWarrantyStatus(): vencida = ya venció, por_vencer = ≤ 30 días,
+    // vigente = > 30 días. Los productos sin fecha_vencimiento_garantia quedan
+    // fuera de cualquiera de los tres (comparaciones con null son falsas).
+    if (warranty_status) {
+      const now = new Date();
+      const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      if (warranty_status === WarrantyStatusFilter.VENCIDA) {
+        where.fecha_vencimiento_garantia = { lt: now };
+      } else if (warranty_status === WarrantyStatusFilter.POR_VENCER) {
+        where.fecha_vencimiento_garantia = { gt: now, lte: in30Days };
+      } else if (warranty_status === WarrantyStatusFilter.VIGENTE) {
+        where.fecha_vencimiento_garantia = { gt: in30Days };
+      }
+    }
+
     if (search) {
-      // Búsqueda case-insensitive en nombre, marca, modelo y descripción.
+      // Búsqueda case-insensitive en nombre, marca, modelo y descripción
+      // (ILIKE en Postgres; LIKE nativo de SQLite en modo local sin Docker).
       where.OR = [
-        { nombre: { contains: search, mode: 'insensitive' } },
-        { marca: { contains: search, mode: 'insensitive' } },
-        { modelo: { contains: search, mode: 'insensitive' } },
-        { descripcion: { contains: search, mode: 'insensitive' } },
+        { nombre: ciContains(search) },
+        { marca: ciContains(search) },
+        { modelo: ciContains(search) },
+        { descripcion: ciContains(search) },
       ];
     }
 
@@ -578,36 +647,6 @@ export class ProductsService {
       throw new BadRequestException(`${field} no es una fecha válida.`);
     }
     return date;
-  }
-
-  /** Resuelve la categoría por nombre; la crea si no existe (cache por import). */
-  private async resolveCategoria(
-    userId: string,
-    nombre: string,
-    cache: Map<string, string | null>,
-    createdCategories: string[],
-  ): Promise<string | null> {
-    const key = nombre.toLowerCase();
-    if (cache.has(key)) return cache.get(key) ?? null;
-
-    const existing = await this.prisma.category.findFirst({
-      where: {
-        nombre: { equals: nombre, mode: 'insensitive' },
-        OR: [{ user_id: userId }, { user_id: null }],
-      },
-      select: { id: true },
-    });
-    if (existing) {
-      cache.set(key, existing.id);
-      return existing.id;
-    }
-
-    const created = await this.prisma.category.create({
-      data: { nombre, user_id: userId },
-    });
-    createdCategories.push(created.nombre);
-    cache.set(key, created.id);
-    return created.id;
   }
 
   private async assertOwned(userId: string, productId: string): Promise<void> {

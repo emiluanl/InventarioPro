@@ -8,7 +8,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ProductsService } from '../src/products/products.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { RedisService } from '../src/common/redis.service';
-import { SortBy, SortOrder } from '../src/products/dto/products-query.dto';
+import { SortBy, SortOrder, WarrantyStatusFilter } from '../src/products/dto/products-query.dto';
 import { PurchaseType } from '../src/generated/prisma/client';
 import { MockPrisma, buildPrismaMock } from './helpers/prisma-mock';
 
@@ -196,6 +196,94 @@ describe('ProductsService', () => {
         contains: 'licuadora',
         mode: 'insensitive',
       });
+    });
+
+    // =========================================================================
+    // WARRANTY_STATUS EN EL WHERE SQL (paginación correcta)
+    // =========================================================================
+    // El filtro debe ir en `where` (no post-query): así `count` y `findMany`
+    // comparten el mismo filtro y total/total_pages son consistentes con los
+    // items devueltos (regresión del bug de paginación).
+    // =========================================================================
+    it.each([
+      [WarrantyStatusFilter.VENCIDA, { lt: expect.any(Date) }],
+      [WarrantyStatusFilter.POR_VENCER, { gt: expect.any(Date), lte: expect.any(Date) }],
+      [WarrantyStatusFilter.VIGENTE, { gt: expect.any(Date) }],
+    ])('aplica warranty_status=%s en el where SQL', async (status, expectedFilter) => {
+      prisma.product.count.mockResolvedValue(3);
+      prisma.product.findMany.mockResolvedValue([]);
+
+      const result = await service.list('u1', {
+        page: 1,
+        per_page: 10,
+        warranty_status: status as WarrantyStatusFilter,
+        sort_by: SortBy.FECHA_COMPRA,
+        sort_order: SortOrder.DESC,
+      });
+
+      // count y findMany usan el MISMO filtro → total consistente con items.
+      expect(prisma.product.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            fecha_vencimiento_garantia: expectedFilter,
+          }),
+        }),
+      );
+      expect(prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            fecha_vencimiento_garantia: expectedFilter,
+          }),
+        }),
+      );
+      expect(result.pagination.total).toBe(3);
+    });
+
+    it('no filtra post-query (los items son exactamente los que devuelve SQL)', async () => {
+      // Producto con garantía vencida y otro vigente: si hubiera post-filtro,
+      // el item con warranty_status distinto se descartaría y el total
+      // (contado SIN el filtro) no coincidiría con items.length.
+      prisma.product.count.mockResolvedValue(2);
+      prisma.product.findMany.mockResolvedValue([
+        {
+          id: 'p1',
+          user_id: 'u1',
+          nombre: 'Vencida',
+          fecha_compra: new Date('2020-01-15'),
+          fecha_vencimiento_garantia: new Date('2020-02-01'),
+          precio: { toString: () => '10.00' },
+          moneda: 'USD',
+          estado: 'NUEVO',
+          categoria: null,
+          _count: { attachments: 0 },
+        },
+        {
+          id: 'p2',
+          user_id: 'u1',
+          nombre: 'Vigente',
+          fecha_compra: new Date('2020-01-15'),
+          fecha_vencimiento_garantia: new Date('2099-01-01'),
+          precio: { toString: () => '20.00' },
+          moneda: 'USD',
+          estado: 'NUEVO',
+          categoria: null,
+          _count: { attachments: 0 },
+        },
+      ]);
+
+      const result = await service.list('u1', {
+        page: 1,
+        per_page: 10,
+        warranty_status: WarrantyStatusFilter.VENCIDA,
+        sort_by: SortBy.FECHA_COMPRA,
+        sort_order: SortOrder.DESC,
+      });
+
+      // Sin post-filtro: SQL devolvió 2 items (vencida + vigente) y el total
+      // se contó con el mismo where; el post-procesado solo enriquece.
+      expect(result.items).toHaveLength(2);
+      expect(result.items.map((p) => p.warranty_status)).toEqual(['vencida', 'vigente']);
+      expect(result.pagination.total).toBe(2);
     });
   });
 });

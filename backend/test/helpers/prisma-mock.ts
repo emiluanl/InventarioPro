@@ -40,6 +40,7 @@ export interface MockPrisma {
     findUnique: jest.Mock;
     count: jest.Mock;
     create: jest.Mock;
+    createMany: jest.Mock;
     update: jest.Mock;
   };
   notification: {
@@ -47,6 +48,7 @@ export interface MockPrisma {
     findFirst: jest.Mock;
     count: jest.Mock;
     create: jest.Mock;
+    createMany: jest.Mock;
     update: jest.Mock;
     updateMany: jest.Mock;
   };
@@ -71,8 +73,18 @@ export function buildPrismaMock(): MockPrisma {
       updateMany: jest.fn(),
       delete: jest.fn(),
     },
-    productAttachment: { findMany: jest.fn() },
-    category: { upsert: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
+    // Los findMany devuelven [] por defecto: un servicio que itere el resultado
+    // (p. ej. checkWarranties en onModuleInit) no debe reventar con
+    // "products is not iterable" cuando un test no mockea esa query. Los tests
+    // que necesitan datos los mockean explícitamente (mockResolvedValue / Once
+    // tienen prioridad sobre este default).
+    productAttachment: { findMany: jest.fn().mockResolvedValue([]) },
+    category: {
+      upsert: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn(),
+      create: jest.fn(),
+    },
     refreshToken: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -83,28 +95,33 @@ export function buildPrismaMock(): MockPrisma {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
-      findMany: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
     },
-    chatMessage: { findMany: jest.fn(), create: jest.fn() },
+    chatMessage: {
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn(),
+    },
     product: {
-      findMany: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       count: jest.fn(),
       create: jest.fn(),
+      createMany: jest.fn(),
       update: jest.fn(),
     },
     notification: {
-      findMany: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
       findFirst: jest.fn(),
       count: jest.fn(),
       create: jest.fn(),
+      createMany: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
     },
     pushSubscription: {
       upsert: jest.fn(),
-      findMany: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
       deleteMany: jest.fn(),
     },
   };

@@ -15,6 +15,7 @@ import {
   formatOwnership,
   getWarrantyStatus,
 } from '../../common/lib/time-ownership';
+import { ciContains } from '../../common/lib/prisma-filters';
 
 type Args = Record<string, unknown>;
 
@@ -56,9 +57,9 @@ export class ChatToolExecutor {
 
     if (typeof args.search === 'string' && args.search.trim()) {
       where.OR = [
-        { nombre: { contains: args.search, mode: 'insensitive' } },
-        { marca: { contains: args.search, mode: 'insensitive' } },
-        { modelo: { contains: args.search, mode: 'insensitive' } },
+        { nombre: ciContains(args.search) },
+        { marca: ciContains(args.search) },
+        { modelo: ciContains(args.search) },
       ];
     }
     if (typeof args.categoria_id === 'string') where.categoria_id = args.categoria_id;

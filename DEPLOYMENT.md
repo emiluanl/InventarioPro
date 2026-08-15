@@ -187,7 +187,7 @@ curl -I https://app.inventariopro.com
 El stack incluye un **contenedor de backups automático** (`backup/`): un cron
 dentro de Docker ejecuta `pg_dump` en formato custom comprimido (`-Fc`) y
 aplica retención. Se levanta solo con `up -d` (no necesita configuración
-adicional) y escribe los dumps en `./backups` del host:
+adicional) y escribe los dumps en `../backups` del host (el directorio hermano del repo, fuera del árbol de trabajo):
 
 > Además de los dumps, cada backup empaqueta los **uploads** (fotos/recibos/facturas)
 > en `uploads-*.tar.gz`. El backend de producción monta `./backend/uploads` como
@@ -222,7 +222,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 docker compose -f docker-compose.prod.yml exec backup /usr/local/bin/backup
 
 # Comprobar los dumps generados
-ls -lh backups/
+ls -lh ../backups/
 
 # Ver los logs del cron
 docker compose -f docker-compose.prod.yml logs -f backup
@@ -249,7 +249,7 @@ docker compose -f docker-compose.prod.yml exec backup \
 
 ### Copia remota de los dumps (rclone)
 
-Los dumps viven en `./backups` del host; un fallo del disco del servidor los
+Los dumps viven en `../backups` del host; un fallo del disco del servidor los
 perdería. El contenedor de backups incluye **rclone** y, si se configura
 `RCLONE_REMOTE`, copia cada dump a un destino remoto (bucket S3, Backblaze B2,
 Cloudflare R2, otro servidor por SFTP, un NAS...) justo después de generarlo,
@@ -322,7 +322,7 @@ local → `rclone copy` al destino → retención remota (`rclone delete
 
 ```bash
 # 1) Traer el dump al servidor (remote real: b2backup:InventarioPro)
-cd backups && docker compose -f docker-compose.prod.yml \
+docker compose -f docker-compose.prod.yml \
   --env-file .env.prod run --rm backup \
   rclone copy b2backup:InventarioPro/inventariopro-YYYYMMDD-HHMMSS.dump /backups/
 
@@ -638,8 +638,8 @@ Cubre dos desastres comunes:
 | Pérdida de fotos/recibos/facturas o disco nuevo | el **tar de uploads** (`uploads-*.tar.gz`) |
 | Servidor nuevo completo | **ambos**, en ese orden |
 
-Los artefactos viven en `./backups` del host (y, si configuraste `RCLONE_REMOTE`,
-una copia en el destino remoto — descárgala con rclone y colócala en `./backups`).
+Los artefactos viven en `../backups` del host (y, si configuraste `RCLONE_REMOTE`,
+una copia en el destino remoto — descárgala con rclone y colócala en `../backups`).
 
 ### 12.1 Restaurar la base de datos
 
@@ -673,7 +673,7 @@ docker run -d --name inventariopro-dr-test \
 
 # 2. Espera a que esté listo y restaura el dump (--exit-on-error aborta si
 #    algo no cuadra; --no-owner evita errores si el rol original no existe):
-docker cp backups/inventariopro-YYYYMMDD-HHMMSS.dump inventariopro-dr-test:/tmp/dump
+docker cp ../backups/inventariopro-YYYYMMDD-HHMMSS.dump inventariopro-dr-test:/tmp/dump
 docker exec inventariopro-dr-test pg_restore \
   -U inventariopro -d inventariopro --no-owner --exit-on-error /tmp/dump
 #    (Nota Windows/Git Bash: antepone MSYS_NO_PATHCONV=1 al docker exec para
@@ -716,7 +716,7 @@ DENTRO de `backend/uploads`** (el directorio que el backend monta en
 cd /opt/inventariopro
 # 1. Con el backend detenido (o tras el restore de la BD), descomprime el tar
 #    dentro de backend/uploads (el prefijo uploads-src/ del tar se descarta):
-tar -xzf backups/uploads-YYYYMMDD-HHMMSS.tar.gz -C backend/uploads --strip-components=1
+tar -xzf ../backups/uploads-YYYYMMDD-HHMMSS.tar.gz -C backend/uploads --strip-components=1
 
 # 2. Verifica que las fotos quedaron en el directorio que el backend monta:
 ls backend/uploads/products/

@@ -22,7 +22,7 @@ Pensada como una **herramienta de gestión de posesiones personales** (no como u
 | **Frontend** | Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS |
 | **Estado y datos remotos** | React Query + react-hook-form + zod |
 | **Backend** | NestJS 11 + TypeScript |
-| **Base de datos** | PostgreSQL 16 + Prisma ORM 7 (cliente generado + driver adapter pg) |
+| **Base de datos** | PostgreSQL 16 + Prisma ORM 7 (cliente generado + driver adapter pg). Modo local sin Docker: **SQLite** (mismo esquema vía `schema.sqlite.prisma` + adapter better-sqlite3) |
 | **Cache, sesiones, rate limiting** | Redis 7 |
 | **Almacenamiento de archivos** | Local (dev y despliegue actual: `./backend/uploads`, incluido en los backups) / Supabase Storage (opción soportada) |
 | **Autenticación** | JWT propio (access 15 min + refresh 7 días, cookies httpOnly) |
@@ -44,8 +44,11 @@ InventarioPro/
 │   │   ├── common/                   # Cookies, Storage, Redis, ValidationPipe, Audit
 │   │   ├── generated/prisma/         # Cliente Prisma generado (v7, se commitea)
 │   │   └── prisma/                   # PrismaService (adapter pg)
-│   ├── prisma/schema.prisma          # Modelo de datos
-│   ├── prisma.config.ts              # Config del CLI Prisma 7 (URL, migraciones)
+│   ├── prisma/schema.prisma          # Modelo de datos (PostgreSQL, producción)
+│   ├── prisma/schema.sqlite.prisma   # Mismo modelo para el modo local sin Docker
+│   ├── prisma/migrations/            # Migraciones de PostgreSQL
+│   ├── prisma/migrations-sqlite/     # Migraciones de SQLite (modo local sin Docker)
+│   ├── prisma.config.ts              # Config del CLI Prisma 7 (elige proveedor por DB_PROVIDER)
 │   ├── test/                         # Tests con Jest
 │   ├── Dockerfile
 │   └── package.json
@@ -62,11 +65,133 @@ InventarioPro/
 ├── docker-compose.prod.yml           # Producción
 ├── Caddyfile                         # Reverse proxy + HTTPS
 ├── e2e/                              # Tests de navegador (Playwright)
+├── desktop/                          # App de escritorio (Electron)
+│   ├── main.js                       # Orquesta el stack embebido + ventana
+│   ├── preload.js                    # Puente seguro main ↔ renderer
+│   ├── electron-builder.yml          # Empaquetado (NSIS/dmg/AppImage)
+│   └── scripts/build.sh              # Ensambla resources/ + empaqueta
 ├── .github/workflows/ci.yml          # CI (backend, frontend y e2e)
 ├── README.md                         # ← este archivo
 ├── SECURITY.md                       # Auditoría de seguridad
 └── DEPLOYMENT.md                     # Guía paso a paso para producción
 ```
+
+## 🚀 Como una app normal (un solo comando)
+
+Desde la raíz del proyecto, sin terminales sueltas ni conocimiento de Docker:
+
+```bash
+npm install   # solo la primera vez (raíz; backend y frontend se instalan solos)
+npm start     # levanta BD + API + web, y abre el navegador
+# Ctrl+C detiene todo (la base de datos queda guardada)
+```
+
+`npm start` hace todo lo que antes hacías a mano: crea `backend/.env` y
+`frontend/.env` desde los ejemplos si faltan, instala dependencias (primera
+vez), elige la base de datos (ver abajo), aplica las **migraciones de Prisma**
+pendientes, y arranca la API (`:3001`) y la web (`:3010`) como procesos
+locales con logs unificados (`[backend]` / `[frontend]`).
+
+- **Web**: http://localhost:3010 · **API**: http://localhost:3001/api
+- `npm start -- --no-open` no abre el navegador.
+- `npm start -- --sqlite` fuerza el modo SQLite (aunque haya Docker).
+- `npm run stop` detiene los contenedores de BD/Redis (los datos persisten).
+- `npm run status` muestra qué está corriendo.
+
+### Base de datos: qué elige `npm start`
+
+1. **PostgreSQL ya corriendo** en `localhost:5432` (o tu `DATABASE_URL`) → se
+   reutiliza, sin tocar Docker.
+2. Si no, **PostgreSQL + Redis con Docker** (`docker compose`, solo
+   infraestructura).
+3. Si no hay Postgres **ni Docker** → **modo SQLite automático**: la app corre
+   SIN DOCKER EN ABSOLUTO, con la BD en `backend/prisma/dev.db`. El cliente
+   Prisma se regenera para SQLite al arrancar y se restaura el de Postgres al
+   salir (el árbol de git queda igual). `--sqlite` fuerza este modo.
+
+> 💡 SQLite es ideal para probar la app sin instalar nada: mismo esquema y
+> mismas migraciones lógicas. Para uso serio/concurrencia usa Postgres
+> (producción es siempre PostgreSQL).
+
+**Implicaciones / requisitos:**
+
+- **Node.js 20.9+** es lo único imprescindible. **Docker es opcional**: solo
+  se usa para Postgres/Redis; sin él, `npm start` cae a SQLite y la app
+  funciona igual (Redis queda en modo no-op: rate limiting en memoria).
+- La API key de DeepSeek es opcional; sin ella el chat responde con un
+  fallback amable.
+- En Windows usa **Git Bash** para `npm start` (los scripts son bash).
+
+## 🖥️ App de escritorio (Windows, instalable)
+
+InventarioPro también se empaqueta como **aplicación de escritorio instalable
+(Electron)** que arranca el stack completo con un clic, **sin terminal y sin
+Docker**: la app lleva el backend, el frontend y el CLI de Prisma embebidos
+(`desktop/resources/`), y la base de datos es **SQLite en los datos del
+usuario** (`%APPDATA%\inventariopro-desktop\dev.db`) — persistente entre
+sesiones. Los datos se conservan al desinstalar (los `uploads` y la BD viven
+en `%APPDATA%`, no en la carpeta de instalación).
+
+```bash
+# Construir (backend + frontend standalone + empaquetado)
+cd desktop
+npm install          # Electron + electron-builder (primera vez)
+npm run build        # empaqueta en desktop/dist/win-unpacked/ (prueba, sin instalador)
+npm run build:installer  # genera el instalador NSIS: dist/InventarioPro-Setup-1.0.0.exe
+```
+
+Al primer arranque la app aplica las migraciones SQLite automáticamente
+(idempotente), genera sus secretos JWT (guardados en `%APPDATA%`), y levanta
+API (`:3001`) + web (`:3010`). El email de verificación aparece en los logs de
+la app (`%APPDATA%\inventariopro-desktop\logs\desktop.log`) — en modo local
+siempre es consola, aunque el `.env` tenga SMTP.
+
+Cómo funciona por dentro (`desktop/`):
+
+- `main.js` — proceso principal de Electron: migra, lanza backend y frontend
+  como procesos Node hijos (`ELECTRON_RUN_AS_NODE`), abre la ventana y mata
+  ambos al cerrar (`taskkill /T`).
+- `scripts/build.sh` — compila el backend con el cliente Prisma **SQLite**
+  (restaura el de Postgres al terminar), arma el standalone de Next.js, mete
+  el CLI de Prisma con sus transitivas en `resources/backend/node_modules`, y
+  reconstruye `better-sqlite3` para el ABI de Electron (`argon2` es N-API y no
+  lo necesita).
+- El resultado va en `resources/stack/` (extraResources, fuera del asar) para
+  que los procesos hijos lean archivos reales.
+- `INVENTARIOPRO_HEADLESS=1` + `INVENTARIOPRO_EXIT_AFTER_READY=1` permiten
+  correr la app empaquetada sin ventana para pruebas/CI.
+
+> ⚠️ `npm run build` tarda varios minutos (compila backend + frontend y copia
+> ~500 MB de node_modules). El instalador es para **Windows x64**; el
+> `electron-builder.yml` ya trae targets para macOS/Linux por si se quieren
+> generar en esas plataformas.
+
+### Firma de código (SmartScreen)
+
+Por defecto el instalador va **sin firmar** y Windows muestra "Editor
+desconocido" al instalarlo. Para firmarlo con un certificado local:
+
+```powershell
+cd desktop
+powershell -ExecutionPolicy Bypass -File scripts/create-cert.ps1
+# crea certs/inventariopro.pfx + password.txt (gitignored, no se commitean)
+npm run build:installer   # firma automáticamente si certs/inventariopro.pfx existe
+```
+
+**Realidad sobre SmartScreen:** un certificado autofirmado **no** elimina el
+aviso para el público — SmartScreen bloquea por *reputación* y solo un
+certificado OV/EV de una CA reconocida + descargas reales lo quita del todo.
+Para **tus máquinas**, el flujo completo es:
+
+1. Exportar el certificado público: `certs/inventariopro.cer` (lo deja el script).
+2. En cada equipo, importarlo en **Entidades de certificación raíz de confianza**
+   → *Equipo local* (certlm.msc, requiere admin).
+3. Con la firma validada, el instalador muestra **Editor: InventarioPro** y el
+   aviso de SmartScreen desaparece en esa máquina.
+
+Para distribuir al público: compra un certificado de firma de código OV/EV
+(DigiCert, Sectigo, …) y configúralo con `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD`
+o `win.certificateFile` en `electron-builder.yml`.
 
 ## ⚡ Arranque rápido (desarrollo)
 
@@ -103,16 +228,25 @@ docker compose up --build
 > publican `localhost:5432/6379`, que producción no toca (solo usa la red
 > interna).
 
-### Sin Docker
+### Sin Docker (modo SQLite)
+
+La vía recomendada sin Docker es `npm start` desde la raíz (elige SQLite solo):
+
+```bash
+npm start -- --sqlite
+# BD en backend/prisma/dev.db, API en :3001, web en :3010
+```
+
+A mano (para desarrollo):
 
 ```bash
 # Backend
 cd backend
 npm install
 cp .env.example .env
-# Edita .env: DATABASE_URL apuntando a tu Postgres local
-npx prisma migrate dev --name init
-npm run start:dev
+DB_PROVIDER=sqlite DATABASE_URL=file:./prisma/dev.db npx prisma generate
+DB_PROVIDER=sqlite DATABASE_URL=file:./prisma/dev.db npx prisma migrate deploy
+DB_PROVIDER=sqlite npm run start:dev
 
 # Frontend (en otra terminal)
 cd ../frontend
@@ -121,6 +255,9 @@ cp .env.example .env
 npm run dev
 # (sirve en http://localhost:3010)
 ```
+
+> Al terminar, regenera el cliente de Postgres para dejar el repo como estaba:
+> `cd backend && npx prisma generate` (o `git checkout -- backend/src/generated/prisma`).
 
 ### Primer uso
 

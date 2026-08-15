@@ -62,6 +62,17 @@ async function bootstrap(): Promise<void> {
     prefix: '/uploads/',
     maxAge: '1d',
     fallthrough: false,
+    // El frontend (otro origen en dev: :3010 vs :3001) embebe estas imágenes
+    // vía <img>. helmet() pone Cross-Origin-Resource-Policy: same-origin por
+    // defecto y el navegador bloquea la carga (ERR_BLOCKED_BY_RESPONSE.
+    // NotSameOrigin): la imagen se ve rota aunque la URL funcione al abrirla
+    // en una pestaña nueva. Solo esta ruta sirve recursos pensados para
+    // embeberse desde el frontend, así que relajamos CORP aquí y la API
+    // conserva same-origin. En prod (dominio único) es irrelevante: todo
+    // comparte origen.
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
   });
 
   // CORS estricto: nunca usamos "*". Lista explícita por dominio.

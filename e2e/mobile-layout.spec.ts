@@ -22,7 +22,7 @@
 import { expect, test } from '@playwright/test';
 
 import { API_URL } from './env';
-import { login, randomEmail, registerAndVerify } from './helpers';
+import { E2E_PASSWORD, login, randomEmail, registerAndVerify } from './helpers';
 
 test.use({ viewport: { width: 375, height: 667 } });
 
@@ -505,6 +505,84 @@ test.describe('tema oscuro/claro', () => {
         'Sistema (según el dispositivo) → Oscuro',
       );
       expect(await isLight()).toBe(false);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test('con prefers-reduced-motion el spinner y el skeleton quedan estáticos', async ({
+    browser,
+  }) => {
+    // serviceWorkers: 'block': el SW de la app (PWA) intercepta los GETs y
+    // page.route no ve sus fetches; bloqueado, las rutas funcionan normal.
+    const ctx = await browser.newContext({
+      reducedMotion: 'reduce',
+      serviceWorkers: 'block',
+    });
+    const page = await ctx.newPage();
+    try {
+      const email = randomEmail('thm');
+      await registerAndVerify(page.request, email);
+
+      // --- Spinner del botón "Entrar": se mantiene en pantalla mientras el
+      //     POST de login está en vuelo (retardo de 800 ms por la ruta). ---
+      await page.route('**/api/auth/login', async (route) => {
+        await new Promise((r) => setTimeout(r, 800));
+        await route.continue();
+      });
+      await page.goto('/login');
+      await page.fill('#email', email);
+      await page.fill('#password', E2E_PASSWORD);
+      await page.getByRole('button', { name: 'Entrar' }).click();
+
+      const spinner = page.locator('button[type="submit"] svg.animate-spin');
+      await expect(spinner).toBeVisible();
+      // La regla global reduce las animaciones: duración ~0.01ms y 1 iteración
+      // (sin reduced-motion sería '1s' + 'infinite'). El navegador serializa
+      // 0.01ms como '1e-05s', así que se normaliza a segundos.
+      const spinDur = await spinner.evaluate((el) => {
+        const d = getComputedStyle(el).animationDuration; // '1s' | '0.01ms' | '1e-05s'
+        return d.endsWith('ms') ? parseFloat(d) / 1000 : parseFloat(d);
+      });
+      expect(spinDur).toBeLessThan(0.01);
+      expect(
+        await spinner.evaluate((el) => getComputedStyle(el).animationIterationCount),
+      ).toBe('1');
+
+      // Sin unroute: el handler pendiente termina su continue() solo y el
+      // login sigue su curso; el contexto se cierra al final del test.
+      await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+
+      // --- Skeleton del edit de producto: queda visible mientras el GET del
+      //     producto está en vuelo (retardo de 800 ms por la ruta). ---
+      const res = await page.request.post(`${API_URL}/products`, {
+        data: {
+          nombre: 'Skeleton Test',
+          tipo_compra: 'FISICO',
+          precio: 1,
+          moneda: 'USD',
+          estado: 'NUEVO',
+          fecha_compra: '2026-08-10',
+        },
+      });
+      expect(res.ok(), `crear producto falló: ${res.status()}`).toBeTruthy();
+      const productId = (await res.json()).id as string;
+      await page.route(`**/api/products/${productId}`, async (route) => {
+        await new Promise((r) => setTimeout(r, 800));
+        await route.continue();
+      });
+      await page.goto(`/products/${productId}/edit`);
+
+      const skeleton = page.locator('.animate-pulse').first();
+      await expect(skeleton).toBeVisible();
+      const skelDur = await skeleton.evaluate((el) => {
+        const d = getComputedStyle(el).animationDuration; // '2s' | '0.01ms' | '1e-05s'
+        return d.endsWith('ms') ? parseFloat(d) / 1000 : parseFloat(d);
+      });
+      expect(skelDur).toBeLessThan(0.01);
+      expect(
+        await skeleton.evaluate((el) => getComputedStyle(el).animationIterationCount),
+      ).toBe('1');
     } finally {
       await ctx.close();
     }

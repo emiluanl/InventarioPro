@@ -26,7 +26,10 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: true,
   workers: 2,
-  retries: process.env.CI ? 1 : 0,
+  // 1 reintento siempre (local y CI): el arranque en frío compila nest + next
+  // en paralelo y puede hacer que un test falle solo por timing la primera
+  // corrida; el reintento elimina ese flake sin tapar fallos reales.
+  retries: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
   globalSetup: './e2e/global-setup.ts',
   use: {

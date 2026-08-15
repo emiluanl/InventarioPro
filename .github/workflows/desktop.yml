@@ -1,0 +1,96 @@
+# =============================================================================
+# Desktop — build --dir + smoke test headless de la app empaquetada.
+#
+# Cierra el hueco de CI detectado en la autoevaluación: el build de Electron
+# (backend+frontend embebidos + módulo nativo reconstruido + empaquetado) no
+# tenía verificación automática. Este job construye win-unpacked y le corre el
+# smoke test real (migraciones → STACK_READY → flujo funcional completo).
+#
+# El instalador NSIS y la firma quedan fuera de este job (requieren el pfx como
+# secreto); se pueden agregar como job de release con workflow_dispatch.
+# =============================================================================
+name: Desktop
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - 'backend/src/**'
+      - 'backend/prisma/**'
+      - 'backend/package.json'
+      - 'backend/package-lock.json'
+      - 'backend/prisma.config.ts'
+      - 'frontend/**'
+      - '.github/workflows/desktop.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'backend/src/**'
+      - 'backend/prisma/**'
+      - 'backend/package.json'
+      - 'backend/package-lock.json'
+      - 'backend/prisma.config.ts'
+      - 'frontend/**'
+      - '.github/workflows/desktop.yml'
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop-build:
+    name: Build --dir + smoke headless
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      # build.sh compila backend (nest build + cliente Prisma SQLite) y
+      # frontend (Next standalone) desde sus fuentes → necesitan sus deps.
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install desktop deps
+        working-directory: desktop
+        run: npm ci
+
+      # Ensambla desktop/resources + reconstruye better-sqlite3 para el ABI de
+      # Electron + empaqueta dist/win-unpacked (modo --dir, sin instalador).
+      - name: Build stack + package (--dir)
+        working-directory: desktop
+        shell: bash
+        run: bash scripts/build.sh
+
+      # Fase A: arranque headless + STACK_READY y salida limpia.
+      # Fase B: flujo funcional real (registro → verify → login → producto →
+      #         refresh → reuso 401 → familia 401 → web 200).
+      - name: Smoke test headless (app empaquetada)
+        working-directory: desktop
+        shell: bash
+        run: bash scripts/smoke-test.sh
+
+      # Artefacto de depuración: descargable desde la página del workflow.
+      - name: Upload win-unpacked (debug)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: InventarioPro-win-unpacked
+          path: desktop/dist/win-unpacked
+          retention-days: 7

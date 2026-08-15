@@ -122,3 +122,15 @@ html.theme-transition *::after {
     stroke 0.35s ease,
     box-shadow 0.35s ease !important;
 }
+
+/* Usuarios que piden menos movimiento: el cambio de tema es INSTANTÁNEO
+   (sin fade). La clase temporal se sigue limpiando igual, solo que el
+   navegador no anima nada. */
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transition,
+  html.theme-transition *,
+  html.theme-transition *::before,
+  html.theme-transition *::after {
+    transition: none !important;
+  }
+}

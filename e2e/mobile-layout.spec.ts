@@ -431,6 +431,43 @@ test.describe('tema oscuro/claro', () => {
       await ctx.close();
     }
   });
+
+  test('con prefers-reduced-motion el cambio de tema es instantáneo (sin fade)', async ({
+    browser,
+  }) => {
+    // Contexto con menos movimiento: el fade queda deshabilitado por CSS.
+    const ctx = await browser.newContext({ reducedMotion: 'reduce', colorScheme: 'dark' });
+    const page = await ctx.newPage();
+    try {
+      const email = randomEmail('thr');
+      await registerAndVerify(page.request, email);
+      await login(page, email);
+      await page.goto('/dashboard');
+
+      await page.getByLabel('Tema: Oscuro').click();
+      await page
+        .getByRole('menu', { name: 'Cambiar tema' })
+        .getByRole('menuitemradio', { name: /Claro/ })
+        .click();
+
+      // El cambio se aplica igual (clase temporal activa durante el cambio)…
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            document.documentElement.classList.contains('theme-transition'),
+          ),
+        )
+        .toBe(true);
+      // …pero la transición está desactivada: duración 0s (cambio instantáneo).
+      const duration = await page.evaluate(
+        () => getComputedStyle(document.body).transitionDuration,
+      );
+      expect(duration).toBe('0s');
+      await expect(page.getByLabel('Tema: Claro')).toBeVisible();
+    } finally {
+      await ctx.close();
+    }
+  });
 });
 
 // -----------------------------------------------------------------------------

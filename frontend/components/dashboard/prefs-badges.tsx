@@ -107,6 +107,74 @@ function useDismissOnOutside(
   }, [open, setOpen, rootRef]);
 }
 
+/**
+ * Navegación por teclado dentro del menú (patrón ARIA menú / roving tabindex):
+ *   - ArrowDown/ArrowUp  : mueve el foco al siguiente/anterior ítem (cicla).
+ *   - Home/End           : primer/último ítem.
+ *   - El ítem SELECCIONADO es el único con tabIndex=0 (Tab entra por ahí); los
+ *     demás quedan -1 y se alcanzan con las flechas.
+ * Cuando el menú se cierra, todos vuelven a tabIndex=0.
+ */
+function useMenuArrowNavigation(
+  open: boolean,
+  menuRef: React.RefObject<HTMLDivElement | null>,
+  isSelected: (value: string) => boolean,
+  setOpen: (open: boolean) => void,
+): void {
+  const menuItems = useCallback((): HTMLElement[] => {
+    const menu = menuRef.current;
+    return menu ? [...menu.querySelectorAll<HTMLElement>('[role="menuitemradio"]')] : [];
+  }, [menuRef]);
+
+  // Al abrir: solo el ítem seleccionado queda enfocable por Tab.
+  useEffect(() => {
+    if (!open) return;
+    menuItems().forEach((el) => {
+      el.tabIndex = isSelected(el.dataset.value ?? '') ? 0 : -1;
+    });
+  }, [open, isSelected, menuItems]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent): void => {
+      const items = menuItems();
+      if (items.length === 0) return;
+      const current = document.activeElement as HTMLElement | null;
+      let idx = items.indexOf(current as HTMLElement);
+      if (idx === -1) return; // el foco está fuera de los ítems: no intervenir
+      let next = -1;
+      switch (e.key) {
+        case 'ArrowDown':
+          next = (idx + 1) % items.length;
+          break;
+        case 'ArrowUp':
+          next = (idx - 1 + items.length) % items.length;
+          break;
+        case 'Home':
+          next = 0;
+          break;
+        case 'End':
+          next = items.length - 1;
+          break;
+        default:
+          return;
+      }
+      e.preventDefault();
+      items[next].focus();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open, menuItems]);
+
+  // Al cerrar: restaura tabIndex=0 en todos (vuelven a ser alcanzables por Tab).
+  useEffect(() => {
+    if (open) return;
+    menuItems().forEach((el) => {
+      el.tabIndex = 0;
+    });
+  }, [open, menuItems, setOpen]);
+}
+
 /** Chevron pequeño de los botones de badge. */
 function Chevron(): JSX.Element {
   return (
@@ -132,7 +200,9 @@ function LayoutModeBadgeInner({ isDesktopViewport }: { isDesktopViewport: boolea
   const { mode, setMode } = useLayoutMode();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   useDismissOnOutside(open, setOpen, rootRef);
+  useMenuArrowNavigation(open, menuRef, (v) => v === mode, setOpen);
 
   const effective: 'mobile' | 'desktop' =
     mode === 'auto' ? (isDesktopViewport ? 'desktop' : 'mobile') : mode;
@@ -179,6 +249,7 @@ function LayoutModeBadgeInner({ isDesktopViewport }: { isDesktopViewport: boolea
 
       {open && (
         <div
+          ref={menuRef}
           role="menu"
           aria-label="Cambiar modo de layout"
           className="absolute left-0 top-full z-50 mt-1.5 w-44 rounded-lg border border-gray-200 bg-gray-50 py-1 shadow-lg"
@@ -196,6 +267,7 @@ function LayoutModeBadgeInner({ isDesktopViewport }: { isDesktopViewport: boolea
                 key={value}
                 type="button"
                 role="menuitemradio"
+                data-value={value}
                 aria-checked={selected}
                 onClick={() => choose(value)}
                 className={cn(
@@ -243,7 +315,9 @@ function ThemeBadgeInner(): JSX.Element {
   const { theme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   useDismissOnOutside(open, setOpen, rootRef);
+  useMenuArrowNavigation(open, menuRef, (v) => v === theme, setOpen);
 
   const choose = useCallback(
     (next: ThemeMode) => {
@@ -287,6 +361,7 @@ function ThemeBadgeInner(): JSX.Element {
 
       {open && (
         <div
+          ref={menuRef}
           role="menu"
           aria-label="Cambiar tema"
           className="absolute left-0 top-full z-50 mt-1.5 w-40 rounded-lg border border-gray-200 bg-gray-50 py-1 shadow-lg"
@@ -304,6 +379,7 @@ function ThemeBadgeInner(): JSX.Element {
                 key={value}
                 type="button"
                 role="menuitemradio"
+                data-value={value}
                 aria-checked={selected}
                 onClick={() => choose(value)}
                 className={cn(

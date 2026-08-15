@@ -196,6 +196,43 @@ test.describe('badge interactivo del modo de layout', () => {
     await expect(bottomNav).toBeHidden();
     await expect(headerDesktopNav).toBeVisible();
   });
+
+  test('navega con las flechas (ARIA menú) y elige con Enter', async ({ page }) => {
+    const email = randomEmail('bdg');
+    await registerAndVerify(page.request, email);
+    await login(page, email);
+    await page.goto('/dashboard');
+
+    await page.getByLabel('Modo de layout: Escritorio').click();
+    const menu = page.getByRole('menu', { name: 'Cambiar modo de layout' });
+    await expect(menu).toBeVisible();
+
+    // Roving tabindex: al abrir, solo la opción seleccionada es alcanzable por Tab.
+    const auto = menu.getByRole('menuitemradio', { name: /Automático/ });
+    const movil = menu.getByRole('menuitemradio', { name: /Móvil/ });
+    await expect(auto).toHaveAttribute('tabindex', '0');
+    await expect(movil).toHaveAttribute('tabindex', '-1');
+
+    await page.keyboard.press('Tab');
+    await expect(auto).toBeFocused();
+
+    // Flechas: bajan y suben, Home/End saltan a los extremos.
+    await page.keyboard.press('ArrowDown');
+    await expect(movil).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(auto).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(menu.getByRole('menuitemradio', { name: /Escritorio/ })).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(auto).toBeFocused();
+
+    // Enter elige la opción activa: cierra el menú y cambia el modo al instante.
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await expect(menu).toBeHidden();
+    await expect(page.getByLabel('Modo de layout: Móvil · forzado')).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Navegación móvil' })).toBeVisible();
+  });
 });
 
 // -----------------------------------------------------------------------------

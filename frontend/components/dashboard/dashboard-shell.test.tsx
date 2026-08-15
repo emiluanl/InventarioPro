@@ -99,6 +99,41 @@ describe('badge del modo de layout', () => {
     expect(link).toHaveAttribute('href', '/settings');
   });
 
+  it('navega con las flechas (patrón ARIA menú / roving tabindex)', async () => {
+    const user = userEvent.setup();
+    renderBadges();
+
+    await user.click(screen.getByLabelText('Modo de layout: Escritorio'));
+    const auto = screen.getByRole('menuitemradio', { name: /Automático/ });
+    const movil = screen.getByRole('menuitemradio', { name: /Móvil/ });
+    const escritorio = screen.getByRole('menuitemradio', { name: /Escritorio/ });
+
+    // Al abrir, solo el ítem SELECCIONADO es alcanzable por Tab (roving tabindex).
+    expect(auto).toHaveAttribute('tabindex', '0');
+    expect(movil).toHaveAttribute('tabindex', '-1');
+    expect(escritorio).toHaveAttribute('tabindex', '-1');
+
+    await user.tab(); // Tab entra por la opción seleccionada (Automático).
+    expect(auto).toHaveFocus();
+
+    await user.keyboard('{ArrowDown}');
+    expect(movil).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(escritorio).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    expect(movil).toHaveFocus();
+    await user.keyboard('{End}');
+    expect(escritorio).toHaveFocus();
+    await user.keyboard('{Home}');
+    expect(auto).toHaveFocus();
+
+    // Enter elige la opción activa: cierra el menú y cambia el modo.
+    await user.keyboard('{ArrowDown}');
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('menu', { name: 'Cambiar modo de layout' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Modo de layout: Móvil · forzado')).toBeInTheDocument();
+  });
+
   it('se cierra al salir el foco del menú (Tab) y restaura el foco al elegir una opción', async () => {
     const user = userEvent.setup();
     renderBadges();
@@ -141,6 +176,24 @@ describe('badge del tema', () => {
     expect(screen.getByLabelText('Tema: Claro')).toBeInTheDocument();
     expect(document.documentElement.classList.contains('light')).toBe(true);
     expect(window.localStorage.getItem('inventariopro:theme')).toBe('light');
+  });
+
+  it('navega con las flechas y elige la opción activa', async () => {
+    const user = userEvent.setup();
+    renderBadges();
+
+    await user.click(screen.getByLabelText('Tema: Oscuro'));
+    await user.tab(); // foco al ítem seleccionado (Oscuro)
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitemradio', { name: /Claro/ })).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitemradio', { name: /Sistema/ })).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    expect(screen.getByRole('menuitemradio', { name: /Claro/ })).toHaveFocus();
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByLabelText('Tema: Claro')).toBeInTheDocument();
+    expect(document.documentElement.classList.contains('light')).toBe(true);
   });
 
   it('el modo Sistema sigue prefers-color-scheme del SO', async () => {

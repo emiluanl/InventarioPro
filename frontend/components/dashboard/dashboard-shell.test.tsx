@@ -207,8 +207,9 @@ describe('badge del tema', () => {
     await user.click(badge);
     await user.click(screen.getByRole('menuitemradio', { name: /Sistema/ }));
 
-    // El stub de matchMedia devuelve prefers-color-scheme: dark = false → claro.
-    expect(screen.getByLabelText('Tema: Sistema')).toBeInTheDocument();
+    // El stub de matchMedia (prefers-color-scheme dark = false) resuelve claro,
+    // así que el badge muestra el resultado efectivo.
+    expect(screen.getByLabelText('Tema: Sistema · Claro')).toBeInTheDocument();
     expect(document.documentElement.classList.contains('light')).toBe(true);
     expect(window.localStorage.getItem('inventariopro:theme')).toBe('system');
   });

@@ -312,7 +312,7 @@ function ThemeBadge(): JSX.Element {
 }
 
 function ThemeBadgeInner(): JSX.Element {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, isLight } = useTheme();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -331,7 +331,16 @@ function ThemeBadgeInner(): JSX.Element {
     [setTheme, rootRef],
   );
 
-  const label = theme === 'light' ? 'Claro' : theme === 'system' ? 'Sistema' : 'Oscuro';
+  // El badge muestra el resultado EFECTIVO: con 'system' se ve qué resolvió
+  // el SO (ej. 'Sistema · Oscuro'), como el badge de layout con '· forzado'.
+  const label =
+    theme === 'light'
+      ? 'Claro'
+      : theme === 'dark'
+        ? 'Oscuro'
+        : isLight
+          ? 'Sistema · Claro'
+          : 'Sistema · Oscuro';
 
   return (
     <div ref={rootRef} className="relative shrink-0">
@@ -344,7 +353,7 @@ function ThemeBadgeInner(): JSX.Element {
         onClick={() => setOpen(true)}
         className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border border-gray-300 bg-gray-100 px-2.5 py-0.5 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-200"
       >
-        {theme === 'light' ? (
+        {isLight ? (
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="4" />
             <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />

@@ -76,6 +76,9 @@ test('móvil: sin overflow, nav inferior, filtros plegables y tarjetas en la lis
   //    los puntos que rompían el ancho del teléfono).
   await expectNoHorizontalOverflow(page);
 
+  // 1b) El badge del header indica el modo efectivo (auto + pantalla chica).
+  await expect(page.getByLabel('Modo de layout: Móvil')).toBeVisible();
+
   // 2) Nav inferior visible; la cabecera de escritorio (con "Reportes") oculta.
   const bottomNav = page.getByRole('navigation', { name: 'Navegación móvil' });
   await expect(bottomNav).toBeVisible();
@@ -149,6 +152,7 @@ test.describe('toggle forzado de móvil en escritorio (Propuesta B)', () => {
     // El chrome cambia al instante: barra inferior visible, cabecera oculta.
     await expect(bottomNav).toBeVisible();
     await expect(headerDesktopNav).toBeHidden();
+    await expect(page.getByLabel('Modo de layout: Móvil · forzado')).toBeVisible();
 
     // En el dashboard: filtros plegados (botón "Filtros") y vista Lista en
     // tarjetas móviles, sin tabla, aunque la pantalla sea de escritorio.
@@ -226,6 +230,7 @@ test.describe('toggle forzado de escritorio en pantalla chica (Propuesta C)', ()
     await expect(headerDesktopNav).toBeVisible();
     await expect(page.getByPlaceholder('Buscar por nombre, marca, modelo...')).toBeVisible();
     await expect(page.getByRole('button', { name: /Filtros/ })).toBeHidden();
+    await expect(page.getByLabel('Modo de layout: Escritorio · forzado')).toBeVisible();
 
     // Vista Lista: la tabla aparece (no las tarjetas móviles) y el desborde
     // queda contenido: el header envuelve y la tabla scrollea hacia adentro.
@@ -350,6 +355,7 @@ test.describe('tablet 1024px (lg): transición a escritorio (Propuesta D)', () =
     await expect(headerDesktopNav).toBeVisible();
     await expect(page.getByRole('button', { name: /Filtros/ })).toBeHidden();
     await expect(page.getByPlaceholder('Buscar por nombre, marca, modelo...')).toBeVisible();
+    await expect(page.getByLabel('Modo de layout: Escritorio')).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     // Grid de tarjetas con 3 columnas (lg).

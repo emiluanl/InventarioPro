@@ -390,6 +390,47 @@ test.describe('tema oscuro/claro', () => {
       await ctx.close();
     }
   });
+
+  test('el label "Sistema · X" se actualiza EN VIVO al cambiar el SO sin recargar', async ({
+    browser,
+  }) => {
+    const ctx = await browser.newContext({ colorScheme: 'dark' });
+    const page = await ctx.newPage();
+    try {
+      const email = randomEmail('thl');
+      await registerAndVerify(page.request, email);
+      await login(page, email);
+      await page.goto('/settings');
+
+      await page.getByLabel('Tema de la app').selectOption('system');
+      await expect(page.getByLabel('Tema: Sistema · Oscuro')).toBeVisible();
+
+      // El SO cambia a claro EN CALIENTE (emulateMedia dispara el media query):
+      // sin recargar, el provider re-resuelve y el badge/selector lo reflejan.
+      await page.emulateMedia({ colorScheme: 'light' });
+      await expect(page.getByLabel('Tema: Sistema · Claro')).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.classList.contains('light')),
+      ).toBe(true);
+      // El selector de Configuración también se actualiza en vivo.
+      await expect(page.getByLabel('Tema de la app').locator('option:checked')).toHaveText(
+        /→ Claro/,
+      );
+      // La elección del usuario no cambió: sigue siendo 'system'.
+      expect(
+        await page.evaluate(() => localStorage.getItem('inventariopro:theme')),
+      ).toBe('system');
+
+      // Y de vuelta a oscuro: el label vuelve sin recargar.
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await expect(page.getByLabel('Tema: Sistema · Oscuro')).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.classList.contains('light')),
+      ).toBe(false);
+    } finally {
+      await ctx.close();
+    }
+  });
 });
 
 // -----------------------------------------------------------------------------

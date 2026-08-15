@@ -505,6 +505,26 @@ test.describe('tema oscuro/claro', () => {
         'Sistema (según el dispositivo) → Oscuro',
       );
       expect(await isLight()).toBe(false);
+
+      // El SO cambia a claro EN CALIENTE (emulateMedia): ambas superficies
+      // siguen coincidiendo sin recargar, y la elección 'system' se mantiene.
+      await page.emulateMedia({ colorScheme: 'light' });
+      await expect(page.getByLabel('Tema: Sistema · Claro')).toBeVisible();
+      await expect(select.locator('option:checked')).toHaveText(
+        'Sistema (según el dispositivo) → Claro',
+      );
+      expect(await isLight()).toBe(true);
+      expect(
+        await page.evaluate(() => localStorage.getItem('inventariopro:theme')),
+      ).toBe('system');
+
+      // Y de vuelta a oscuro en caliente: ambas vuelven a '→ Oscuro'.
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await expect(page.getByLabel('Tema: Sistema · Oscuro')).toBeVisible();
+      await expect(select.locator('option:checked')).toHaveText(
+        'Sistema (según el dispositivo) → Oscuro',
+      );
+      expect(await isLight()).toBe(false);
     } finally {
       await ctx.close();
     }

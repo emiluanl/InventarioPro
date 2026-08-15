@@ -8,6 +8,13 @@ frontend/.next-e2e/
 frontend/.next-pwa/
 frontend/out/
 
+# App de escritorio (desktop/): stack ensamblado, iconos e instaladores.
+# desktop/certs/ contiene la clave privada de firma (pfx) — nunca se commitea.
+desktop/dist/
+desktop/resources/
+desktop/build/
+desktop/certs/
+
 # Playwright (e2e)
 e2e/.tmp/
 playwright-report/

@@ -1,0 +1,58 @@
+# =============================================================================
+# electron-builder - empaqueta la app de escritorio de InventarioPro
+# =============================================================================
+# La app mete el stack completo en "extraResources" (NO en el asar): el backend
+# y el frontend se lanzan como procesos Node hijos (ELECTRON_RUN_AS_NODE) y
+# necesitan archivos reales en disco; dentro del asar no serían legibles.
+# Resultado: resources/stack/ al lado del ejecutable.
+# =============================================================================
+
+appId: com.inventariopro.desktop
+productName: InventarioPro
+copyright: InventarioPro
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - main.js
+  - preload.js
+
+extraResources:
+  - from: resources
+    to: stack
+    filter:
+      - '**/*'
+      - '!**/*.map'
+
+# El backend usa better-sqlite3 (módulo nativo): se reconstruye para el ABI de
+# Electron en scripts/build.sh y viaja en extraResources (fuera del asar).
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+
+nsis:
+  oneClick: true
+  perMachine: false
+  deleteAppDataOnUninstall: false
+  artifactName: InventarioPro-Setup-${version}.${ext}
+  shortcutName: InventarioPro
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  icon: build/icon.png
+  category: public.app-category.productivity
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  icon: build/icon.png
+  category: Utility

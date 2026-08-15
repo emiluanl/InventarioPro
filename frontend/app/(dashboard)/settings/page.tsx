@@ -11,10 +11,25 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { changePasswordSchema, type ChangePasswordInput } from '@/lib/validations/auth';
 import { useAuth } from '@/hooks/use-auth';
 import { extractErrorMessage } from '@/lib/api';
+import { useLayoutMode } from '@/lib/layout-mode';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert } from '@/components/ui/alert';
+
+function LayoutModeSelect(): JSX.Element {
+  const { mode, setMode } = useLayoutMode();
+  return (
+    <select
+      value={mode}
+      onChange={(e) => setMode(e.target.value as 'auto' | 'mobile')}
+      className="mt-1 w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm"
+    >
+      <option value="auto">Automático (según pantalla)</option>
+      <option value="mobile">Forzado móvil</option>
+    </select>
+  );
+}
 
 export default function SettingsPage(): JSX.Element {
   const { user, changePassword, deleteAccount, logout } = useAuth();
@@ -73,6 +88,23 @@ export default function SettingsPage(): JSX.Element {
           Cuenta: <span className="font-medium text-gray-900">{user?.email}</span>
         </p>
       </div>
+
+      {/* --------------------------------------------------------------------- */}
+      {/* VISTA (modo de layout)                                                */}
+      {/* --------------------------------------------------------------------- */}
+      <section className="rounded-lg border border-gray-200 bg-gray-100 p-6">
+        <h2 className="text-lg font-semibold text-gray-900">Vista</h2>
+        <p className="mt-1 text-sm text-gray-700">
+          Elige el modo de layout. “Automático” se adapta al tamaño de la pantalla
+          (móvil o escritorio); “Forzado móvil” usa la barra de navegación inferior y
+          la vista compacta aunque estés en una pantalla grande.
+        </p>
+
+        <label className="mt-4 block max-w-xs">
+          <span className="text-sm font-medium text-gray-800">Modo de vista</span>
+          <LayoutModeSelect />
+        </label>
+      </section>
 
       {/* --------------------------------------------------------------------- */}
       {/* CAMBIO DE CONTRASEÑA                                                  */}

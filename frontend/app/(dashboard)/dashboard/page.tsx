@@ -13,10 +13,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { Product, ProductsFilters } from '@/lib/types';
 import { PRODUCT_STATUS_LABELS } from '@/lib/types';
 import { formatCurrency } from '@/lib/format';
+import { useLayoutMode } from '@/lib/layout-mode';
+import { cn } from '@/lib/utils';
 
 function DashboardInner(): JSX.Element {
   const params = useSearchParams();
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const { forced } = useLayoutMode();
 
   const filters: ProductsFilters = useMemo(
     () => ({
@@ -89,13 +92,15 @@ function DashboardInner(): JSX.Element {
       {data && data.items.length > 0 && (
         <>
           {view === 'grid' ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div
+              className={cn('grid gap-4', forced ? '' : 'sm:grid-cols-2 lg:grid-cols-3')}
+            >
               {data.items.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
             </div>
           ) : (
-            <ProductsTable products={data.items} onDelete={handleDelete} />
+            <ProductsTable products={data.items} onDelete={handleDelete} forced={forced} />
           )}
 
           <Pagination pagination={data.pagination} />
@@ -108,12 +113,64 @@ function DashboardInner(): JSX.Element {
 function ProductsTable({
   products,
   onDelete,
+  forced = false,
 }: {
   products: Product[];
   onDelete: (id: string) => void;
+  /** true con el modo móvil forzado: tarjetas compactas aunque haya espacio. */
+  forced?: boolean;
 }): JSX.Element {
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-gray-100">
+    <>
+      {/* En móvil la tabla desborda el ancho del teléfono: se reemplaza por
+          tarjetas compactas. La tabla queda para ≥md (tablet/escritorio), o
+          siempre con el modo móvil forzado. */}
+      <div className={cn('space-y-2', forced ? '' : 'md:hidden')}>
+        {products.map((p) => (
+          <div
+            key={p.id}
+            className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-100 p-3"
+          >
+            <div className="min-w-0 flex-1">
+              <Link
+                href={`/products/${p.id}`}
+                className="block truncate font-medium text-gray-900 hover:text-accent-300"
+              >
+                {p.nombre}
+              </Link>
+              <p className="mt-0.5 truncate text-xs text-gray-600">
+                {[p.marca && p.marca, p.categoria?.nombre && p.categoria.nombre]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+              <p className="mt-0.5 text-xs text-gray-600">
+                {formatCurrency(p.precio, p.moneda)} · {p.tiempo_posesion}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="text-xs text-gray-700">{PRODUCT_STATUS_LABELS[p.estado]}</span>
+              <button
+                type="button"
+                onClick={() => onDelete(p.id)}
+                aria-label={`Borrar ${p.nombre}`}
+                className="rounded-md p-1.5 text-red-600 transition hover:bg-red-50 hover:text-red-700"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div
+        className={cn(
+          'overflow-x-auto rounded-lg border border-gray-200 bg-gray-100',
+          forced ? 'hidden' : 'hidden md:block',
+        )}
+      >
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50 text-left text-xs font-medium uppercase text-gray-600">
           <tr>
@@ -156,7 +213,8 @@ function ProductsTable({
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
 

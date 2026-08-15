@@ -15,9 +15,19 @@ vi.mock('@/hooks/use-auth', () => ({
 }));
 
 import { useAuth } from '@/hooks/use-auth';
+import { LayoutModeProvider } from '@/lib/layout-mode';
 import SettingsPage from './page';
 
 const mockUseAuth = vi.mocked(useAuth);
+
+/** Renderiza la página dentro del provider que requiere (LayoutMode). */
+function renderSettings(): void {
+  render(
+    <LayoutModeProvider>
+      <SettingsPage />
+    </LayoutModeProvider>,
+  );
+}
 
 const changePassword = vi.fn();
 const deleteAccount = vi.fn();
@@ -39,8 +49,8 @@ beforeEach(() => {
 });
 
 describe('SettingsPage', () => {
-  it('muestra el email y las dos secciones', () => {
-    render(<SettingsPage />);
+  it('muestra el email y las secciones', () => {
+    renderSettings();
     expect(screen.getByRole('heading', { name: 'Configuración' })).toBeInTheDocument();
     expect(screen.getByText('test@example.com')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Cambiar contraseña' })).toBeInTheDocument();
@@ -49,7 +59,7 @@ describe('SettingsPage', () => {
 
   it('muestra un error si las contraseñas nuevas no coinciden', async () => {
     const user = userEvent.setup();
-    render(<SettingsPage />);
+    renderSettings();
 
     await user.type(screen.getByLabelText('Contraseña actual'), 'OldPass123');
     await user.type(screen.getByLabelText('Nueva contraseña'), 'NewPass456');
@@ -63,7 +73,7 @@ describe('SettingsPage', () => {
   it('llama a changePassword con los datos y muestra el mensaje de éxito', async () => {
     changePassword.mockResolvedValue('Contraseña actualizada. Inicia sesión con tu nueva contraseña.');
     const user = userEvent.setup();
-    render(<SettingsPage />);
+    renderSettings();
 
     await user.type(screen.getByLabelText('Contraseña actual'), 'OldPass123');
     await user.type(screen.getByLabelText('Nueva contraseña'), 'NewPass456');
@@ -85,7 +95,7 @@ describe('SettingsPage', () => {
   it('muestra el error del servidor si la contraseña actual es incorrecta', async () => {
     changePassword.mockRejectedValue(new Error('La contraseña actual no es correcta.'));
     const user = userEvent.setup();
-    render(<SettingsPage />);
+    renderSettings();
 
     await user.type(screen.getByLabelText('Contraseña actual'), 'WrongPass1');
     await user.type(screen.getByLabelText('Nueva contraseña'), 'NewPass456');
@@ -100,7 +110,7 @@ describe('SettingsPage', () => {
   it('la eliminación exige el doble paso y la contraseña', async () => {
     deleteAccount.mockResolvedValue('Tu cuenta y todos tus datos fueron eliminados.');
     const user = userEvent.setup();
-    render(<SettingsPage />);
+    renderSettings();
 
     // Paso 1: botón que abre la confirmación.
     await user.click(screen.getByRole('button', { name: 'Eliminar mi cuenta' }));
@@ -121,7 +131,7 @@ describe('SettingsPage', () => {
   it('muestra el error si la contraseña de eliminación es incorrecta', async () => {
     deleteAccount.mockRejectedValue(new Error('La contraseña no es correcta.'));
     const user = userEvent.setup();
-    render(<SettingsPage />);
+    renderSettings();
 
     await user.click(screen.getByRole('button', { name: 'Eliminar mi cuenta' }));
     await user.type(screen.getByLabelText(/Confirma con tu contraseña/), 'WrongPass1');

@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, type JSX } from 'react';
 
 import type { ProductsFilters, ProductStatus, PurchaseType, WarrantyStatus } from '@/lib/types';
 import { PRODUCT_STATUS_LABELS, PURCHASE_TYPE_LABELS, WARRANTY_LABELS } from '@/lib/types';
+import { useLayoutMode } from '@/lib/layout-mode';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -29,6 +30,7 @@ interface FilterBarProps {
 export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
   const router = useRouter();
   const params = useSearchParams();
+  const { forced } = useLayoutMode();
 
   const [search, setSearch] = useState<string>(params?.get('search') ?? '');
   const [estado, setEstado] = useState<string>(params?.get('estado') ?? '');
@@ -36,6 +38,13 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
   const [warranty, setWarranty] = useState<string>(params?.get('warranty_status') ?? '');
   const [sortBy, setSortBy] = useState<string>(params?.get('sort_by') ?? 'fecha_compra');
   const [sortOrder, setSortOrder] = useState<string>(params?.get('sort_order') ?? 'desc');
+  // En móvil los filtros vienen plegados (el botón "Filtros" los despliega);
+  // en escritorio (lg) el panel siempre está visible.
+  const [filtersOpen, setFiltersOpen] = useState<boolean>(false);
+
+  // Cuántos filtros hay activos (sin contar orden/paginación): para el badge
+  // del botón "Filtros" en móvil.
+  const activeFilterCount = [estado, tipo, warranty].filter(Boolean).length + (search.trim() ? 1 : 0);
 
   const applyFilters = useCallback(
     (overrides: Partial<ProductsFilters> = {}) => {
@@ -81,7 +90,50 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
 
   return (
     <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-100 p-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      {/* Botón que despliega/pliega los filtros: solo en móvil (<lg) o con el
+          modo móvil forzado (toggle de Configuración). */}
+      <div
+        className={cn('flex items-center justify-between', forced ? '' : 'lg:hidden')}
+      >
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          aria-expanded={filtersOpen}
+          className="flex items-center gap-2 rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-200"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            className={cn('transition-transform', filtersOpen && 'rotate-180')}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+          Filtros
+          {activeFilterCount > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-600 px-1.5 text-xs font-semibold text-white">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      <div
+        className={cn(
+          'grid gap-3 sm:grid-cols-2 lg:grid-cols-5',
+          forced
+            ? filtersOpen
+              ? 'grid'
+              : 'hidden'
+            : filtersOpen
+              ? 'grid'
+              : 'hidden lg:grid',
+        )}
+      >
         <div className="lg:col-span-2">
           <Input
             placeholder="Buscar por nombre, marca, modelo..."
@@ -140,7 +192,9 @@ export function FilterBar({ view, onViewChange }: FilterBarProps): JSX.Element {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm">
+        {/* flex-wrap: en móvil "Ordenar por" + selects + Limpiar se parten en
+            varias líneas en vez de desbordar el ancho del teléfono. */}
+        <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-gray-700">Ordenar por</span>
           <select
             value={sortBy}

@@ -2,11 +2,13 @@
 
 import { useState, type JSX } from 'react';
 import { cn } from '@/lib/utils';
+import { useLayoutMode } from '@/lib/layout-mode';
 
 import { ChatPanel } from './chat-panel';
 
 export function ChatWidget(): JSX.Element {
   const [open, setOpen] = useState<boolean>(false);
+  const { forced } = useLayoutMode();
 
   return (
     <>
@@ -16,7 +18,10 @@ export function ChatWidget(): JSX.Element {
         onClick={() => setOpen((v) => !v)}
         aria-label="Abrir chat con asistente"
         className={cn(
-          'fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-accent-600 text-white shadow-lg transition hover:bg-accent-700 sm:right-6',
+          // En móvil flota por ENCIMA de la barra de navegación inferior (también
+          // cuando el modo móvil está forzado en pantalla grande).
+          'fixed bottom-20 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-accent-600 text-white shadow-lg transition hover:bg-accent-700 sm:right-6',
+          forced ? '' : 'lg:bottom-4',
           'focus:outline-none focus:ring-4 focus:ring-accent-300',
         )}
       >

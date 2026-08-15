@@ -53,6 +53,20 @@ beforeEach(() => {
   // dejamos ambos limpios para que cada test parta del tema oscuro.
   window.localStorage.clear();
   document.documentElement.classList.remove('light');
+  // ThemeProvider se suscribe a prefers-color-scheme: jsdom no tiene
+  // matchMedia, así que lo simulamos (dark = false → el modo Sistema resuelve claro).
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
 });
 
 describe('SettingsPage', () => {
@@ -77,6 +91,19 @@ describe('SettingsPage', () => {
     expect(select).toHaveValue('light');
     expect(document.documentElement.classList.contains('light')).toBe(true);
     expect(window.localStorage.getItem('inventariopro:theme')).toBe('light');
+  });
+
+  it('el modo Sistema sigue la preferencia del SO (aquí: claro)', async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    const select = screen.getByLabelText('Tema de la app');
+    await user.selectOptions(select, 'system');
+
+    expect(select).toHaveValue('system');
+    // matchMedia stub: prefers-color-scheme dark = false → tema claro activo.
+    expect(document.documentElement.classList.contains('light')).toBe(true);
+    expect(window.localStorage.getItem('inventariopro:theme')).toBe('system');
   });
 
   it('muestra un error si las contraseñas nuevas no coinciden', async () => {

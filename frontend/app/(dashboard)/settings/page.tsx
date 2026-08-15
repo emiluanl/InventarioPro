@@ -43,6 +43,7 @@ function ThemeSelect(): JSX.Element {
     >
       <option value="dark">Oscuro (predeterminado)</option>
       <option value="light">Claro</option>
+      <option value="system">Sistema (según el dispositivo)</option>
     </select>
   );
 }
@@ -130,8 +131,9 @@ export default function SettingsPage(): JSX.Element {
         <h2 className="text-lg font-semibold text-gray-900">Tema</h2>
         <p className="mt-1 text-sm text-gray-700">
           Elige la apariencia de la app. “Oscuro” es el tema predeterminado
-          (estilo Grok/X); “Claro” usa superficies blancas y texto oscuro.
-          La elección se guarda en este navegador.
+          (estilo Grok/X); “Claro” usa superficies blancas y texto oscuro;
+          “Sistema” sigue la preferencia del dispositivo y se actualiza en
+          vivo si la cambias. La elección se guarda en este navegador.
         </p>
 
         <label className="mt-4 block max-w-xs">

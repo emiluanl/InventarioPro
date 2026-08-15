@@ -257,7 +257,7 @@ function ThemeBadgeInner(): JSX.Element {
     [setTheme, rootRef],
   );
 
-  const label = theme === 'light' ? 'Claro' : 'Oscuro';
+  const label = theme === 'light' ? 'Claro' : theme === 'system' ? 'Sistema' : 'Oscuro';
 
   return (
     <div ref={rootRef} className="relative shrink-0">
@@ -295,6 +295,7 @@ function ThemeBadgeInner(): JSX.Element {
             [
               ['dark', 'Oscuro', 'Predeterminado'],
               ['light', 'Claro', 'Superficies blancas'],
+              ['system', 'Sistema', 'Sigue la preferencia del dispositivo'],
             ] as const
           ).map(([value, name, hint]) => {
             const selected = theme === value;

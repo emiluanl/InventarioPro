@@ -265,6 +265,34 @@ test.describe('tema oscuro/claro', () => {
       await page.evaluate(() => document.documentElement.classList.contains('light')),
     ).toBe(true);
   });
+
+  test('el modo Sistema sigue prefers-color-scheme del SO y cambia en vivo', async ({
+    browser,
+  }) => {
+    // Contexto con el SO en MODO OSCURO (prefers-color-scheme: dark).
+    const ctx = await browser.newContext({ colorScheme: 'dark' });
+    const page = await ctx.newPage();
+    try {
+      const email = randomEmail('ths');
+      await registerAndVerify(page.request, email);
+      await login(page, email);
+      await page.goto('/settings');
+
+      // Con el SO en oscuro, activar "Sistema" deja el tema oscuro (sin .light).
+      const select = page.getByLabel('Tema de la app');
+      await expect(select).toHaveValue('dark');
+      await select.selectOption('system');
+      await expect(page.getByLabel('Tema: Sistema')).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.classList.contains('light')),
+      ).toBe(false);
+      expect(
+        await page.evaluate(() => localStorage.getItem('inventariopro:theme')),
+      ).toBe('system');
+    } finally {
+      await ctx.close();
+    }
+  });
 });
 
 // -----------------------------------------------------------------------------

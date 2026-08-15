@@ -142,4 +142,18 @@ describe('badge del tema', () => {
     expect(document.documentElement.classList.contains('light')).toBe(true);
     expect(window.localStorage.getItem('inventariopro:theme')).toBe('light');
   });
+
+  it('el modo Sistema sigue prefers-color-scheme del SO', async () => {
+    const user = userEvent.setup();
+    renderBadges();
+
+    const badge = screen.getByLabelText('Tema: Oscuro');
+    await user.click(badge);
+    await user.click(screen.getByRole('menuitemradio', { name: /Sistema/ }));
+
+    // El stub de matchMedia devuelve prefers-color-scheme: dark = false → claro.
+    expect(screen.getByLabelText('Tema: Sistema')).toBeInTheDocument();
+    expect(document.documentElement.classList.contains('light')).toBe(true);
+    expect(window.localStorage.getItem('inventariopro:theme')).toBe('system');
+  });
 });

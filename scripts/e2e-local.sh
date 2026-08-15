@@ -3,12 +3,15 @@
 # test:e2e:local — e2e de Playwright contra el stack de desarrollo local.
 #
 # Hace el ciclo completo (igual que en la sección E2E del README):
-#   1. Levanta el stack dev (docker compose up -d). El e2e conecta a
-#      localhost:5432/6379, que es lo que publica el Postgres/Redis dev.
+#   1. Levanta SOLO la infraestructura (postgres + redis, mismo patrón que
+#      start.sh). Playwright arranca su PROPIO backend/frontend (puertos
+#      3002/3102), así que no hace falta construir las imágenes de la app —
+#      además el build de la imagen backend falla en máquinas sin Python en
+#      la etapa de deps (better-sqlite3 compila desde fuente).
 #   2. Espera a que postgres y redis estén healthy.
 #   3. Crea la BD inventariopro_e2e si aún no existe.
 #   4. Corre Playwright (pasa argumentos extra, p. ej. --trace=on).
-#   5. Baja el stack dev siempre (los volúmenes persisten).
+#   5. Baja la infraestructura siempre (los volúmenes persisten).
 #
 # Uso:  npm run test:e2e:local
 #       npm run test:e2e:local -- --trace=on
@@ -28,8 +31,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "[e2e:local] Levantando el stack dev…"
-docker compose up -d
+echo "[e2e:local] Levantando infraestructura (postgres + redis)…"
+docker compose up -d postgres redis
 
 echo "[e2e:local] Esperando a que postgres/redis estén healthy…"
 for _ in $(seq 1 30); do

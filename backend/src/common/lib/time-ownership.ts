@@ -19,20 +19,26 @@ export interface OwnershipDuration {
 /**
  * Calcula la diferencia entre `from` y `to` (por defecto, ahora).
  * Si `from` es posterior a `to`, devuelve 0 en todo.
+ *
+ * Los @db.Date (fecha_compra, fecha_vencimiento_garantia) se guardan a
+ * medianoche UTC (convención documentada en products/csv.ts y parseDate). Los
+ * cálculos usan componentes UTC para que el resultado no dependa de la zona
+ * horaria del servidor: un producto comprado hoy muestra "0 días" (Recién
+ * adquirido) hasta que rote el día en UTC.
  */
 export function calculateOwnershipDuration(from: Date, to: Date = new Date()): OwnershipDuration {
   if (from > to) {
     return { years: 0, months: 0, days: 0, totalDays: 0 };
   }
 
-  let years = to.getFullYear() - from.getFullYear();
-  let months = to.getMonth() - from.getMonth();
-  let days = to.getDate() - from.getDate();
+  let years = to.getUTCFullYear() - from.getUTCFullYear();
+  let months = to.getUTCMonth() - from.getUTCMonth();
+  let days = to.getUTCDate() - from.getUTCDate();
 
   if (days < 0) {
     months -= 1;
-    const lastMonth = new Date(to.getFullYear(), to.getMonth(), 0);
-    days += lastMonth.getDate();
+    const lastMonth = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), 0));
+    days += lastMonth.getUTCDate();
   }
 
   if (months < 0) {

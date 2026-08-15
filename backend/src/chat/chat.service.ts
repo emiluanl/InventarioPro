@@ -24,6 +24,13 @@ const MAX_TOOL_ROUNDS = 5;
 const FALLBACK_MESSAGE =
   'Ahora mismo no puedo pensar bien. ¿Te importa volver a intentarlo en unos segundos?';
 
+/** Registro de auditoría de una herramienta ejecutada por la IA. */
+interface ToolCallDetail {
+  name: string;
+  arguments: string;
+  result: unknown;
+}
+
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
@@ -56,7 +63,24 @@ export class ChatService {
     // 4) Loop de function calling
     const result = await this.runAgentLoop(userId, history);
 
-    // 5) Persistir la respuesta final del asistente
+    // 5) Auditoría: registrar las herramientas ejecutadas (qué se llamó, con
+    //    qué argumentos y qué devolvió). Son filas auxiliares marcadas por
+    //    function_call (content ''): no van al historial de la IA (buildHistory
+    //    las filtra) ni a la UI (getMessages filtra function_call null).
+    for (const detail of result.toolDetails) {
+      await this.prisma.chatMessage.create({
+        data: {
+          conversation_id: conversation.id,
+          role: ChatRole.ASSISTANT,
+          content: '',
+          function_call: JSON.stringify({ name: detail.name, arguments: detail.arguments }),
+          function_result:
+            detail.result === undefined ? null : JSON.stringify(detail.result),
+        },
+      });
+    }
+
+    // 6) Persistir la respuesta final del asistente
     await this.prisma.chatMessage.create({
       data: {
         conversation_id: conversation.id,
@@ -97,8 +121,10 @@ export class ChatService {
     if (!conversation) {
       throw new NotFoundException('Conversación no encontrada.');
     }
+    // function_call null: las filas de auditoría (function_call/result, content
+    // vacío) no se exponen a la UI, solo viven en la BD.
     return this.prisma.chatMessage.findMany({
-      where: { conversation_id: conversationId },
+      where: { conversation_id: conversationId, function_call: null },
       orderBy: { created_at: 'asc' },
     });
   }
@@ -122,11 +148,14 @@ export class ChatService {
   }
 
   private async buildHistory(userId: string, conversationId: string): Promise<ApiChatMessage[]> {
-    const messages = await this.prisma.chatMessage.findMany({
+    const messages = (await this.prisma.chatMessage.findMany({
       where: { conversation_id: conversationId },
       orderBy: { created_at: 'asc' },
       take: 50, // límite para no enviar historiales infinitos
-    });
+    })).filter(
+      // Las filas de auditoría (function_call seteado) no se envían al LLM.
+      (m) => m.function_call === null,
+    );
 
     const apiMessages: ApiChatMessage[] = [
       { role: 'system', content: SYSTEM_PROMPT + `\n\nUsuario actual: ${userId}` },
@@ -141,8 +170,9 @@ export class ChatService {
   private async runAgentLoop(
     userId: string,
     history: ApiChatMessage[],
-  ): Promise<{ message: string; toolCalls: string[] }> {
+  ): Promise<{ message: string; toolCalls: string[]; toolDetails: ToolCallDetail[] }> {
     const toolCalls: string[] = [];
+    const toolDetails: ToolCallDetail[] = [];
     const currentMessages = [...history];
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -160,14 +190,14 @@ export class ChatService {
       } catch (err) {
         // Fallback amable: nunca devolvemos el error crudo.
         this.logger.warn(`Error de IA: ${(err as Error).message}`);
-        return { message: FALLBACK_MESSAGE, toolCalls };
+        return { message: FALLBACK_MESSAGE, toolCalls, toolDetails };
       }
 
       const choice = response.choices?.[0];
       const message = choice?.message;
 
       if (!message) {
-        return { message: FALLBACK_MESSAGE, toolCalls };
+        return { message: FALLBACK_MESSAGE, toolCalls, toolDetails };
       }
 
       // Si la IA quiere llamar a una o más herramientas...
@@ -195,6 +225,11 @@ export class ChatService {
           }
 
           const result = await this.executor.execute(userId, toolCall.function.name, parsedArgs);
+          toolDetails.push({
+            name: toolCall.function.name,
+            arguments: toolCall.function.arguments,
+            result,
+          });
 
           currentMessages.push({
             role: 'tool',
@@ -209,14 +244,14 @@ export class ChatService {
 
       // Si la IA respondió con texto, terminamos.
       if (message.content) {
-        return { message: message.content, toolCalls };
+        return { message: message.content, toolCalls, toolDetails };
       }
 
       // Sin contenido ni tool_calls: fallback.
-      return { message: FALLBACK_MESSAGE, toolCalls };
+      return { message: FALLBACK_MESSAGE, toolCalls, toolDetails };
     }
 
     // Si agotamos las rondas, fallback.
-    return { message: FALLBACK_MESSAGE, toolCalls };
+    return { message: FALLBACK_MESSAGE, toolCalls, toolDetails };
   }
 }

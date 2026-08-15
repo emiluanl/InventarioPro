@@ -184,8 +184,11 @@ export class ProductsService {
       : null;
 
     if (!fechaVencimiento && dto.duracion_garantia_meses && dto.fecha_compra) {
-      fechaVencimiento = new Date(dto.fecha_compra);
-      fechaVencimiento.setMonth(fechaVencimiento.getMonth() + dto.duracion_garantia_meses);
+      // fecha_compra llega como "YYYY-MM-DD" → medianoche UTC (convención de
+      // parseDate): la aritmética de meses se hace en UTC para que el día
+      // resultante no dependa de la zona horaria del servidor.
+      fechaVencimiento = new Date(`${dto.fecha_compra}T00:00:00Z`);
+      fechaVencimiento.setUTCMonth(fechaVencimiento.getUTCMonth() + dto.duracion_garantia_meses);
     }
 
     const product = await this.prisma.product.create({
@@ -236,8 +239,9 @@ export class ProductsService {
     if (dto.fecha_vencimiento_garantia) {
       fechaVencimiento = new Date(dto.fecha_vencimiento_garantia);
     } else if (dto.duracion_garantia_meses !== undefined && dto.fecha_compra) {
-      fechaVencimiento = new Date(dto.fecha_compra);
-      fechaVencimiento.setMonth(fechaVencimiento.getMonth() + dto.duracion_garantia_meses);
+      // Mismo criterio que en create(): aritmética de meses en UTC.
+      fechaVencimiento = new Date(`${dto.fecha_compra}T00:00:00Z`);
+      fechaVencimiento.setUTCMonth(fechaVencimiento.getUTCMonth() + dto.duracion_garantia_meses);
     }
 
     const data: Prisma.ProductUpdateInput = {

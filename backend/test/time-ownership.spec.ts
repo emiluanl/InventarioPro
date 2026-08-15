@@ -42,6 +42,23 @@ describe('calculateOwnershipDuration', () => {
     expect(result.months).toBe(3);
     expect(result.days).toBe(10);
   });
+
+  // Los @db.Date llegan a medianoche UTC (convención de products/csv.ts): el
+  // cálculo usa componentes UTC para que la antigüedad no dependa de la zona
+  // horaria del servidor (en UTC-3 un producto comprado hoy mostraba "1 día").
+  it('muestra 0 días el mismo día (aunque sea tarde en el día UTC)', () => {
+    const from = new Date('2026-08-15T00:00:00.000Z');
+    const to = new Date('2026-08-15T23:59:00.000Z');
+    const result = calculateOwnershipDuration(from, to);
+    expect(result).toEqual({ years: 0, months: 0, days: 0, totalDays: 0 });
+  });
+
+  it('suma 1 día al rotar el día UTC', () => {
+    const from = new Date('2026-08-15T00:00:00.000Z');
+    const to = new Date('2026-08-16T00:00:00.000Z');
+    const result = calculateOwnershipDuration(from, to);
+    expect(result).toEqual({ years: 0, months: 0, days: 1, totalDays: 1 });
+  });
 });
 
 describe('formatOwnership', () => {

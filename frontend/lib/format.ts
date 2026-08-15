@@ -16,17 +16,43 @@ export function formatCurrency(value: string | number, currency: string): string
   }
 }
 
+function formatDateIn(iso: string, timeZone?: string): string {
+  return new Intl.DateTimeFormat('es-ES', {
+    timeZone,
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(iso));
+}
+
+/**
+ * Formatea una fecha de PRODUCTO (fecha_compra, fecha_vencimiento_garantia).
+ *
+ * El backend guarda estos @db.Date a medianoche UTC (convención documentada en
+ * backend/src/products/csv.ts y parseDate). Se formatean en UTC para que el día
+ * mostrado sea exactamente el ingresado, sin desplazarse según la zona horaria
+ * del usuario (p. ej. en UTC-3 "2026-08-15" se mostraba como "14 ago 2026").
+ */
 export function formatDate(iso: string | null): string {
   if (!iso) return '—';
-  try {
-    return new Intl.DateTimeFormat('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return formatDateIn(iso, 'UTC');
+}
+
+/**
+ * Convierte el ISO que devuelve la API ("2026-08-15T00:00:00.000Z") al formato
+ * "YYYY-MM-DD" que espera un <input type="date">, usando los componentes UTC
+ * (misma convención que formatDate). Devuelve '' si no hay fecha válida.
+ */
+export function toDateInputValue(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export function formatBytes(bytes: number | null): string {
@@ -45,5 +71,6 @@ export function formatRelativeTime(iso: string, now: Date = new Date()): string 
   if (hours < 24) return `hace ${hours} h`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `hace ${days} día${days === 1 ? '' : 's'}`;
-  return formatDate(iso);
+  // Timestamps reales (created_at de notificaciones): se muestran en hora local.
+  return formatDateIn(iso);
 }

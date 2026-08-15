@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert } from '@/components/ui/alert';
 import { extractErrorMessage } from '@/lib/api';
+import { toDateInputValue } from '@/lib/format';
 import type { Product, ProductStatus, PurchaseType } from '@/lib/types';
 import { PRODUCT_STATUS_LABELS, PURCHASE_TYPE_LABELS } from '@/lib/types';
 
@@ -59,7 +60,7 @@ export function ProductForm({ mode, initialProduct }: ProductFormProps): JSX.Ele
       marca: initialProduct?.marca ?? '',
       modelo: initialProduct?.modelo ?? '',
       descripcion: initialProduct?.descripcion ?? '',
-      fecha_compra: initialProduct?.fecha_compra ?? '',
+      fecha_compra: toDateInputValue(initialProduct?.fecha_compra),
       lugar_compra: initialProduct?.lugar_compra ?? '',
       tipo_compra: initialProduct?.tipo_compra ?? 'FISICO',
       precio: initialProduct ? Number(initialProduct.precio) : 0,
@@ -67,7 +68,7 @@ export function ProductForm({ mode, initialProduct }: ProductFormProps): JSX.Ele
       metodo_pago: initialProduct?.metodo_pago ?? '',
       numero_serie: initialProduct?.numero_serie ?? '',
       duracion_garantia_meses: initialProduct?.duracion_garantia_meses ?? null,
-      fecha_vencimiento_garantia: initialProduct?.fecha_vencimiento_garantia ?? '',
+      fecha_vencimiento_garantia: toDateInputValue(initialProduct?.fecha_vencimiento_garantia),
       estado: initialProduct?.estado ?? 'NUEVO',
       notas: initialProduct?.notas ?? '',
       tags: initialProduct?.tags ?? '',
@@ -79,11 +80,27 @@ export function ProductForm({ mode, initialProduct }: ProductFormProps): JSX.Ele
   const watchDuracion = useWatch({ control, name: 'duracion_garantia_meses' });
   const watchFechaCompra = useWatch({ control, name: 'fecha_compra' });
 
+  // Las opciones de categoría llegan de forma asíncrona (useCategories). En modo
+  // edición, RHF aplica el defaultValues al montar, pero el <select> todavía no
+  // tiene la opción de la categoría guardada: el navegador lo deja visualmente en
+  // "Sin categoría" y nunca lo re-sincroniza cuando las opciones aparecen (el
+  // estado interno de RHF sí conserva el valor correcto). Al cargar las opciones
+  // por PRIMERA vez, re-aplicamos la categoría guardada para sincronizar el DOM.
+  const categoriesLoadedRef = useRef(false);
+  useEffect(() => {
+    if (categoriesLoadedRef.current || !categories || !initialProduct?.categoria_id) return;
+    categoriesLoadedRef.current = true;
+    setValue('categoria_id', initialProduct.categoria_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories, initialProduct]);
+
   // Si cambia duración o fecha_compra, recalcula fecha_vencimiento automáticamente.
+  // La fecha viene como "YYYY-MM-DD" (medianoche UTC en el backend): la aritmética
+  // se hace en UTC para que el día resultante no dependa de la zona horaria local.
   useEffect(() => {
     if (watchFechaCompra && watchDuracion && watchDuracion > 0) {
-      const base = new Date(watchFechaCompra);
-      base.setMonth(base.getMonth() + Number(watchDuracion));
+      const base = new Date(`${watchFechaCompra}T00:00:00Z`);
+      base.setUTCMonth(base.getUTCMonth() + Number(watchDuracion));
       const iso = base.toISOString().slice(0, 10);
       setValue('fecha_vencimiento_garantia', iso);
     }

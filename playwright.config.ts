@@ -16,6 +16,7 @@ import {
   EMAIL_LOG,
   FRONTEND_PORT,
   FRONTEND_URL,
+  MOCK_AI_PORT,
   ROOT_DIR,
 } from './e2e/env';
 
@@ -66,6 +67,12 @@ export default defineConfig({
         // Forzamos SMTP_HOST vacío para caer en el modo dev (enlaces en log).
         SMTP_HOST: '',
         STORAGE_PROVIDER: 'local',
+        // El chat e2e usa el mock local de DeepSeek (e2e/mock-deepseek.cjs):
+        // la "IA" responde tool_calls solo a preguntas de conteo; el resto
+        // devuelve 401 y el backend degrada al fallback amable (igual que hoy
+        // sin key). Así el e2e cubre function calling SIN API key real.
+        DEEPSEEK_API_KEY: 'sk-e2e-mock',
+        DEEPSEEK_API_BASE: `http://127.0.0.1:${MOCK_AI_PORT}/v1`,
         // Los límites de auth por defecto (5 login/15min, 3 forgot/hora…) se
         // agotan cuando N tests corren en paralelo desde localhost. Subimos
         // los límites SOLO para el backend e2e (env temporal del proceso).
@@ -90,6 +97,15 @@ export default defineConfig({
         NEXT_PUBLIC_API_URL: API_URL,
         E2E_FRONTEND_PORT: String(FRONTEND_PORT),
       },
+    },
+    {
+      // Mock local de DeepSeek: le da IA al chat e2e (function calling) sin
+      // API key real. El backend e2e apunta DEEPSEEK_API_BASE a este puerto.
+      command: `node e2e/mock-deepseek.cjs`,
+      cwd: ROOT_DIR,
+      url: `http://127.0.0.1:${MOCK_AI_PORT}/health`,
+      timeout: 30_000,
+      reuseExistingServer: false,
     },
   ],
 });

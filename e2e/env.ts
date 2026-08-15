@@ -14,6 +14,9 @@ import { join } from 'node:path';
 export const BACKEND_PORT = Number(process.env.E2E_BACKEND_PORT ?? 3002);
 export const FRONTEND_PORT = Number(process.env.E2E_FRONTEND_PORT ?? 3102);
 
+// Puerto del mock local de DeepSeek (chat con function calling sin API key real).
+export const MOCK_AI_PORT = Number(process.env.E2E_MOCK_AI_PORT ?? 3009);
+
 export const API_URL = `http://localhost:${BACKEND_PORT}/api`;
 export const FRONTEND_URL = `http://localhost:${FRONTEND_PORT}`;
 

@@ -17,23 +17,37 @@ FROM node:20-slim AS deps
 WORKDIR /app
 
 # openssl es necesario para que Prisma detecte el engine correcto al generar.
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+# better-sqlite3 (dependencia de @prisma/adapter-better-sqlite3) no trae prebuild
+# para node 20.x en slim: se compila desde fuente con node-gyp. Necesitamos
+# python3 + build-essential AQUÍ; se purgan después del npm ci (el binario
+# compilado queda en node_modules y el runtime solo necesita libstdc++6,
+# que ya trae la imagen base de Node).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl ca-certificates build-essential python3 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 # --omit=optional también: prisma es peer opcional de @prisma/client (devOptional
 # en el lock) y npm solo lo excluye si se omiten dev Y optional a la vez. Sin
 # esto, el CLI de Prisma (con Studio) volvería a colarse en la imagen runtime.
-RUN npm ci --omit=dev --omit=optional --no-audit --no-fund
+RUN npm ci --omit=dev --omit=optional --no-audit --no-fund \
+    && apt-get purge -y --auto-remove build-essential python3 \
+    && rm -rf /var/lib/apt/lists/*
 
 # ---- build stage ----
 FROM node:20-slim AS builder
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+# Mismo motivo que en deps: el npm ci completo también compila better-sqlite3.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl ca-certificates build-essential python3 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 COPY tsconfig.json tsconfig.build.json nest-cli.json prisma.config.ts ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund \
+    && apt-get purge -y --auto-remove build-essential python3 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY src ./src
 COPY prisma ./prisma

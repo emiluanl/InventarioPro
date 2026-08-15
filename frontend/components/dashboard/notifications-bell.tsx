@@ -37,7 +37,9 @@ export function NotificationsBell(): JSX.Element {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Notificaciones"
-        className="relative rounded-md p-1.5 text-gray-700 transition hover:bg-gray-100 hover:text-gray-900"
+        // Touch target ≥ 44px en móvil (Apple HIG): el icono se centra y el
+        // área táctil crece; en escritorio basta con el padding compacto.
+        className="relative flex h-11 w-11 items-center justify-center rounded-md text-gray-700 transition hover:bg-gray-100 hover:text-gray-900 sm:h-auto sm:w-auto sm:p-1.5"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />

@@ -21,7 +21,8 @@ export function HeaderActions({ compact = false }: HeaderActionsProps): JSX.Elem
         onClick={() => {
           void logout();
         }}
-        className="flex h-9 w-9 items-center justify-center rounded-md text-gray-600 transition hover:bg-gray-200 hover:text-gray-900"
+        // Touch target ≥ 44px en móvil (Apple HIG); en escritorio compacto.
+        className="flex h-11 w-11 items-center justify-center rounded-md text-gray-600 transition hover:bg-gray-200 hover:text-gray-900 sm:h-9 sm:w-9"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

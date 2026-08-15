@@ -133,4 +133,19 @@ html.theme-transition *::after {
   html.theme-transition *::after {
     transition: none !important;
   }
+
+  /* Además del fade, se desactiva TODO el movimiento de la app para quien
+     pide menos movimiento: micro-interacciones de hover/active, el glow del
+     acento, los spinners de carga y el scroll suave. Transiciones a 0s (el
+     fade del tema ya lo cubre su bloque) y animaciones a una iteración
+     instantánea. */
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }

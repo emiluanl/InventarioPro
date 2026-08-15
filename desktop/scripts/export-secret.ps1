@@ -33,5 +33,5 @@ if (Test-Path $pass) {
   Write-Host $password
   Write-Host ""
 } else {
-  Write-Warning "No encontré $pass: definí WIN_CSC_KEY_PASSWORD a mano."
+  Write-Warning "No encontré ${pass}: definí WIN_CSC_KEY_PASSWORD a mano."
 }

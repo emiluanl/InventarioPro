@@ -14,6 +14,17 @@ import { ConfigService } from '@nestjs/config';
 
 import { EmailService } from '../src/auth/email.service';
 
+// El transporte de Nodemailer se mockea para que NINGÚN test toque la red:
+// antes, el caso "producción" usaba localhost:1 (puerto cerrado) esperando un
+// ECONNREFUSED inmediato, pero el SMTP puede colgarse y superar el timeout de
+// Jest (flaky). El mock hace el test determinista: en modo dev sendMail
+// resuelve; en modo SMTP rechaza, y la aserción es que prod NUNCA loguea.
+const mockSendMail = jest.fn();
+
+jest.mock('nodemailer', () => ({
+  createTransport: jest.fn(() => ({ sendMail: mockSendMail })),
+}));
+
 function buildConfig(values: Record<string, string>): ConfigService {
   return {
     get: (key: string) => values[key],
@@ -27,6 +38,10 @@ describe('EmailService', () => {
   beforeEach(() => {
     logDir = mkdtempSync(join(tmpdir(), 'email-test-'));
     logFile = join(logDir, 'emails.log');
+    // Modo dev: sendMail resuelve (streamTransport simulado); cada test que
+    // quiera un fallo lo overridea con mockRejectedValueOnce.
+    mockSendMail.mockReset();
+    mockSendMail.mockResolvedValue({ message: 'mock message' });
   });
 
   afterEach(() => {
@@ -110,13 +125,14 @@ describe('EmailService', () => {
   });
 
   it('no loguea enlaces en producción (SMTP configurado)', async () => {
+    // Simula un SMTP que falla (sin red real): el servicio lo absorbe y lo
+    // registra como error, pero JAMÁS escribe el enlace en DEV_EMAIL_LOG.
+    mockSendMail.mockRejectedValueOnce(new Error('SMTP rechazó la conexión'));
     const service = new EmailService(
       buildConfig({
         APP_BASE_URL: 'https://app.inventariopro.com',
-        // Host local con puerto cerrado: el envío falla al instante
-        // (ECONNREFUSED) y el catch interno del servicio lo absorbe.
-        SMTP_HOST: 'localhost',
-        SMTP_PORT: '1',
+        SMTP_HOST: 'smtp.example.com',
+        SMTP_PORT: '587',
         SMTP_USER: 'noreply@example.com',
         SMTP_PASSWORD: 'secret',
         DEV_EMAIL_LOG: logFile,
@@ -127,5 +143,7 @@ describe('EmailService', () => {
 
     // En prod el enlace va por SMTP real: DEV_EMAIL_LOG debe quedar vacío.
     expect(() => readFileSync(logFile, 'utf8')).toThrow();
+    // Y sí se intentó enviar por SMTP (el mock rechazó, el servicio absorbió).
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
   });
 });

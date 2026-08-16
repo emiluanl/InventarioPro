@@ -74,8 +74,7 @@ export class ChatService {
           role: ChatRole.ASSISTANT,
           content: '',
           function_call: JSON.stringify({ name: detail.name, arguments: detail.arguments }),
-          function_result:
-            detail.result === undefined ? null : JSON.stringify(detail.result),
+          function_result: detail.result === undefined ? null : JSON.stringify(detail.result),
         },
       });
     }
@@ -148,11 +147,13 @@ export class ChatService {
   }
 
   private async buildHistory(userId: string, conversationId: string): Promise<ApiChatMessage[]> {
-    const messages = (await this.prisma.chatMessage.findMany({
-      where: { conversation_id: conversationId },
-      orderBy: { created_at: 'asc' },
-      take: 50, // límite para no enviar historiales infinitos
-    })).filter(
+    const messages = (
+      await this.prisma.chatMessage.findMany({
+        where: { conversation_id: conversationId },
+        orderBy: { created_at: 'asc' },
+        take: 50, // límite para no enviar historiales infinitos
+      })
+    ).filter(
       // Las filas de auditoría (function_call seteado) no se envían al LLM.
       (m) => m.function_call === null,
     );

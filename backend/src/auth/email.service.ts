@@ -37,6 +37,11 @@ export class EmailService {
         port,
         secure: port === 465,
         auth: { user, pass },
+        // Un servidor SMTP colgado no debe bloquear la request para siempre
+        // (p. ej. un host con puerto cerrado que no responde RST).
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 10_000,
       });
       this.logger.log(`Email configurado vía SMTP (${host}).`);
     } else {

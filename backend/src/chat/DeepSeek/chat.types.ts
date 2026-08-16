@@ -33,6 +33,9 @@ export interface ChatTool {
       type: 'object';
       properties: Record<string, unknown>;
       required?: string[];
+      // JSON-Schema válido para OpenAI-compatible: si viene del schema zod
+      // .strict() avisa al LLM que no invente claves fuera del contrato.
+      additionalProperties?: boolean;
     };
   };
 }

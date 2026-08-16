@@ -5,108 +5,70 @@
 // usuario hace una pregunta relevante. La ejecución corre del lado del
 // backend (ver ToolExecutor), NUNCA en el cliente.
 //
-// Schema en formato JSON-Schema (compatible con OpenAI/Qwen/Anthropic).
+// Los JSON schemas NO se escriben a mano: se GENERAN a partir de los schemas
+// zod de ./schemas (zod-to-json-schema). Así el contrato que ve DeepSeek y el
+// que valida ToolExecutor son la misma fuente de verdad.
 // =============================================================================
 
+import type { ZodTypeAny } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
 import { ChatTool } from '../DeepSeek/chat.types';
+import {
+  buscarProductosSchema,
+  crearProductoSchema,
+  garantiasPorVencerSchema,
+  resumenGastosSchema,
+} from './schemas';
+
+type ToolParameters = ChatTool['function']['parameters'];
+
+function buildTool(name: string, description: string, schema: ZodTypeAny): ChatTool {
+  // zod-to-json-schema devuelve { $ref, definitions: { [name]: schema } }.
+  const generated = zodToJsonSchema(schema, name) as {
+    definitions?: Record<string, ToolParameters>;
+    $ref?: string;
+  };
+  const params =
+    (name && generated.definitions?.[name]) || (generated as unknown as ToolParameters);
+
+  return {
+    type: 'function',
+    function: {
+      name,
+      description,
+      parameters: {
+        type: 'object',
+        properties: params.properties ?? {},
+        required: params.required,
+        // .strict() en los schemas → la IA no inventa claves fuera del contrato.
+        additionalProperties: params.additionalProperties ?? false,
+      },
+    },
+  };
+}
 
 export const CHAT_TOOLS: ChatTool[] = [
-  {
-    type: 'function',
-    function: {
-      name: 'buscar_productos',
-      description:
-        'Busca productos del usuario por criterios como texto libre, categoría, rango de fechas, estado o estado de garantía. Devuelve una lista resumida.',
-      parameters: {
-        type: 'object',
-        properties: {
-          search: {
-            type: 'string',
-            description: 'Texto a buscar en nombre, marca, modelo o descripción.',
-          },
-          categoria_id: { type: 'string', description: 'ID de la categoría para filtrar.' },
-          estado: {
-            type: 'string',
-            enum: ['NUEVO', 'USADO', 'EN_REPARACION', 'VENDIDO', 'PERDIDO_ROBADO', 'DADO_DE_BAJA'],
-          },
-          warranty_status: {
-            type: 'string',
-            enum: ['vigente', 'por_vencer', 'vencida'],
-          },
-          fecha_desde: { type: 'string', description: 'ISO date (YYYY-MM-DD).' },
-          fecha_hasta: { type: 'string', description: 'ISO date (YYYY-MM-DD).' },
-          limit: { type: 'number', description: 'Máximo de resultados. Por defecto 20.' },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'crear_producto',
-      description:
-        'Crea un producto a partir de datos extraídos de lenguaje natural. Úsala cuando el usuario diga algo como "acabo de comprar X en Y por $Z".',
-      parameters: {
-        type: 'object',
-        required: ['nombre', 'fecha_compra', 'tipo_compra', 'precio'],
-        properties: {
-          nombre: { type: 'string' },
-          marca: { type: 'string' },
-          modelo: { type: 'string' },
-          descripcion: { type: 'string' },
-          fecha_compra: {
-            type: 'string',
-            description: 'ISO date. Si el usuario dice "hace 2 días", calcula tú la fecha.',
-          },
-          lugar_compra: { type: 'string' },
-          tipo_compra: { type: 'string', enum: ['FISICO', 'ONLINE'] },
-          precio: { type: 'number' },
-          moneda: {
-            type: 'string',
-            description: 'Código ISO 4217 (USD, EUR, ARS...). Por defecto USD.',
-          },
-          duracion_garantia_meses: { type: 'number' },
-          notas: { type: 'string' },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'consultar_garantias_por_vencer',
-      description:
-        'Devuelve productos cuya garantía vence en los próximos N días (por defecto 30).',
-      parameters: {
-        type: 'object',
-        properties: {
-          dias: {
-            type: 'number',
-            description: 'Ventana en días. Por defecto 30. Máximo 365.',
-          },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'resumen_gastos',
-      description:
-        'Calcula el gasto total en productos, agrupado por categoría, dentro de un periodo.',
-      parameters: {
-        type: 'object',
-        properties: {
-          periodo: {
-            type: 'string',
-            enum: ['mes_actual', 'mes_pasado', 'anio_actual', 'ultimos_30_dias', 'ultimos_90_dias'],
-            description: 'Periodo predefinido. Por defecto "anio_actual".',
-          },
-          categoria_id: { type: 'string', description: 'Opcional: filtrar por categoría.' },
-        },
-      },
-    },
-  },
+  buildTool(
+    'buscar_productos',
+    'Busca productos del usuario por criterios como texto libre, categoría, rango de fechas, estado o estado de garantía. Devuelve una lista resumida.',
+    buscarProductosSchema,
+  ),
+  buildTool(
+    'crear_producto',
+    'Crea un producto a partir de datos extraídos de lenguaje natural. Úsala cuando el usuario diga algo como "acabo de comprar X en Y por $Z".',
+    crearProductoSchema,
+  ),
+  buildTool(
+    'consultar_garantias_por_vencer',
+    'Devuelve productos cuya garantía vence en los próximos N días (por defecto 30).',
+    garantiasPorVencerSchema,
+  ),
+  buildTool(
+    'resumen_gastos',
+    'Calcula el gasto total en productos, agrupado por categoría, dentro de un periodo.',
+    resumenGastosSchema,
+  ),
 ];
 
 // =============================================================================

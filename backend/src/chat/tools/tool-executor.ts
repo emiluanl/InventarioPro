@@ -4,6 +4,11 @@
 // Cada tool hace UNA cosa concreta y devuelve un objeto JSON. Si algo falla,
 // lanza un error que el service captura y devuelve a la IA como
 // { error: "mensaje" } para que ella formule una respuesta amable.
+//
+// Validación: TODOS los argumentos pasan por los schemas zod de ./schemas
+// ANTES de tocar la base de datos (misma fuente de verdad que el JSON schema
+// que ve el LLM). Un argumento inválido devuelve { error } descriptivo y la
+// IA puede corregirse — nunca llega un valor crudo a Prisma.
 // =============================================================================
 
 import { Injectable, Logger } from '@nestjs/common';
@@ -16,6 +21,14 @@ import {
   getWarrantyStatus,
 } from '../../common/lib/time-ownership';
 import { ciContains } from '../../common/lib/prisma-filters';
+import {
+  TOOL_SCHEMAS,
+  buscarProductosSchema,
+  crearProductoSchema,
+  garantiasPorVencerSchema,
+  resumenGastosSchema,
+} from './schemas';
+import type { z } from 'zod';
 
 type Args = Record<string, unknown>;
 
@@ -27,19 +40,47 @@ export class ChatToolExecutor {
 
   /**
    * Despacha una tool call al handler correspondiente.
+   * Los argumentos se validan contra el schema zod de la tool: si no pasan,
+   * se devuelve { error } (la IA puede corregirse) sin ejecutar nada.
    * Devuelve un objeto listo para enviar de vuelta a la IA.
    */
   async execute(userId: string, name: string, args: Args): Promise<unknown> {
     try {
+      const schema = TOOL_SCHEMAS[name as keyof typeof TOOL_SCHEMAS];
+      if (!schema) {
+        return { error: `Función desconocida: ${name}` };
+      }
+
+      const parsed = schema.safeParse(args ?? {});
+      if (!parsed.success) {
+        return {
+          error: `Argumentos inválidos para ${name}: ${parsed.error.issues
+            .map((i) => `${i.path.join('.') || '(raíz)'}: ${i.message}`)
+            .join('; ')}`,
+        };
+      }
+
       switch (name) {
         case 'buscar_productos':
-          return await this.buscarProductos(userId, args);
+          return await this.buscarProductos(
+            userId,
+            parsed.data as z.infer<typeof buscarProductosSchema>,
+          );
         case 'crear_producto':
-          return await this.crearProducto(userId, args);
+          return await this.crearProducto(
+            userId,
+            parsed.data as z.infer<typeof crearProductoSchema>,
+          );
         case 'consultar_garantias_por_vencer':
-          return await this.garantiasPorVencer(userId, args);
+          return await this.garantiasPorVencer(
+            userId,
+            parsed.data as z.infer<typeof garantiasPorVencerSchema>,
+          );
         case 'resumen_gastos':
-          return await this.resumenGastos(userId, args);
+          return await this.resumenGastos(
+            userId,
+            parsed.data as z.infer<typeof resumenGastosSchema>,
+          );
         default:
           return { error: `Función desconocida: ${name}` };
       }
@@ -52,27 +93,43 @@ export class ChatToolExecutor {
   // ===========================================================================
   // buscar_productos
   // ===========================================================================
-  private async buscarProductos(userId: string, args: Args) {
+  private async buscarProductos(userId: string, args: z.infer<typeof buscarProductosSchema>) {
     const where: Prisma.ProductWhereInput = { user_id: userId, deleted_at: null };
 
-    if (typeof args.search === 'string' && args.search.trim()) {
+    if (args.search?.trim()) {
       where.OR = [
         { nombre: ciContains(args.search) },
         { marca: ciContains(args.search) },
         { modelo: ciContains(args.search) },
       ];
     }
-    if (typeof args.categoria_id === 'string') where.categoria_id = args.categoria_id;
-    if (typeof args.estado === 'string')
-      where.estado = args.estado as Prisma.EnumProductStatusFilter;
+    if (args.categoria_id) where.categoria_id = args.categoria_id;
+    if (args.estado) where.estado = args.estado as Prisma.EnumProductStatusFilter;
 
-    if (typeof args.fecha_desde === 'string' || typeof args.fecha_hasta === 'string') {
-      where.fecha_compra = {};
-      if (typeof args.fecha_desde === 'string') where.fecha_compra.gte = new Date(args.fecha_desde);
-      if (typeof args.fecha_hasta === 'string') where.fecha_compra.lte = new Date(args.fecha_hasta);
+    // warranty_status SÍ filtra en SQL (no post-query), con el mismo criterio
+    // que buildListWhere de products.service.ts: vencida = ya venció,
+    // por_vencer = ≤ 30 días, vigente = > 30 días. Los productos sin fecha de
+    // vencimiento quedan fuera de los tres (comparaciones con null son falsas).
+    if (args.warranty_status) {
+      const now = new Date();
+      const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      if (args.warranty_status === 'vencida') {
+        where.fecha_vencimiento_garantia = { lt: now };
+      } else if (args.warranty_status === 'por_vencer') {
+        where.fecha_vencimiento_garantia = { gt: now, lte: in30Days };
+      } else {
+        where.fecha_vencimiento_garantia = { gt: in30Days };
+      }
     }
 
-    const limit = Math.min(Number(args.limit ?? 20), 50);
+    if (args.fecha_desde || args.fecha_hasta) {
+      where.fecha_compra = {};
+      if (args.fecha_desde) where.fecha_compra.gte = new Date(args.fecha_desde);
+      if (args.fecha_hasta) where.fecha_compra.lte = new Date(args.fecha_hasta);
+    }
+
+    // El schema ya acota limit a 1..50; 20 es el default.
+    const limit = args.limit ?? 20;
 
     const products = await this.prisma.product.findMany({
       where,
@@ -98,36 +155,33 @@ export class ChatToolExecutor {
   // ===========================================================================
   // crear_producto
   // ===========================================================================
-  private async crearProducto(userId: string, args: Args) {
-    const required = ['nombre', 'fecha_compra', 'tipo_compra', 'precio'];
-    for (const key of required) {
-      if (args[key] === undefined || args[key] === null) {
-        return { error: `Falta el campo obligatorio "${key}".` };
-      }
-    }
+  private async crearProducto(userId: string, args: z.infer<typeof crearProductoSchema>) {
+    // Los required (nombre, fecha_compra, tipo_compra, precio) ya los exige el
+    // schema zod: si faltan, execute() devuelve { error } sin llegar acá.
 
     let fechaVencimiento: Date | null = null;
-    if (typeof args.duracion_garantia_meses === 'number') {
-      fechaVencimiento = new Date(args.fecha_compra as string);
-      fechaVencimiento.setMonth(fechaVencimiento.getMonth() + args.duracion_garantia_meses);
+    if (args.duracion_garantia_meses) {
+      // Misma convención que products.service.create: aritmética de meses en
+      // UTC para que el día resultante no dependa de la zona horaria.
+      fechaVencimiento = new Date(`${args.fecha_compra}T00:00:00Z`);
+      fechaVencimiento.setUTCMonth(fechaVencimiento.getUTCMonth() + args.duracion_garantia_meses);
     }
 
     const product = await this.prisma.product.create({
       data: {
         user_id: userId,
-        nombre: String(args.nombre),
-        marca: typeof args.marca === 'string' ? args.marca : null,
-        modelo: typeof args.modelo === 'string' ? args.modelo : null,
-        descripcion: typeof args.descripcion === 'string' ? args.descripcion : null,
-        fecha_compra: new Date(args.fecha_compra as string),
-        lugar_compra: typeof args.lugar_compra === 'string' ? args.lugar_compra : null,
+        nombre: args.nombre,
+        marca: args.marca ?? null,
+        modelo: args.modelo ?? null,
+        descripcion: args.descripcion ?? null,
+        fecha_compra: new Date(args.fecha_compra),
+        lugar_compra: args.lugar_compra ?? null,
         tipo_compra: args.tipo_compra as PurchaseType,
-        precio: new Prisma.Decimal(Number(args.precio)),
-        moneda: typeof args.moneda === 'string' ? args.moneda : 'USD',
-        duracion_garantia_meses:
-          typeof args.duracion_garantia_meses === 'number' ? args.duracion_garantia_meses : null,
+        precio: new Prisma.Decimal(args.precio),
+        moneda: args.moneda ?? 'USD',
+        duracion_garantia_meses: args.duracion_garantia_meses ?? null,
         fecha_vencimiento_garantia: fechaVencimiento,
-        notas: typeof args.notas === 'string' ? args.notas : null,
+        notas: args.notas ?? null,
       },
     });
 
@@ -146,8 +200,9 @@ export class ChatToolExecutor {
   // ===========================================================================
   // consultar_garantias_por_vencer
   // ===========================================================================
-  private async garantiasPorVencer(userId: string, args: Args) {
-    const dias = Math.min(Number(args.dias ?? 30), 365);
+  private async garantiasPorVencer(userId: string, args: z.infer<typeof garantiasPorVencerSchema>) {
+    // El schema acota dias a 1..365; 30 es el default.
+    const dias = args.dias ?? 30;
     const limit = new Date();
     limit.setDate(limit.getDate() + dias);
 
@@ -174,8 +229,8 @@ export class ChatToolExecutor {
   // ===========================================================================
   // resumen_gastos
   // ===========================================================================
-  private async resumenGastos(userId: string, args: Args) {
-    const periodo = String(args.periodo ?? 'anio_actual');
+  private async resumenGastos(userId: string, args: z.infer<typeof resumenGastosSchema>) {
+    const periodo = args.periodo ?? 'anio_actual';
     const { desde, hasta } = this.resolvePeriodo(periodo);
 
     const where: Prisma.ProductWhereInput = {
@@ -183,7 +238,7 @@ export class ChatToolExecutor {
       deleted_at: null,
       fecha_compra: { gte: desde, lte: hasta },
     };
-    if (typeof args.categoria_id === 'string') where.categoria_id = args.categoria_id;
+    if (args.categoria_id) where.categoria_id = args.categoria_id;
 
     const products = await this.prisma.product.findMany({
       where,

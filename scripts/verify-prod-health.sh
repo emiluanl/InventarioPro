@@ -50,7 +50,9 @@ if [ -n "$MISSING" ]; then
   echo "   Levanta el stack: docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d"
   exit 1
 fi
-echo "✅ Stack prod presente (8 servicios)"
+# 7 servicios permanentes; el job one-shot `migrate` no es un contenedor
+# residente y se valida aparte (paso 4). Ver DEPLOYMENT.md §9.
+echo "✅ Stack prod presente (7 servicios permanentes)"
 
 # ---------------------------------------------------------------------------
 # 2. Healthchecks de los servicios con healthcheck definido
@@ -85,16 +87,10 @@ fi
 # ---------------------------------------------------------------------------
 # 3. API: healthcheck con BD y Redis
 # ---------------------------------------------------------------------------
-# Por la red interna (como lo ve el monitor), sin depender del puerto público.
-backend_ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' inventariopro-backend | head -n1)
-if [ -n "$backend_ip" ]; then
-  health_json=$(docker exec inventariopro-monitor sh -c "wget -qO- http://backend:3001/api/health 2>/dev/null" 2>/dev/null || true)
-  if [ -z "$health_json" ]; then
-    health_json=$(curl -s -m 5 "http://localhost:3001/api/health" 2>/dev/null || true)
-  fi
-else
-  health_json=$(curl -s -m 5 "http://localhost:3001/api/health" 2>/dev/null || true)
-fi
+# Por la red interna del compose (como la ve el monitor): el backend NO
+# publica puerto al host (ver DEPLOYMENT.md §4), así que localhost:3001 no
+# responde desde el host en producción.
+health_json=$(docker exec inventariopro-monitor sh -c "wget -qO- http://backend:3001/api/health 2>/dev/null" 2>/dev/null || true)
 
 if echo "$health_json" | grep -q '"db":"up"' && echo "$health_json" | grep -q '"redis":"up"'; then
   echo "✅ API: $health_json"

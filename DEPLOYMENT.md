@@ -587,10 +587,12 @@ El script [`scripts/verify-prod-health.sh`](scripts/verify-prod-health.sh)
 comprueba en un solo comando que el stack prod esté sano después de un
 reinicio de Docker Desktop o de un deploy:
 
-1. Docker arriba y los 8 servicios de prod presentes (7 permanentes + el job
-   one-shot `migrate`).
+1. Docker arriba y los **7 contenedores permanentes** de prod presentes
+   (postgres, redis, backend, frontend, backup, monitor, caddy). El job
+   one-shot `migrate` no es un contenedor residente y se valida aparte (punto 4).
 2. Healthchecks de cada contenedor (`running` + `healthy`).
-3. API responde con BD y Redis arriba (`/api/health`).
+3. API responde con BD y Redis arriba (`/api/health`), comprobada por la red
+   interna del compose (el backend no publica puerto al host).
 4. El job `migrate` re-ejecuta de forma idempotente (exit 0 si no hay
    migraciones pendientes).
 5. Conteos mínimos de `users`/`products`/`categories` en la BD real (los

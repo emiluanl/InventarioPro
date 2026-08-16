@@ -273,15 +273,16 @@ npm run dev
 Tres capas, todas en el CI:
 
 ```bash
-# 1) Backend — Jest (118 tests)
+# 1) Backend — Jest (133 tests, incluye la paridad de esquemas Prisma pg/sqlite)
 cd backend && npm test
 
-# 2) Frontend — Vitest + Testing Library (55 tests)
+# 2) Frontend — Vitest + Testing Library (71 tests)
 cd frontend && npm test
 
-# 3) E2E de navegador — Playwright (6 tests: registro → verificación → login,
-#    CRUD de productos, categorías, reportes + CSV, chat, notificaciones y
-#    configuración de cuenta)
+# 3) E2E de navegador — Playwright (25 tests: registro → verificación → login,
+#    CRUD de productos, categorías, reportes + CSV, chat (function calling con
+#    mock local), notificaciones, configuración, adjuntos con imagen, layout
+#    móvil/tablet y accesibilidad (touch targets, tema, reduced-motion))
 npm install            # en la raíz (deps del e2e)
 npx playwright install chromium
 npm run test:e2e:local # levanta el stack dev, crea la BD e2e si falta, corre y baja
@@ -397,7 +398,7 @@ Las herramientas ejecutan SIEMPRE del lado del servidor con filtrado por `user_i
 
 - **175 archivos** de código y configuración (+ 17 del cliente Prisma generado)
 - **~15 400 líneas** de TypeScript / TSX / YAML / Prisma (sin el cliente generado)
-- **179 tests** (118 backend + 55 frontend + 6 e2e de navegador)
+- **229 tests** (133 backend + 71 frontend + 25 e2e de navegador)
 - **9 modelos** en la base de datos + 5 enums
 - **~35 endpoints** REST
 - **12 páginas** en el frontend

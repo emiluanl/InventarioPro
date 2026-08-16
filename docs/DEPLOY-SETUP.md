@@ -101,7 +101,7 @@ El compose exige estas (`:?required` en `docker-compose.prod.yml`):
 | Variable | Ejemplo | Notas |
 |---|---|---|
 | `POSTGRES_USER` | `inventariopro` | usuario de la BD (ya en `.env.prod.example`) |
-| `POSTGRES_PASSWORD` | `genera-una-fuerte` | `openssl rand -base64 24` (no está en el example, añadir) |
+| `POSTGRES_PASSWORD` | `genera-una-fuerte` | `openssl rand -base64 24` (ya en `.env.prod.example`) |
 | `REDIS_PASSWORD` | `genera-una-fuerte` | Redis arranca con `--requirepass`; misma clave en backend y healthcheck |
 | `JWT_ACCESS_SECRET` | `genera-una-fuerte` | firma de tokens (`openssl rand -hex 32`) |
 | `APP_BASE_URL` | `https://app.tudominio.com` | base de los enlaces de email |
@@ -123,6 +123,10 @@ Y las opcionales según el stack (con su default):
 | `TZ` | `UTC` | zona horaria de backups/cron |
 | `FRONTEND_DOMAIN` | `inventariopro.example.com` | para Caddy |
 
+> Las variables de **backups y monitoreo** (`BACKUP_SCHEDULE`, `BACKUP_KEEP_DAYS`,
+> `BACKUP_PING_URL`, `MONITOR_PING_URL`, `RCLONE_REMOTE`, `MONITOR_WEBHOOK_URL`…)
+> se documentan en DEPLOYMENT.md §7-§8; todas ya vienen en `.env.prod.example`.
+
 ### 1.6. Primer arranque manual (validar el servidor)
 
 ```bash
@@ -130,12 +134,18 @@ cd ~/InventarioPro-staging
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 # Espera ~30s y verifica:
 docker compose -f docker-compose.prod.yml --env-file .env.prod ps
-curl -s http://localhost:3001/api/health
+# El backend es INTERNO (sin puerto publicado): su health se mira desde
+# dentro del contenedor, igual que hace su healthcheck:
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec backend \
+  node -e "fetch('http://localhost:3001/api/health').then(r=>r.json()).then(j=>console.log(JSON.stringify(j)))"
 ```
 
-Debe responder `{"status":"ok","db":"up","redis":"up",...}`. Si el servidor
-tiene dominio, Caddy levanta HTTPS solo; si no, la API queda en el puerto 3001
-y el frontend en el 3000 (para pruebas internas basta).
+Debe responder `{"status":"ok","db":"up","redis":"up",...}`. ⚠️ El backend
+NO publica puerto (red interna de docker); solo están publicados el
+**frontend en :3000** y **Caddy en 80/443**. Sin dominio, la API solo se
+prueba dentro del contenedor (como arriba) o con `docker inspect --format
+'{{.State.Health.Status}}' inventariopro-backend`. Con dominio, Caddy levanta
+HTTPS solo y la API queda en `https://tu-dominio/api`.
 
 > ✅ Si este arranque manual funciona, el workflow hará exactamente lo mismo
 > de forma automática.
@@ -189,6 +199,11 @@ Opcionales:
 | `DEPLOY_SSH_KEY` | clave privada PEM del deploy a producción |
 
 Opcionales: `DEPLOY_PORT`, `DEPLOY_DIR` (variable, default `~/InventarioPro`).
+
+> ⚠️ El servidor de producción actual tiene el repo en **`/opt/inventariopro`**
+> (ver DEPLOYMENT.md §9 y §12): define `DEPLOY_DIR=/opt/inventariopro` como
+> variable, o el workflow hará el `git pull` en `~/InventarioPro` y levantará
+> un stack duplicado.
 
 > **Variables vs Secrets**: los valores que NO son credenciales (rutas) se
 > configuran en `Settings → Secrets and variables → Actions → Variables`,

@@ -86,6 +86,11 @@ VAPID_SUBJECT=mailto:admin@inventariopro.com
 > muestra y abre el producto al hacer clic. Los avisos requieren HTTPS
 > (el que ya da Caddy); en localhost funcionan también.
 > Si una suscripción expira (404/410 del push service), se elimina sola.
+>
+> Las variables de **backups y monitoreo** (`BACKUP_SCHEDULE`, `BACKUP_KEEP_DAYS`,
+> `TZ`, `BACKUP_PING_URL`, `MONITOR_PING_URL`, `RCLONE_REMOTE`,
+> `MONITOR_WEBHOOK_URL`…) no están en el bloque de arriba: se documentan en
+> §7-§8 y ya vienen en `.env.prod.example` (raíz) para completar.
 
 ## 4. Levantar los servicios
 
@@ -735,9 +740,10 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod exec backend \
 ```bash
 cd /opt/inventariopro
 git clone <repo> .          # o copia el proyecto existente
-# Crea .env.prod desde la plantilla de §3 (no existe .env.prod.example
-# commiteado: el archivo real nunca se sube a git) y completa los secretos
-cp backend/.env.example .env.prod   # base, y añade las vars de §3
+# Crea .env.prod desde la plantilla commiteada .env.prod.example (raíz, SIN
+# secretos) y completa los valores reales (ver §3); el archivo .env.prod real
+# nunca se sube a git
+cp .env.prod.example .env.prod
 # 1. BD: levanta el Postgres, restaura el dump y verifica (sección 12.1)
 # 2. Uploads: descomprime el tar (sección 12.2)
 # 3. Stack: sube todo — el job 'migrate' es idempotente (no aplica nada ya

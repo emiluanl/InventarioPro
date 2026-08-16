@@ -150,6 +150,75 @@ HTTPS solo y la API queda en `https://tu-dominio/api`.
 > ✅ Si este arranque manual funciona, el workflow hará exactamente lo mismo
 > de forma automática.
 
+### 1.7. Runbook completo — crear staging y probar el primer deploy (copiar y pegar)
+
+Secuencia única, de cero a primer deploy funcionando. Reemplaza `<IP_STAGING>`
+(y las credenciales entre `<...>`) antes de ejecutar. Genera contraseñas
+**distintas** para staging y producción.
+
+**1. Máquina local — clave SSH del deploy:**
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/inventariopro_deploy -C "github-actions" -N ""
+ssh-copy-id -i ~/.ssh/inventariopro_deploy.pub deploy@<IP_STAGING>
+ssh -i ~/.ssh/inventariopro_deploy deploy@<IP_STAGING> 'echo OK'   # debe decir OK
+```
+
+**2. En el servidor — Docker Engine + repo:**
+
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker "$USER" && newgrp docker
+docker --version && docker compose version
+
+git clone https://github.com/emiluanl/InventarioPro.git ~/InventarioPro-staging
+cd ~/InventarioPro-staging
+```
+
+**3. En el servidor — `.env.prod` desde la plantilla** (reemplaza cada
+placeholder `genera-...` / `tu-...`):
+
+```bash
+cp .env.prod.example .env.prod
+openssl rand -hex 32   # usa el resultado en JWT_ACCESS_SECRET
+openssl rand -hex 24   # usa el resultado en POSTGRES_PASSWORD
+openssl rand -hex 24   # y otro distinto en REDIS_PASSWORD
+nano .env.prod
+# ⚠️ Sin dominio real: FRONTEND_DOMAIN=localhost  → Caddy sirve HTTP en :80
+#    sin intentar Let's Encrypt. Con dominio: FRONTEND_DOMAIN=staging.tudominio.com
+```
+
+**4. En el servidor — primer arranque manual** (exactamente lo que el
+workflow hará vía SSH):
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+# Espera ~30-60s y verifica:
+docker compose -f docker-compose.prod.yml --env-file .env.prod ps
+
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec backend \
+  node -e "fetch('http://localhost:3001/api/health').then(r=>r.json()).then(j=>console.log(JSON.stringify(j)))"
+# Debe responder {"status":"ok","db":"up","redis":"up",...}
+
+curl -s -o /dev/null -w "frontend: %{http_code}\n" http://localhost:3000/login   # 200
+curl -s -o /dev/null -w "caddy:    %{http_code}\n" http://localhost/login        # 200
+```
+
+**5. Probar el deploy AUTOMATIZADO a staging** (tras configurar los secrets
+de §2):
+
+1. Navegador → **Actions** → **Deploy** → **Run workflow** → environment:
+   `staging`.
+2. El workflow repite el paso 4 por SSH: `git pull` + `docker compose up -d
+   --build` y verifica el health del backend (falla con `::error::` si no
+   quedó `healthy`).
+3. Al terminar, confirma en el servidor que el health sigue OK con el mismo
+   `exec backend node -e fetch(...)` del paso 4.
+
+> ✅ Con el paso 4 funcionando y el workflow verde contra `staging`, ya puedes
+> repetir §1.7 y §2 para **producción** (`DEPLOY_*`) — cambiando `FRONTEND_DOMAIN`
+> al dominio real y `DEPLOY_DIR` a `/opt/inventariopro` si ese es el directorio.
+
 ---
 
 ## 2. Configurar los secrets en GitHub

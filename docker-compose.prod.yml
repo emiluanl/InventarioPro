@@ -254,8 +254,11 @@ services:
     container_name: inventariopro-caddy
     restart: always
     # El Caddyfile sirve frontend + API bajo el MISMO dominio (dominio único):
-    # /api/* y /uploads/* van al backend, todo lo demás al frontend. Solo hace
-    # falta FRONTEND_DOMAIN; si no se define, Caddy usa su default localhost.
+    # /api/* y /uploads/* van al backend, todo lo demás al frontend.
+    # OJO: el default del compose es inventariopro.example.com (el Caddyfile
+    # usa localhost, pero esta variable lo sobrescribe). Sin dominio real,
+    # pon FRONTEND_DOMAIN=localhost en .env.prod para que Caddy sirva HTTP
+    # en :80 sin intentar Let's Encrypt.
     environment:
       FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:-inventariopro.example.com}
     ports:

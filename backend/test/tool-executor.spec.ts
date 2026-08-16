@@ -172,7 +172,6 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
   });
 
   it.each([
-    ['sin nombre', { fecha_compra: '2026-08-15', tipo_compra: 'FISICO', precio: 10 }],
     [
       'precio negativo',
       { nombre: 'X', fecha_compra: '2026-08-15', tipo_compra: 'FISICO', precio: -1 },
@@ -229,6 +228,29 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     const { prisma, executor } = buildMocks();
     const res = await executor.execute('u1', 'conv-1', 'crear_producto', args as never);
     expect((res as { error: string }).error).toContain('Argumentos inválidos');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+  });
+
+  it('crear_producto sin confirmar y con campos obligatorios faltantes devuelve error descriptivo (sin crear)', async () => {
+    const { prisma, executor } = buildMocks();
+    // El schema los deja opcionales para permitir { confirmar: true } solo;
+    // el camino de creación real (sin confirmar) los exige acá.
+    const res = (await executor.execute('u1', 'conv-1', 'crear_producto', {
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 10,
+    } as never)) as { error: string };
+    expect(res.error).toContain('Faltan datos obligatorios');
+    expect(res.error).toContain('nombre');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+
+    const res2 = (await executor.execute('u1', 'conv-1', 'crear_producto', {
+      nombre: 'X',
+    } as never)) as { error: string };
+    expect(res2.error).toContain('Faltan datos obligatorios');
+    expect(res2.error).toContain('fecha_compra');
+    expect(res2.error).toContain('tipo_compra');
+    expect(res2.error).toContain('precio');
     expect(prisma.product.create).not.toHaveBeenCalled();
   });
 
@@ -324,6 +346,114 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     const data = prisma.product.create.mock.calls[0][0].data;
     expect(data.nombre).toBe('Licuadora Oster');
     expect(data.fecha_compra).toEqual(new Date('2026-08-15T00:00:00Z'));
+    expect(data.precio.toString()).toBe('150');
+  });
+
+  it('{ confirmar: true } SOLO (sin repetir datos) crea con los argumentos ORIGINALES', async () => {
+    const { prisma, executor } = buildMocks();
+    prisma.product.findMany.mockResolvedValueOnce([
+      {
+        id: 'p-old',
+        nombre: 'Licuadora Oster',
+        fecha_compra: new Date('2026-08-15T00:00:00.000Z'),
+        precio: { toString: () => '150' },
+        moneda: 'USD',
+      },
+    ]);
+
+    // Turno 1: duplicado → pendiente con los args originales.
+    await executor.execute('u1', 'conv-1', 'crear_producto', {
+      nombre: 'Licuadora Oster',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 150,
+      lugar_compra: 'Falabella',
+    });
+
+    // Turno 2: SOLO { confirmar: true } — sin nombre/fecha/tipo/precio.
+    const res = (await executor.execute('u1', 'conv-1', 'crear_producto', {
+      confirmar: true,
+    })) as { ok: boolean };
+    expect(res.ok).toBe(true);
+    expect(prisma.product.create).toHaveBeenCalledTimes(1);
+    const data = prisma.product.create.mock.calls[0][0].data;
+    expect(data.nombre).toBe('Licuadora Oster');
+    expect(data.fecha_compra).toEqual(new Date('2026-08-15T00:00:00Z'));
+    expect(data.precio.toString()).toBe('150');
+    expect(data.lugar_compra).toBe('Falabella');
+  });
+
+  it('{ confirmar: false } SOLO cancela y limpia el pendiente (sin datos del producto)', async () => {
+    const { prisma, executor } = buildMocks();
+    prisma.product.findMany.mockResolvedValueOnce([
+      {
+        id: 'p-old',
+        nombre: 'Licuadora Oster',
+        fecha_compra: new Date('2026-08-15T00:00:00.000Z'),
+        precio: { toString: () => '150' },
+        moneda: 'USD',
+      },
+    ]);
+
+    await executor.execute('u1', 'conv-1', 'crear_producto', {
+      nombre: 'Licuadora Oster',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 150,
+    });
+
+    const cancel = (await executor.execute('u1', 'conv-1', 'crear_producto', {
+      confirmar: false,
+    })) as { cancelada: boolean };
+    expect(cancel.cancelada).toBe(true);
+    expect(prisma.product.create).not.toHaveBeenCalled();
+
+    // El pendiente quedó limpio: confirmar:true posterior se rechaza.
+    const later = (await executor.execute('u1', 'conv-1', 'crear_producto', {
+      confirmar: true,
+    })) as { error: string };
+    expect(later.error).toContain('No hay una confirmación pendiente');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+  });
+
+  it('confirmar con argumentos inválidos se rechaza sin crear NI consumir el pendiente', async () => {
+    const { prisma, executor } = buildMocks();
+    prisma.product.findMany.mockResolvedValueOnce([
+      {
+        id: 'p-old',
+        nombre: 'Licuadora Oster',
+        fecha_compra: new Date('2026-08-15T00:00:00.000Z'),
+        precio: { toString: () => '150' },
+        moneda: 'USD',
+      },
+    ]);
+
+    await executor.execute('u1', 'conv-1', 'crear_producto', {
+      nombre: 'Licuadora Oster',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 150,
+    });
+
+    // Args inválidos (precio no numérico) → zod rechaza la llamada completa.
+    const bad = (await executor.execute('u1', 'conv-1', 'crear_producto', {
+      confirmar: true,
+      precio: 'caro',
+    })) as { error: string };
+    expect(bad.error).toContain('Argumentos inválidos');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+
+    // El pendiente NO se consumió: un confirmar limpio posterior crea con los
+    // argumentos ORIGINALES (no con los alterados).
+    const good = (await executor.execute('u1', 'conv-1', 'crear_producto', {
+      confirmar: true,
+      precio: 999,
+      nombre: 'Otro',
+    })) as { ok: boolean };
+    expect(good.ok).toBe(true);
+    expect(prisma.product.create).toHaveBeenCalledTimes(1);
+    const data = prisma.product.create.mock.calls[0][0].data;
+    expect(data.nombre).toBe('Licuadora Oster');
     expect(data.precio.toString()).toBe('150');
   });
 

@@ -111,17 +111,10 @@ describe('crear_producto consultivo — flujo real de dos turnos', () => {
     expect(turn1.message).toContain('¿La creo igual?');
     expect(prisma.product.create).not.toHaveBeenCalled();
 
-    // --- Turno 2: el usuario dice que sí; la IA confirma (repitiendo otros args) ---
+    // --- Turno 2: el usuario dice que sí; la IA confirma con SOLO { confirmar: true } ---
+    // (sin repetir nombre/fecha/tipo/precio — el backend usa los originales).
     deepSeek.chatCompletion
-      .mockResolvedValueOnce(
-        toolCall('crear_producto', {
-          confirmar: true,
-          nombre: 'lo que sea',
-          fecha_compra: '2026-01-01',
-          tipo_compra: 'ONLINE',
-          precio: 999,
-        }),
-      )
+      .mockResolvedValueOnce(toolCall('crear_producto', { confirmar: true }))
       .mockResolvedValueOnce(textAnswer('Listo, la creé.'));
 
     const turn2 = await service.sendMessage('u1', 'c1', 'sí');
@@ -162,16 +155,10 @@ describe('crear_producto consultivo — flujo real de dos turnos', () => {
     expect(wrongConv.message).toBe('No pude crear el producto.');
     expect(prisma.product.create).not.toHaveBeenCalled();
 
-    // --- Conversación c1 (la original): confirma → se crea con los argumentos ORIGINALES ---
+    // --- Conversación c1 (la original): confirma con SOLO { confirmar: true } →
+    // se crea con los argumentos ORIGINALES (los del turno 1 de c1) ---
     deepSeek.chatCompletion
-      .mockResolvedValueOnce(
-        toolCall('crear_producto', {
-          ...ORIGINAL_ARGS,
-          confirmar: true,
-          nombre: 'otro',
-          precio: 1,
-        }),
-      )
+      .mockResolvedValueOnce(toolCall('crear_producto', { confirmar: true }))
       .mockResolvedValueOnce(textAnswer('Listo, la creé.'));
     const rightConv = await service.sendMessage('u1', 'c1', 'sí');
     expect(rightConv.message).toBe('Listo, la creé.');
@@ -192,9 +179,9 @@ describe('crear_producto consultivo — flujo real de dos turnos', () => {
     await service.sendMessage('u1', undefined, 'Compré una licuadora');
     expect(prisma.product.create).not.toHaveBeenCalled();
 
-    // --- Turno 2: el usuario dice que no; la IA cancela ---
+    // --- Turno 2: el usuario dice que no; la IA cancela con SOLO { confirmar: false } ---
     deepSeek.chatCompletion
-      .mockResolvedValueOnce(toolCall('crear_producto', { ...ORIGINAL_ARGS, confirmar: false }))
+      .mockResolvedValueOnce(toolCall('crear_producto', { confirmar: false }))
       .mockResolvedValueOnce(textAnswer('Perfecto, no la creo.'));
 
     const turn2 = await service.sendMessage('u1', 'c1', 'no');

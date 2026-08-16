@@ -48,6 +48,11 @@ interface PendingConfirmation {
   createdAt: number;
 }
 
+// Obligatorios de crear_producto en el camino de creación real (sin confirmar).
+// El schema zod los deja opcionales a propósito para que la confirmación pueda
+// llegar sola; el executor los exige únicamente cuando NO hay confirmar.
+const REQUIRED_CREATE_FIELDS = ['nombre', 'fecha_compra', 'tipo_compra', 'precio'] as const;
+
 @Injectable()
 export class ChatToolExecutor {
   private static readonly PENDING_TTL_MS = 10 * 60 * 1000; // 10 minutos
@@ -203,11 +208,14 @@ export class ChatToolExecutor {
   // Deduplicación CONSULTIVA (nunca automática) con confirmación pendiente:
   //   1) Llamada sin `confirmar` y con duplicado (mismo nombre + fecha) →
   //      devuelve needs_confirmation y GUARDA los argumentos originales.
-  //   2) Llamada con `confirmar: true` → crea SOLO si hay una confirmación
-  //      pendiente (crea con los argumentos ORIGINALES guardados), y la limpia.
-  //   3) Llamada con `confirmar: false` → el usuario rechazó: no crea y limpia
-  //      el pendiente.
-  //   4) Sin duplicados → crea directo y descarta pendientes viejos.
+  //   2) Llamada con `confirmar: true` SOLO (sin repetir datos) → crea SOLO si
+  //      hay una confirmación pendiente, con los argumentos ORIGINALES
+  //      guardados (lo que la IA repita en esta llamada se ignora), y limpia.
+  //   3) Llamada con `confirmar: false` SOLO → el usuario rechazó: no crea y
+  //      limpia el pendiente.
+  //   4) Sin `confirmar` → creación real: exige los obligatorios (el schema los
+  //      deja opcionales), y sin duplicados crea directo descartando pendientes
+  //      viejos.
   // `confirmar: true` SIN pendiente previo se rechaza: la IA no puede
   // auto-confirmar un duplicado que el usuario nunca vio.
   private async crearProducto(
@@ -215,8 +223,9 @@ export class ChatToolExecutor {
     conversationId: string,
     args: z.infer<typeof crearProductoSchema>,
   ) {
-    // Los required (nombre, fecha_compra, tipo_compra, precio) ya los exige el
-    // schema zod: si faltan, execute() devuelve { error } sin llegar acá.
+    // El schema permite { confirmar: true } / { confirmar: false } SOLOS (sin
+    // repetir los datos), así que los campos obligatorios solo se exigen en el
+    // camino de creación real (sin confirmar).
 
     const key = ChatToolExecutor.pendingKey(userId, conversationId);
     const pending = this.getPending(key);
@@ -229,6 +238,8 @@ export class ChatToolExecutor {
         };
       }
       this.pendingConfirmations.delete(key);
+      // Se crea EXCLUSIVAMENTE con los argumentos ORIGINALES guardados: los que
+      // la IA repita en esta llamada (alterados o no) se ignoran.
       return this.createProductFromArgs(userId, pending.args);
     }
 
@@ -237,13 +248,29 @@ export class ChatToolExecutor {
       return { cancelada: true, message: 'No se creó el producto.' };
     }
 
-    const similar = await this.findSimilar(userId, args.nombre, args.fecha_compra);
+    // Camino de creación real: los obligatorios se verifican acá (el schema no
+    // los exige para permitir confirmar solo).
+    const missing = REQUIRED_CREATE_FIELDS.filter((f) => args[f] === undefined || args[f] === null);
+    if (missing.length > 0) {
+      return {
+        error: `Faltan datos obligatorios para crear el producto: ${missing.join(', ')}.`,
+      };
+    }
+    // A partir de acá los 4 obligatorios están presentes (chequeado arriba).
+    const complete = args as z.infer<typeof crearProductoSchema> & {
+      nombre: string;
+      fecha_compra: string;
+      tipo_compra: PurchaseType;
+      precio: number;
+    };
+
+    const similar = await this.findSimilar(userId, complete.nombre, complete.fecha_compra);
     if (similar.length > 0) {
       // Guarda los argumentos ORIGINALES para el turno de confirmación.
-      this.pendingConfirmations.set(key, { args, createdAt: Date.now() });
+      this.pendingConfirmations.set(key, { args: complete, createdAt: Date.now() });
       return {
         needs_confirmation: true,
-        message: `Ya existe un producto llamado "${args.nombre}" con la misma fecha de compra. ¿Lo creo igual?`,
+        message: `Ya existe un producto llamado "${complete.nombre}" con la misma fecha de compra. ¿Lo creo igual?`,
         similar: similar.map((p) => ({
           id: p.id,
           nombre: p.nombre,
@@ -257,7 +284,7 @@ export class ChatToolExecutor {
     // Sin duplicados: crea directo y descarta cualquier pendiente viejo (el
     // flujo del usuario avanzó hacia otro producto).
     this.pendingConfirmations.delete(key);
-    return this.createProductFromArgs(userId, args);
+    return this.createProductFromArgs(userId, complete);
   }
 
   /** Crea el producto con argumentos ya validados (los actuales o los pendientes). */
@@ -266,7 +293,8 @@ export class ChatToolExecutor {
     if (args.duracion_garantia_meses) {
       // Misma convención que products.service.create: aritmética de meses en
       // UTC para que el día resultante no dependa de la zona horaria.
-      fechaVencimiento = new Date(`${args.fecha_compra}T00:00:00Z`);
+      // Los obligatorios están garantizados por los callers (ver crearProducto).
+      fechaVencimiento = new Date(`${args.fecha_compra!}T00:00:00Z`);
       fechaVencimiento.setUTCMonth(fechaVencimiento.getUTCMonth() + args.duracion_garantia_meses);
     }
 
@@ -294,14 +322,14 @@ export class ChatToolExecutor {
     const product = await this.prisma.product.create({
       data: {
         user_id: userId,
-        nombre: args.nombre,
+        nombre: args.nombre!,
         marca: args.marca ?? null,
         modelo: args.modelo ?? null,
         descripcion: args.descripcion ?? null,
-        fecha_compra: new Date(args.fecha_compra),
+        fecha_compra: new Date(args.fecha_compra!),
         lugar_compra: args.lugar_compra ?? null,
         tipo_compra: args.tipo_compra as PurchaseType,
-        precio: new Prisma.Decimal(args.precio),
+        precio: new Prisma.Decimal(args.precio!),
         moneda: args.moneda ?? 'USD',
         duracion_garantia_meses: args.duracion_garantia_meses ?? null,
         fecha_vencimiento_garantia: fechaVencimiento,

@@ -6,7 +6,10 @@
 // silenciosamente el function calling:
 //   1. Las 4 funciones del brief existen con sus nombres.
 //   2. buscar_productos NO exige nada ({} es válido — el mock e2e llama así).
-//   3. crear_producto exige exactamente nombre/fecha_compra/tipo_compra/precio.
+//   3. crear_producto NO exige campos en el schema: { confirmar: true } o
+//      { confirmar: false } deben poder llegar SOLOS. Los obligatorios
+//      (nombre/fecha_compra/tipo_compra/precio) los valida el executor solo en
+//      el camino de creación real (sin confirmar).
 //   4. additionalProperties: false (schema .strict() — la IA no inventa claves).
 //   5. Las descripciones viajan al payload (documentación para el LLM).
 // =============================================================================
@@ -32,16 +35,17 @@ describe('CHAT_TOOLS — contrato del JSON schema para DeepSeek', () => {
     expect(tool?.function.parameters.properties).toHaveProperty('limit');
   });
 
-  it('crear_producto exige exactamente nombre/fecha_compra/tipo_compra/precio', () => {
+  it('crear_producto NO exige campos ({ confirmar: true } solo es válido); los obligatorios los valida el executor', () => {
     const tool = byName('crear_producto');
-    expect(tool?.function.parameters.required?.sort()).toEqual([
-      'fecha_compra',
-      'nombre',
-      'precio',
-      'tipo_compra',
-    ]);
+    // La confirmación puede llegar sola: el schema no marca `required`.
+    expect(tool?.function.parameters.required).toBeUndefined();
+    for (const f of ['nombre', 'fecha_compra', 'tipo_compra', 'precio', 'confirmar']) {
+      expect(tool?.function.parameters.properties).toHaveProperty(f);
+    }
     expect(tool?.function.parameters.properties).toHaveProperty('moneda');
     expect(tool?.function.parameters.properties).toHaveProperty('duracion_garantia_meses');
+    const confirmar = tool?.function.parameters.properties.confirmar as { type?: string };
+    expect(confirmar.type).toBe('boolean');
   });
 
   it('los schemas .strict() marcan additionalProperties: false', () => {

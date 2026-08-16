@@ -270,18 +270,28 @@ export const buscarProductosSchema = z
 // =============================================================================
 // crear_producto
 // =============================================================================
+// Los campos del producto son OPCIONALES en el schema a propósito: la
+// confirmación puede llegar SOLA como { confirmar: true } o { confirmar: false }
+// sin repetir nombre/fecha/tipo/precio. Los obligatorios los verifica el
+// executor SOLO en el camino de creación real (sin confirmar) — el backend
+// siempre crea con los argumentos ORIGINALES guardados, nunca con los que la
+// IA repita al confirmar.
 export const crearProductoSchema = z
   .object({
-    nombre: z.string().min(1, 'No puede estar vacío.').max(200, 'Máximo 200 caracteres.'),
+    nombre: z
+      .string()
+      .min(1, 'No puede estar vacío.')
+      .max(200, 'Máximo 200 caracteres.')
+      .optional(),
     marca: z.string().optional(),
     modelo: z.string().optional(),
     descripcion: z.string().optional(),
-    fecha_compra: isoDate.describe(
-      'ISO date. Si el usuario dice "hace 2 días", calcula tú la fecha.',
-    ),
+    fecha_compra: isoDate
+      .describe('ISO date. Si el usuario dice "hace 2 días", calcula tú la fecha.')
+      .optional(),
     lugar_compra: z.string().optional(),
-    tipo_compra: z.enum(PURCHASE_TYPE),
-    precio: z.number().finite('Debe ser un número.').min(0, 'No puede ser negativo.'),
+    tipo_compra: z.enum(PURCHASE_TYPE).optional(),
+    precio: z.number().finite('Debe ser un número.').min(0, 'No puede ser negativo.').optional(),
     moneda: isoCurrency.optional().describe('Código ISO 4217 (USD, EUR, ARS...). Por defecto USD.'),
     // 0 = sin garantía (dato válido, como en el resto de la app); tope 600 meses.
     duracion_garantia_meses: z
@@ -303,10 +313,14 @@ export const crearProductoSchema = z
     // Deduplicación CONSULTIVA: si ya existe un producto con el mismo nombre y
     // fecha de compra, la tool pide confirmación (needs_confirmation) y NO
     // crea. La IA pasa true solo cuando el usuario confirmó explícitamente.
+    // Puede llegar SOLO ({ confirmar: true } / { confirmar: false }) sin
+    // repetir los datos del producto: el backend usa los ORIGINALES guardados.
     confirmar: z
       .boolean()
       .optional()
-      .describe('true solo si el usuario confirmó crear un posible duplicado.'),
+      .describe(
+        'Solo para confirmar/cancelar un duplicado: puede ir solo. true = el usuario confirmó crear (se usan los datos originales guardados); false = el usuario rechazó. Sin esto, se crea un producto nuevo.',
+      ),
   })
   .strict();
 

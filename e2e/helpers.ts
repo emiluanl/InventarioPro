@@ -19,7 +19,14 @@ import { API_URL, EMAIL_LOG } from './env';
 
 export const E2E_PASSWORD = 'E2ePass123';
 
-/** Email único por test (evita colisiones entre ejecuciones paralelas). */
+/**
+ * Email único por test (evita colisiones entre ejecuciones paralelas).
+ *
+ * CONTRATO: el dominio @example.com es la marca canónica de "usuario de
+ * prueba" — scripts/clean-test-users.sh (npm run test-users) la usa para
+ * listar/borrar usuarios de test de la BD de desarrollo. No cambies el
+ * dominio sin actualizar también ese script.
+ */
 export function randomEmail(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 }

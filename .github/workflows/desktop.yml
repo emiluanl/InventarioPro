@@ -189,9 +189,25 @@ jobs:
           path: desktop/dist/InventarioPro-Setup-*.exe
           retention-days: 14
 
+      # Checksum del instalador para verificar la integridad de descargas:
+      # se publica como checksums.txt junto al .exe en la GitHub Release
+      # (ver desktop/README.md → Verificación del instalador).
+      - name: Generar checksums del instalador
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem "desktop/dist/InventarioPro-Setup-*.exe" |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $exe) { throw "No se encontró el instalador en desktop/dist/" }
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          "SHA256 ($($exe.Name)) = $hash" | Set-Content "desktop/dist/checksums.txt"
+          Write-Host "checksums.txt generado:"
+          Get-Content "desktop/dist/checksums.txt"
+
       - name: GitHub Release (solo tags)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: desktop/dist/InventarioPro-Setup-*.exe
+          files: |
+            desktop/dist/InventarioPro-Setup-*.exe
+            desktop/dist/checksums.txt
           generate_release_notes: true

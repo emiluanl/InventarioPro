@@ -84,7 +84,7 @@ describe('ChatService — persistencia de tool calls', () => {
 
     expect(result.message).toBe('Tienes 2 productos.');
     expect(result.tool_calls).toEqual(['buscar_productos']);
-    expect(executor.execute).toHaveBeenCalledWith('u1', 'buscar_productos', {});
+    expect(executor.execute).toHaveBeenCalledWith('u1', 'c1', 'buscar_productos', {});
 
     // 3 filas: mensaje del usuario + auditoría + respuesta final.
     const created = prisma.chatMessage.create.mock.calls.map((c) => c[0].data);
@@ -216,7 +216,7 @@ describe('ChatService — fallback sin API key y respuestas malformadas (sin 500
 
     const result = await service.sendMessage('u1', undefined, 'hola');
     expect(result.message).toBe('Listo.');
-    expect(executor.execute).toHaveBeenCalledWith('u1', 'buscar_productos', {});
+    expect(executor.execute).toHaveBeenCalledWith('u1', 'c1', 'buscar_productos', {});
   });
 });
 

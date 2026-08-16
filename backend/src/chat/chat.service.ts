@@ -68,7 +68,7 @@ export class ChatService {
     const history = await this.buildHistory(conversation.id);
 
     // 4) Loop de function calling
-    const result = await this.runAgentLoop(userId, history);
+    const result = await this.runAgentLoop(userId, conversation.id, history);
 
     // 5) Auditoría: registrar las herramientas ejecutadas (qué se llamó, con
     //    qué argumentos y qué devolvió). Son filas auxiliares marcadas por
@@ -195,6 +195,7 @@ export class ChatService {
 
   private async runAgentLoop(
     userId: string,
+    conversationId: string,
     history: ApiChatMessage[],
   ): Promise<{ message: string; toolCalls: string[]; toolDetails: ToolCallDetail[] }> {
     const toolCalls: string[] = [];
@@ -250,7 +251,15 @@ export class ChatService {
             parsedArgs = {};
           }
 
-          const result = await this.executor.execute(userId, toolCall.function.name, parsedArgs);
+          // El conversationId llega al executor: el estado de confirmaciones
+          // pendientes (crear_producto consultivo) queda aislado POR conversación
+          // — confirmar en otra conversación del mismo usuario se rechaza.
+          const result = await this.executor.execute(
+            userId,
+            conversationId,
+            toolCall.function.name,
+            parsedArgs,
+          );
           toolDetails.push({
             name: toolCall.function.name,
             arguments: toolCall.function.arguments,

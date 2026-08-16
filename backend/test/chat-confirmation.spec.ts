@@ -136,6 +136,51 @@ describe('crear_producto consultivo — flujo real de dos turnos', () => {
     expect(data.lugar_compra).toBe('Falabella');
   });
 
+  it('estado aislado por conversación: confirmar en la conversación equivocada se rechaza; en la original crea', async () => {
+    const { prisma, deepSeek, service } = buildFullStack();
+    prisma.product.findMany.mockResolvedValue(EXISTING);
+    // El mock devuelve la conversación pedida, para poder usar c1 y c2.
+    prisma.chatConversation.findFirst.mockImplementation(
+      async ({ where }: { where: { id?: string } }) => ({
+        id: where?.id ?? 'c1',
+        user_id: 'u1',
+      }),
+    );
+
+    // --- Conversación c1: turno 1 con duplicado → queda pendiente bajo la clave u1:c1 ---
+    deepSeek.chatCompletion
+      .mockResolvedValueOnce(toolCall('crear_producto', ORIGINAL_ARGS))
+      .mockResolvedValueOnce(textAnswer('¿La creo igual?'));
+    await service.sendMessage('u1', 'c1', 'Compré una licuadora');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+
+    // --- Conversación c2 (mismo usuario): intenta confirmar → SE RECHAZA (el pendiente está en c1) ---
+    deepSeek.chatCompletion
+      .mockResolvedValueOnce(toolCall('crear_producto', { ...ORIGINAL_ARGS, confirmar: true }))
+      .mockResolvedValueOnce(textAnswer('No pude crear el producto.'));
+    const wrongConv = await service.sendMessage('u1', 'c2', 'sí');
+    expect(wrongConv.message).toBe('No pude crear el producto.');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+
+    // --- Conversación c1 (la original): confirma → se crea con los argumentos ORIGINALES ---
+    deepSeek.chatCompletion
+      .mockResolvedValueOnce(
+        toolCall('crear_producto', {
+          ...ORIGINAL_ARGS,
+          confirmar: true,
+          nombre: 'otro',
+          precio: 1,
+        }),
+      )
+      .mockResolvedValueOnce(textAnswer('Listo, la creé.'));
+    const rightConv = await service.sendMessage('u1', 'c1', 'sí');
+    expect(rightConv.message).toBe('Listo, la creé.');
+    expect(prisma.product.create).toHaveBeenCalledTimes(1);
+    const data = prisma.product.create.mock.calls[0][0].data;
+    expect(data.nombre).toBe('Licuadora Oster');
+    expect(data.fecha_compra).toEqual(new Date('2026-08-15T00:00:00Z'));
+  });
+
   it('turno 1: duplicado; turno 2 "no" → no crea y limpia el pendiente (confirmar:true posterior se rechaza)', async () => {
     const { prisma, deepSeek, service } = buildFullStack();
     prisma.product.findMany.mockResolvedValue(EXISTING);

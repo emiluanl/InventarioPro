@@ -55,7 +55,9 @@ Crea un producto a partir de parámetros extraídos. El usuario puede decir "aca
 
 Campos: `nombre`, `fecha_compra`, `tipo_compra`, `precio` (obligatorios) + `marca`, `modelo`, `descripcion`, `lugar_compra`, `moneda` (ISO 4217 real), `duracion_garantia_meses` (0–600), `notas`, `categoria_nombre` (se resuelve por nombre o se crea), `metodo_pago`, `numero_serie`, `tags` y `confirmar`.
 
-**Deduplicación consultiva (nunca automática):** si ya existe un producto con el mismo nombre (case-insensitive) y la misma fecha de compra, la tool devuelve `needs_confirmation` y **NO crea**; además guarda los argumentos originales como confirmación pendiente (10 min de vida).
+**Deduplicación consultiva (nunca automática):** si ya existe un producto con el mismo nombre (case-insensitive) y la misma fecha de compra, la tool devuelve `needs_confirmation` y **NO crea**; además guarda los argumentos originales como confirmación pendiente.
+
+El pendiente se guarda **en memoria, aislado por conversación** (clave `userId:conversationId`): confirmar desde otra conversación del mismo usuario se rechaza. Tiene **TTL de 10 minutos** y al reiniciar el proceso se pierde de forma **segura** — el usuario solo tiene que reintentar y la tool vuelve a preguntar; nunca queda un `confirmar` huérfano que cree algo sin confirmación real.
 
 - Usuario **confirma** → la IA vuelve a llamar con `confirmar: true` → crea con los argumentos **originales** guardados.
 - Usuario **rechaza** → la IA llama con `confirmar: false` → no crea y limpia el pendiente.

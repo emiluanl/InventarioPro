@@ -39,7 +39,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 describe('ChatToolExecutor — validación y ejecución de tools', () => {
   it('devuelve error para una función desconocida', async () => {
     const { executor } = buildMocks();
-    const res = await executor.execute('u1', 'no_existe', {});
+    const res = await executor.execute('u1', 'conv-1', 'no_existe', {});
     expect(res).toEqual({ error: 'Función desconocida: no_existe' });
   });
 
@@ -50,7 +50,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     const { prisma, executor } = buildMocks();
     const before = Date.now();
 
-    await executor.execute('u1', 'buscar_productos', { warranty_status: 'vencida' });
+    await executor.execute('u1', 'conv-1', 'buscar_productos', { warranty_status: 'vencida' });
 
     const where = prisma.product.findMany.mock.calls[0][0].where;
     expect(where.user_id).toBe('u1');
@@ -64,7 +64,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     const { prisma, executor } = buildMocks();
     const before = Date.now();
 
-    await executor.execute('u1', 'buscar_productos', { warranty_status: 'por_vencer' });
+    await executor.execute('u1', 'conv-1', 'buscar_productos', { warranty_status: 'por_vencer' });
 
     const fv = prisma.product.findMany.mock.calls[0][0].where.fecha_vencimiento_garantia;
     expect(fv.gt.getTime()).toBeGreaterThanOrEqual(before - 5_000);
@@ -75,7 +75,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
   it('buscar_productos filtra warranty_status=vigente (gt +30d)', async () => {
     const { prisma, executor } = buildMocks();
 
-    await executor.execute('u1', 'buscar_productos', { warranty_status: 'vigente' });
+    await executor.execute('u1', 'conv-1', 'buscar_productos', { warranty_status: 'vigente' });
 
     const fv = prisma.product.findMany.mock.calls[0][0].where.fecha_vencimiento_garantia;
     const in30 = new Date(Date.now() + 30 * DAY_MS);
@@ -87,21 +87,21 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
   // -------------------------------------------------------------------------
   it('buscar_productos con limit inválido devuelve error sin consultar', async () => {
     const { prisma, executor } = buildMocks();
-    const res = await executor.execute('u1', 'buscar_productos', { limit: 0 });
+    const res = await executor.execute('u1', 'conv-1', 'buscar_productos', { limit: 0 });
     expect((res as { error: string }).error).toContain('Argumentos inválidos');
     expect(prisma.product.findMany).not.toHaveBeenCalled();
   });
 
   it('buscar_productos con fecha inválida devuelve error', async () => {
     const { prisma, executor } = buildMocks();
-    const res = await executor.execute('u1', 'buscar_productos', { fecha_desde: 'ayer' });
+    const res = await executor.execute('u1', 'conv-1', 'buscar_productos', { fecha_desde: 'ayer' });
     expect((res as { error: string }).error).toContain('fecha_desde');
     expect(prisma.product.findMany).not.toHaveBeenCalled();
   });
 
   it('buscar_productos con estado inválido devuelve error', async () => {
     const { prisma, executor } = buildMocks();
-    const res = await executor.execute('u1', 'buscar_productos', { estado: 'ROTO' });
+    const res = await executor.execute('u1', 'conv-1', 'buscar_productos', { estado: 'ROTO' });
     expect((res as { error: string }).error).toContain('estado');
     expect(prisma.product.findMany).not.toHaveBeenCalled();
   });
@@ -109,7 +109,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
   it('buscar_productos con search y fechas válidas construye el where', async () => {
     const { prisma, executor } = buildMocks();
 
-    await executor.execute('u1', 'buscar_productos', {
+    await executor.execute('u1', 'conv-1', 'buscar_productos', {
       search: 'licuadora',
       fecha_desde: '2026-01-01',
       fecha_hasta: '2026-12-31',
@@ -123,13 +123,13 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
 
   it('buscar_productos respeta el default de limit (20)', async () => {
     const { prisma, executor } = buildMocks();
-    await executor.execute('u1', 'buscar_productos', {});
+    await executor.execute('u1', 'conv-1', 'buscar_productos', {});
     expect(prisma.product.findMany.mock.calls[0][0].take).toBe(20);
   });
 
   it('args nulos se tratan como objeto vacío', async () => {
     const { prisma, executor } = buildMocks();
-    const res = await executor.execute('u1', 'buscar_productos', null as never);
+    const res = await executor.execute('u1', 'conv-1', 'buscar_productos', null as never);
     expect(res).toEqual([]);
     expect(prisma.product.findMany).toHaveBeenCalled();
   });
@@ -140,7 +140,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
   it('crear_producto con args válidos crea el producto con Decimal', async () => {
     const { prisma, executor } = buildMocks();
 
-    const res = await executor.execute('u1', 'crear_producto', {
+    const res = await executor.execute('u1', 'conv-1', 'crear_producto', {
       nombre: 'Licuadora Oster',
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
@@ -159,7 +159,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
   it('crear_producto calcula fecha_vencimiento desde la duración (UTC)', async () => {
     const { prisma, executor } = buildMocks();
 
-    await executor.execute('u1', 'crear_producto', {
+    await executor.execute('u1', 'conv-1', 'crear_producto', {
       nombre: 'TV',
       fecha_compra: '2026-08-15',
       tipo_compra: 'ONLINE',
@@ -227,14 +227,14 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     ],
   ])('crear_producto rechaza %s', async (_label, args) => {
     const { prisma, executor } = buildMocks();
-    const res = await executor.execute('u1', 'crear_producto', args as never);
+    const res = await executor.execute('u1', 'conv-1', 'crear_producto', args as never);
     expect((res as { error: string }).error).toContain('Argumentos inválidos');
     expect(prisma.product.create).not.toHaveBeenCalled();
   });
 
   it('crear_producto acepta duracion_garantia_meses=0 (sin garantía)', async () => {
     const { prisma, executor } = buildMocks();
-    const res = await executor.execute('u1', 'crear_producto', {
+    const res = await executor.execute('u1', 'conv-1', 'crear_producto', {
       nombre: 'X',
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
@@ -249,7 +249,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
 
   it('crear_producto acepta moneda ISO 4217 real (ARS)', async () => {
     const { prisma, executor } = buildMocks();
-    const res = await executor.execute('u1', 'crear_producto', {
+    const res = await executor.execute('u1', 'conv-1', 'crear_producto', {
       nombre: 'X',
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
@@ -275,7 +275,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
       },
     ]);
 
-    const res = (await executor.execute('u1', 'crear_producto', {
+    const res = (await executor.execute('u1', 'conv-1', 'crear_producto', {
       nombre: 'Licuadora Oster',
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
@@ -300,7 +300,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     ]);
 
     // Turno 1: duplicado → needs_confirmation (guarda el pendiente con los args).
-    const first = await executor.execute('u1', 'crear_producto', {
+    const first = await executor.execute('u1', 'conv-1', 'crear_producto', {
       nombre: 'Licuadora Oster',
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
@@ -311,7 +311,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
 
     // Turno 2: la IA confirma con OTROS args (los que repita no importan):
     // se crea con los ORIGINALES guardados en el turno 1.
-    const res = await executor.execute('u1', 'crear_producto', {
+    const res = await executor.execute('u1', 'conv-1', 'crear_producto', {
       confirmar: true,
       nombre: 'Otro nombre cualquiera',
       fecha_compra: '2026-01-01',
@@ -329,7 +329,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
 
   it('confirmar:true SIN confirmación pendiente se rechaza (no crea ni consulta)', async () => {
     const { prisma, executor } = buildMocks();
-    const res = await executor.execute('u1', 'crear_producto', {
+    const res = await executor.execute('u1', 'conv-1', 'crear_producto', {
       confirmar: true,
       nombre: 'X',
       fecha_compra: '2026-08-15',
@@ -355,7 +355,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     ]);
 
     // Turno 1: pendiente creado.
-    await executor.execute('u1', 'crear_producto', {
+    await executor.execute('u1', 'conv-1', 'crear_producto', {
       nombre: 'Licuadora Oster',
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
@@ -363,7 +363,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     });
 
     // Turno 2: el usuario rechaza → no crea y limpia.
-    const cancel = await executor.execute('u1', 'crear_producto', {
+    const cancel = await executor.execute('u1', 'conv-1', 'crear_producto', {
       confirmar: false,
       nombre: 'Licuadora Oster',
       fecha_compra: '2026-08-15',
@@ -374,7 +374,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     expect(prisma.product.create).not.toHaveBeenCalled();
 
     // Turno 3: sin pendiente, confirmar:true se rechaza.
-    const later = await executor.execute('u1', 'crear_producto', {
+    const later = await executor.execute('u1', 'conv-1', 'crear_producto', {
       confirmar: true,
       nombre: 'Licuadora Oster',
       fecha_compra: '2026-08-15',
@@ -399,7 +399,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
         },
       ]);
 
-      await executor.execute('u1', 'crear_producto', {
+      await executor.execute('u1', 'conv-1', 'crear_producto', {
         nombre: 'Licuadora Oster',
         fecha_compra: '2026-08-15',
         tipo_compra: 'FISICO',
@@ -408,7 +408,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
 
       jest.advanceTimersByTime(11 * 60 * 1000); // +11 min: el pendiente expiró
 
-      const res = await executor.execute('u1', 'crear_producto', {
+      const res = await executor.execute('u1', 'conv-1', 'crear_producto', {
         confirmar: true,
         nombre: 'Licuadora Oster',
         fecha_compra: '2026-08-15',
@@ -434,7 +434,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
       },
     ]);
 
-    const res = await executor.execute('u1', 'crear_producto', {
+    const res = await executor.execute('u1', 'conv-1', 'crear_producto', {
       nombre: 'Licuadora Oster',
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
@@ -452,7 +452,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     const { prisma, executor } = buildMocks();
     prisma.category.findMany.mockResolvedValueOnce([{ id: 'cat-1', nombre: 'Electrodomésticos' }]);
 
-    await executor.execute('u1', 'crear_producto', {
+    await executor.execute('u1', 'conv-1', 'crear_producto', {
       nombre: 'X',
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
@@ -468,7 +468,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
   it('crear_producto crea la categoría personal si no existe', async () => {
     const { prisma, executor } = buildMocks();
 
-    await executor.execute('u1', 'crear_producto', {
+    await executor.execute('u1', 'conv-1', 'crear_producto', {
       nombre: 'X',
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
@@ -485,7 +485,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
   it('crear_producto completa metodo_pago, numero_serie y tags', async () => {
     const { prisma, executor } = buildMocks();
 
-    await executor.execute('u1', 'crear_producto', {
+    await executor.execute('u1', 'conv-1', 'crear_producto', {
       nombre: 'X',
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
@@ -516,7 +516,9 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     );
     prisma.product.findMany.mockRejectedValueOnce(prismaError);
 
-    const res = (await executor.execute('u1', 'buscar_productos', {})) as { error: string };
+    const res = (await executor.execute('u1', 'conv-1', 'buscar_productos', {})) as {
+      error: string;
+    };
 
     expect(res.error).toBe('Error interno al consultar los datos. Inténtalo de nuevo.');
     expect(res.error).not.toContain('SELECT');
@@ -527,7 +529,9 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     const { prisma, executor } = buildMocks();
     prisma.product.findMany.mockRejectedValueOnce(new Error('se rompió algo interno'));
 
-    const res = (await executor.execute('u1', 'buscar_productos', {})) as { error: string };
+    const res = (await executor.execute('u1', 'conv-1', 'buscar_productos', {})) as {
+      error: string;
+    };
 
     expect(res.error).toBe('Ocurrió un error al ejecutar la herramienta. Inténtalo de nuevo.');
   });
@@ -537,14 +541,16 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
   // -------------------------------------------------------------------------
   it('garantías con dias inválido (0) devuelve error sin consultar', async () => {
     const { prisma, executor } = buildMocks();
-    const res = await executor.execute('u1', 'consultar_garantias_por_vencer', { dias: 0 });
+    const res = await executor.execute('u1', 'conv-1', 'consultar_garantias_por_vencer', {
+      dias: 0,
+    });
     expect((res as { error: string }).error).toContain('dias');
     expect(prisma.product.findMany).not.toHaveBeenCalled();
   });
 
   it('garantías con dias 30 consulta con ventana de fechas', async () => {
     const { prisma, executor } = buildMocks();
-    await executor.execute('u1', 'consultar_garantias_por_vencer', { dias: 30 });
+    await executor.execute('u1', 'conv-1', 'consultar_garantias_por_vencer', { dias: 30 });
     const where = prisma.product.findMany.mock.calls[0][0].where;
     expect(where.fecha_vencimiento_garantia.not).toBeNull();
     expect(where.fecha_vencimiento_garantia.lte).toBeInstanceOf(Date);
@@ -556,7 +562,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
   // -------------------------------------------------------------------------
   it('resumen_gastos con periodo inválido devuelve error', async () => {
     const { prisma, executor } = buildMocks();
-    const res = await executor.execute('u1', 'resumen_gastos', { periodo: 'el_anio' });
+    const res = await executor.execute('u1', 'conv-1', 'resumen_gastos', { periodo: 'el_anio' });
     expect((res as { error: string }).error).toContain('periodo');
     expect(prisma.product.findMany).not.toHaveBeenCalled();
   });
@@ -569,7 +575,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
       { id: 'c', precio: { toString: () => '5' }, categoria: null },
     ]);
 
-    const res = (await executor.execute('u1', 'resumen_gastos', {
+    const res = (await executor.execute('u1', 'conv-1', 'resumen_gastos', {
       periodo: 'anio_actual',
     })) as { total: string; cantidad_productos: number; por_categoria: Record<string, number> };
 
@@ -580,7 +586,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
 
   it('resumen_gastos filtra por categoria_id', async () => {
     const { prisma, executor } = buildMocks();
-    await executor.execute('u1', 'resumen_gastos', { categoria_id: 'cat1' });
+    await executor.execute('u1', 'conv-1', 'resumen_gastos', { categoria_id: 'cat1' });
     const where = prisma.product.findMany.mock.calls[0][0].where;
     expect(where.categoria_id).toBe('cat1');
   });

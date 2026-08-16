@@ -345,7 +345,13 @@ docker compose -f docker-compose.prod.yml \
 Los backups solo valen si se pueden restaurar. Al menos una vez al mes (o tras
 cambiar la configuración), verifica de punta a punta que un dump remoto
 restaura correctamente **sin tocar la BD de producción** — se restaura en una
-BD descartable en la red del stack:
+BD descartable en la red del stack.
+
+> ⚡ **Automatizado**: `npm run restore:drill` (`scripts/restore-drill.sh`)
+> hace todo esto en un comando (sanidad del dump + restauración en BD
+> descartable + conteos + verificación del tar de uploads con `--uploads`).
+
+El procedimiento manual completo:
 
 ```bash
 # 1) BD temporal en la red del stack (el nombre de la red es <proyecto>_default)

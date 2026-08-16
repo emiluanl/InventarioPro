@@ -75,22 +75,24 @@ ssh -i ~/.ssh/inventariopro_deploy deploy@<IP_STAGING> 'echo OK'
 
 ```bash
 ssh -i ~/.ssh/inventariopro_deploy deploy@<IP_STAGING>
-git clone https://github.com/emiluanl/InventarioPro-2.0.git ~/InventarioPro-staging
+git clone https://github.com/emiluanl/InventarioPro.git ~/InventarioPro-staging
 cd ~/InventarioPro-staging
 
 # El .env.prod mezcla las variables del backend + las del compose (Postgres,
-# Redis, dominio público). Empieza desde el ejemplo del backend:
-cp backend/.env.example .env.prod
+# Redis, dominio público). La plantilla raíz .env.prod.example (commiteada,
+# SIN secretos) cubre ambas: cópiala y completa los valores reales.
+cp .env.prod.example .env.prod
 nano .env.prod
 ```
 
-> ⚠️ **`backend/.env.example` NO cubre todo el `.env.prod`**: faltan las
-> variables del compose — `POSTGRES_USER`, `POSTGRES_PASSWORD`,
-> `PUBLIC_API_URL` y, si usas Redis con contraseña, `REDIS_PASSWORD`. Sin
-> ellas el primer `docker compose up` falla con `:?required`. Añádelas
-> manualmente (ver §1.5). El `.env.prod` **nunca se sube a git** (está en
-> `.gitignore`); es local al servidor. Si usas staging y producción, cada
-> servidor tiene el suyo.
+> ⚠️ `.env.prod.example` incluye TODAS las variables que el compose exige
+> (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `PUBLIC_API_URL`,
+> `CORS_ORIGIN`, `JWT_ACCESS_SECRET`, `APP_BASE_URL`) con placeholders
+> (`genera-con-openssl-rand-...`): **reemplaza cada placeholder** antes de
+> arrancar o el primer `docker compose up` falla. El `.env.prod` **nunca se
+> sube a git** (está en `.gitignore`); es local al servidor. Si usas staging
+> y producción, cada servidor tiene el suyo (no compartas secretos entre
+> ambos).
 
 ### 1.5. Variables mínimas del `.env.prod`
 
@@ -98,7 +100,7 @@ El compose exige estas (`:?required` en `docker-compose.prod.yml`):
 
 | Variable | Ejemplo | Notas |
 |---|---|---|
-| `POSTGRES_USER` | `inventariopro` | usuario de la BD (no está en `backend/.env.example`, añadir) |
+| `POSTGRES_USER` | `inventariopro` | usuario de la BD (ya en `.env.prod.example`) |
 | `POSTGRES_PASSWORD` | `genera-una-fuerte` | `openssl rand -base64 24` (no está en el example, añadir) |
 | `REDIS_PASSWORD` | `genera-una-fuerte` | Redis arranca con `--requirepass`; misma clave en backend y healthcheck |
 | `JWT_ACCESS_SECRET` | `genera-una-fuerte` | firma de tokens (`openssl rand -hex 32`) |
@@ -106,15 +108,15 @@ El compose exige estas (`:?required` en `docker-compose.prod.yml`):
 | `CORS_ORIGIN` | `https://app.tudominio.com` | exacto, sin barra final |
 | `PUBLIC_API_URL` | `https://app.tudominio.com/api` | se inlinea en el bundle del frontend (build-time) |
 
-> La guía `backend/.env.example` tiene `REDIS_PASSWORD`, `JWT_ACCESS_SECRET`,
-> `APP_BASE_URL` y `CORS_ORIGIN`; añade a mano las otras tres.
+> Todas estas variables (y las opcionales de abajo) ya están en la plantilla
+> raíz `.env.prod.example`; solo falta completarlas con valores reales.
 
 Y las opcionales según el stack (con su default):
 
 | Variable | Default | Notas |
 |---|---|---|
 | `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | vacías | si `STORAGE_PROVIDER=supabase` |
-| `STORAGE_PROVIDER` | `supabase` | o `local` (guardar en disco del servidor) |
+| `STORAGE_PROVIDER` | `supabase` (default del compose) | `local` = guardar en disco del servidor (**despliegue actual**) |
 | `SMTP_HOST` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_PORT` | vacíos | para envío real de emails |
 | `DEEPSEEK_API_KEY` | vacío | chat con IA |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | vacíos | notificaciones push |
@@ -142,14 +144,27 @@ y el frontend en el 3000 (para pruebas internas basta).
 
 ## 2. Configurar los secrets en GitHub
 
-Todo se hace desde el navegador (o con `gh secret set` si tienes la CLI
-autenticada con permisos de admin):
+Se configura en **Settings → Secrets and variables → Actions** del repo:
 
 ```
-https://github.com/emiluanl/InventarioPro-2.0/settings/secrets/actions
+https://github.com/emiluanl/InventarioPro/settings/secrets/actions
 ```
 
-Pulsa **"New repository secret"** por cada uno:
+**Opción A — navegador:** pulsa **"New repository secret"** por cada secret
+de la tabla de abajo. El valor de la clave SSH es el **contenido COMPLETO**
+del archivo privado (con las líneas `-----BEGIN OPENSSH PRIVATE KEY-----` y
+`-----END ...-----` incluidas).
+
+**Opción B — CLI** (`gh secret set`, si tienes `gh` autenticado con permisos
+de admin):
+
+```bash
+gh secret set STAGING_HOST    --body "<IP_STAGING>"
+gh secret set STAGING_USER    --body "deploy"
+gh secret set STAGING_SSH_KEY < ~/.ssh/inventariopro_deploy   # archivo, no string
+gh secret set STAGING_PORT    --body "22"                     # solo si no es 22
+# Para producción: repetir con DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY / DEPLOY_PORT
+```
 
 ### Secrets de STAGING
 
@@ -178,6 +193,11 @@ Opcionales: `DEPLOY_PORT`, `DEPLOY_DIR` (variable, default `~/InventarioPro`).
 > **Variables vs Secrets**: los valores que NO son credenciales (rutas) se
 > configuran en `Settings → Secrets and variables → Actions → Variables`,
 > no como secrets (los secrets se ocultan en los logs).
+>
+> ℹ️ En la misma página viven los secrets de los OTROS workflows del repo
+> (p. ej. `WIN_CSC_BASE64` / `WIN_CSC_KEY_PASSWORD`, que firman el
+> instalador del desktop, ver `.github/workflows/desktop.yml`). No borres
+> los que no sean de deploy.
 
 ---
 
@@ -217,18 +237,41 @@ aprobación antes de ejecutar el SSH.
 
 ## 5. Activar el deploy automático
 
-> 🔕 **Estado actual**: el trigger de push a `main` está **desactivado**
-> temporalmente en `.github/workflows/deploy.yml` (hasta configurar los
-> secrets, para que el CI no falle en cada push). Para reactivarlo, vuelve a
-> añadir el bloque `push: branches: [main]` (hay un comentario en el
-> workflow con las instrucciones).
+> 🔕 **Estado actual (16-08-2026)**: los secrets `DEPLOY_*` / `STAGING_*` aún
+> NO están configurados en GitHub, y el trigger de push a `main` sigue
+> **desactivado** en `.github/workflows/deploy.yml` para que el CI no falle
+> en cada push con secrets ausentes.
 
-Cuando los secrets ya estén configurados, reactiva el trigger y:
+Reactivar el trigger (una vez configurados los secrets y validado staging):
 
-- **Inmediato**: haz el primer `git push` de la rama actual.
-- **Controlando cuándo**: elige `main` como `Deployment branches` en el
-  environment de producción (paso 4), y el push automático pasará por la
-  aprobación.
+1. Abre `.github/workflows/deploy.yml` y busca el bloque comentado del header
+   ("El trigger automático de push a main está DESACTIVADO...").
+2. Añade `push` dentro del bloque `on:` existente:
+
+   ```yaml
+   on:
+     workflow_dispatch:
+       inputs:
+         environment: ...
+     push:              # ← lo que hay que añadir
+       branches: [main]
+   ```
+
+3. Commit y push:
+
+   ```bash
+   git add .github/workflows/deploy.yml
+   git commit -m "CI: activa el deploy automático por push a main"
+   git push
+   ```
+
+4. Verifica: en la pestaña **Actions** debe aparecer un run de **Deploy**
+   (entorno `production`) en cada push a `main`. Si `Validar secrets` pasa y
+   el SSH despliega y deja el backend `healthy`, quedó activo.
+
+Para controlar cuándo despliega: elige `main` como **Deployment branches**
+en el environment de `production` (paso 4) y el push automático pasará por
+la aprobación de revisores antes del SSH.
 
 ---
 
@@ -253,4 +296,5 @@ Cuando los secrets ya estén configurados, reactiva el trigger y:
 - [ ] Workflow lanzado a `staging` con éxito
 - [ ] (Opcional) Environments con revisores para producción
 - [ ] Secrets `DEPLOY_HOST/USER/SSH_KEY` configurados
+- [ ] Trigger automático reactivado (§5) — el push a `main` dispara Deploy
 - [ ] Primer push a `main` desplegó a producción

@@ -85,6 +85,31 @@ describe('DeepSeekClient — timeout, presupuesto y retry', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('HTTP 429 (rate limit) no se reintenta y cae al fallback', async () => {
+    fetchMock.mockResolvedValue(httpError(429));
+    const client = makeClient({ DEEPSEEK_API_KEY: 'key' });
+
+    await expect(client.chatCompletion({} as ChatCompletionRequest)).rejects.toThrow(
+      ServiceUnavailableException,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cuerpo no-JSON (proxy/HTML) → error sanitizado, sin reintentar', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('Unexpected token < in JSON');
+      },
+    } as unknown as Response);
+    const client = makeClient({ DEEPSEEK_API_KEY: 'key' });
+
+    const promise = client.chatCompletion({} as ChatCompletionRequest);
+    await expect(promise).rejects.toThrow('respuesta inválida');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('timeout del intento: aborta con su propio controller y NO reintenta', async () => {
     jest.useFakeTimers();
     fetchMock.mockImplementation(hangingFetch());

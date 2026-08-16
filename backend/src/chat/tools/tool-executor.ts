@@ -85,9 +85,25 @@ export class ChatToolExecutor {
           return { error: `Función desconocida: ${name}` };
       }
     } catch (err) {
+      // El detalle REAL siempre queda en los logs del servidor.
       this.logger.error(`Error ejecutando tool ${name}: ${(err as Error).message}`);
-      return { error: (err as Error).message };
+      // Hacia la IA (y de ahí al usuario) NUNCA viajan mensajes internos de
+      // Prisma (SQL, nombres de constraint, valores): solo un mensaje genérico.
+      return { error: this.sanitizeError(err) };
     }
+  }
+
+  /**
+   * Mensaje seguro hacia el LLM: nunca filtra detalles internos de Prisma.
+   * La validación de argumentos (zod) ya devuelve mensajes descriptivos antes
+   * de llegar acá; este catch es la red de seguridad de errores inesperados.
+   */
+  private sanitizeError(err: unknown): string {
+    const ctor = (err as { constructor?: { name?: string } })?.constructor?.name ?? '';
+    if (ctor.startsWith('PrismaClient')) {
+      return 'Error interno al consultar los datos. Inténtalo de nuevo.';
+    }
+    return 'Ocurrió un error al ejecutar la herramienta. Inténtalo de nuevo.';
   }
 
   // ===========================================================================
@@ -159,12 +175,52 @@ export class ChatToolExecutor {
     // Los required (nombre, fecha_compra, tipo_compra, precio) ya los exige el
     // schema zod: si faltan, execute() devuelve { error } sin llegar acá.
 
+    // Deduplicación CONSULTIVA (nunca automática): si ya existe un producto con
+    // el mismo nombre (case-insensitive) y la misma fecha de compra, la tool
+    // NO crea: pide confirmación. La IA solo pasa confirmar:true tras la
+    // confirmación explícita del usuario (dos compras idénticas son legítimas).
+    const similar = await this.findSimilar(userId, args.nombre, args.fecha_compra);
+    if (similar.length > 0 && args.confirmar !== true) {
+      return {
+        needs_confirmation: true,
+        message: `Ya existe un producto llamado "${args.nombre}" con la misma fecha de compra. ¿Lo creo igual?`,
+        similar: similar.map((p) => ({
+          id: p.id,
+          nombre: p.nombre,
+          fecha_compra: p.fecha_compra.toISOString().slice(0, 10),
+          precio: p.precio.toString(),
+          moneda: p.moneda,
+        })),
+      };
+    }
+
     let fechaVencimiento: Date | null = null;
     if (args.duracion_garantia_meses) {
       // Misma convención que products.service.create: aritmética de meses en
       // UTC para que el día resultante no dependa de la zona horaria.
       fechaVencimiento = new Date(`${args.fecha_compra}T00:00:00Z`);
       fechaVencimiento.setUTCMonth(fechaVencimiento.getUTCMonth() + args.duracion_garantia_meses);
+    }
+
+    // Categoría por nombre: resuelve (usuario + sistema, case-insensitive) o
+    // crea una categoría personal si no existe — mismo patrón que importCsv.
+    let categoriaId: string | null = null;
+    if (args.categoria_nombre) {
+      const cats = await this.prisma.category.findMany({
+        where: { OR: [{ user_id: userId }, { user_id: null }] },
+        select: { id: true, nombre: true },
+      });
+      const found = cats.find(
+        (c) => c.nombre.toLowerCase() === args.categoria_nombre!.toLowerCase(),
+      );
+      if (found) {
+        categoriaId = found.id;
+      } else {
+        const created = await this.prisma.category.create({
+          data: { nombre: args.categoria_nombre, user_id: userId },
+        });
+        categoriaId = created.id;
+      }
     }
 
     const product = await this.prisma.product.create({
@@ -182,6 +238,10 @@ export class ChatToolExecutor {
         duracion_garantia_meses: args.duracion_garantia_meses ?? null,
         fecha_vencimiento_garantia: fechaVencimiento,
         notas: args.notas ?? null,
+        categoria_id: categoriaId,
+        metodo_pago: args.metodo_pago ?? null,
+        numero_serie: args.numero_serie ?? null,
+        tags: args.tags ?? null,
       },
     });
 
@@ -195,6 +255,25 @@ export class ChatToolExecutor {
         moneda: product.moneda,
       },
     };
+  }
+
+  /**
+   * Busca posibles duplicados para la confirmación consultiva: mismo nombre
+   * (case-insensitive) y misma fecha de compra, sin borrados. Filtra en JS
+   * para ser compatible con Postgres Y SQLite (mode: insensitive no existe
+   * en SQLite); el pre-filtro usa ciContains para no traer todo el inventario.
+   */
+  private async findSimilar(userId: string, nombre: string, fechaCompra: string) {
+    const candidates = await this.prisma.product.findMany({
+      where: { user_id: userId, deleted_at: null, nombre: ciContains(nombre) },
+      select: { id: true, nombre: true, fecha_compra: true, precio: true, moneda: true },
+      take: 10,
+    });
+    return candidates.filter(
+      (p) =>
+        p.nombre.toLowerCase() === nombre.toLowerCase() &&
+        p.fecha_compra.toISOString().slice(0, 10) === fechaCompra,
+    );
   }
 
   // ===========================================================================

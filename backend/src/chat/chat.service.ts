@@ -24,6 +24,13 @@ const MAX_TOOL_ROUNDS = 5;
 const FALLBACK_MESSAGE =
   'Ahora mismo no puedo pensar bien. ¿Te importa volver a intentarlo en unos segundos?';
 
+// Límites del contexto que se envía al LLM: un historial que crece sin tope
+// multiplica coste, tokens y latencia. El input del usuario ya está acotado por
+// el DTO (MaxLength 2000); aquí se acota lo que ACUMULA la conversación.
+const MAX_HISTORY_MESSAGES = 50; // mensajes como máximo (fila más reciente)
+const MAX_CONTEXT_CHARS = 16000; // presupuesto TOTAL de caracteres
+const MAX_MESSAGE_CHARS = 4000; // tope individual por mensaje
+
 /** Registro de auditoría de una herramienta ejecutada por la IA. */
 interface ToolCallDetail {
   name: string;
@@ -58,7 +65,7 @@ export class ChatService {
     });
 
     // 3) Construir el historial para la IA
-    const history = await this.buildHistory(userId, conversation.id);
+    const history = await this.buildHistory(conversation.id);
 
     // 4) Loop de function calling
     const result = await this.runAgentLoop(userId, history);
@@ -146,26 +153,44 @@ export class ChatService {
     });
   }
 
-  private async buildHistory(userId: string, conversationId: string): Promise<ApiChatMessage[]> {
+  private async buildHistory(conversationId: string): Promise<ApiChatMessage[]> {
     const messages = (
       await this.prisma.chatMessage.findMany({
         where: { conversation_id: conversationId },
         orderBy: { created_at: 'asc' },
-        take: 50, // límite para no enviar historiales infinitos
+        take: MAX_HISTORY_MESSAGES, // límite para no enviar historiales infinitos
       })
     ).filter(
       // Las filas de auditoría (function_call seteado) no se envían al LLM.
       (m) => m.function_call === null,
     );
 
-    const apiMessages: ApiChatMessage[] = [
-      { role: 'system', content: SYSTEM_PROMPT + `\n\nUsuario actual: ${userId}` },
-      ...messages.map((m) => ({
-        role: m.role.toLowerCase() as ApiChatMessage['role'],
-        content: m.content,
-      })),
-    ];
-    return apiMessages;
+    // Mensajes acotados por tamaño individual y por presupuesto TOTAL de
+    // caracteres: se recorta desde los más viejos, conservando SIEMPRE el
+    // último mensaje (el del usuario que dispara esta llamada).
+    let budget = MAX_CONTEXT_CHARS;
+    const capped: ApiChatMessage[] = [];
+    for (const m of [...messages].reverse()) {
+      const content = m.content ? m.content.slice(0, MAX_MESSAGE_CHARS) : m.content;
+      const size = content?.length ?? 0;
+      if (size <= budget) {
+        capped.unshift({ role: m.role.toLowerCase() as ApiChatMessage['role'], content });
+        budget -= size;
+      } else if (capped.length === 0 && size > 0) {
+        // El último mensaje siempre entra, recortado al presupuesto restante.
+        capped.unshift({
+          role: m.role.toLowerCase() as ApiChatMessage['role'],
+          content: content.slice(0, budget),
+        });
+        budget = 0;
+      }
+      if (budget <= 0) break;
+    }
+
+    // El system prompt NO lleva datos internos (userId, tokens, ids de BD):
+    // el LLM no los necesita y el proveedor no debe ver identificadores
+    // internos del usuario.
+    return [{ role: 'system', content: SYSTEM_PROMPT }, ...capped];
   }
 
   private async runAgentLoop(

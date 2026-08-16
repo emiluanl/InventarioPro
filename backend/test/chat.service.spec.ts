@@ -148,3 +148,133 @@ describe('ChatService — persistencia de tool calls', () => {
     });
   });
 });
+
+describe('ChatService — fallback sin API key y respuestas malformadas (sin 500)', () => {
+  const FALLBACK =
+    'Ahora mismo no puedo pensar bien. ¿Te importa volver a intentarlo en unos segundos?';
+
+  it('sin API key (el cliente rechaza) responde el fallback amable y persiste sin errores', async () => {
+    const { prisma, deepSeek, executor, service } = buildMocks();
+    deepSeek.chatCompletion.mockRejectedValue(new Error('El servicio de IA no está configurado.'));
+
+    const result = await service.sendMessage('u1', undefined, '¿Cuántos productos tengo?');
+
+    expect(result.message).toBe(FALLBACK);
+    expect(result.tool_calls).toBeUndefined();
+    expect(executor.execute).not.toHaveBeenCalled();
+    // Usuario + respuesta de fallback, ambas persistidas (2 filas, sin auditoría).
+    expect(prisma.chatMessage.create).toHaveBeenCalledTimes(2);
+    expect(prisma.chatMessage.create.mock.calls[1][0].data.content).toBe(FALLBACK);
+  });
+
+  it('choices vacío → fallback (nunca 500 por shape malformado)', async () => {
+    const { deepSeek, service } = buildMocks();
+    deepSeek.chatCompletion.mockResolvedValueOnce({ choices: [] } as never);
+
+    const result = await service.sendMessage('u1', undefined, 'hola');
+    expect(result.message).toBe(FALLBACK);
+  });
+
+  it('mensaje sin content ni tool_calls → fallback', async () => {
+    const { deepSeek, service } = buildMocks();
+    deepSeek.chatCompletion.mockResolvedValueOnce({
+      choices: [{ index: 0, message: { role: 'assistant', content: null }, finish_reason: 'stop' }],
+    } as never);
+
+    const result = await service.sendMessage('u1', undefined, 'hola');
+    expect(result.message).toBe(FALLBACK);
+  });
+
+  it('tool_calls con arguments JSON inválido se degrada a error de la tool (no 500)', async () => {
+    const { deepSeek, executor, service } = buildMocks();
+    deepSeek.chatCompletion
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [
+                {
+                  id: 'c1',
+                  type: 'function',
+                  function: { name: 'buscar_productos', arguments: '{rotos' },
+                },
+              ],
+            },
+            finish_reason: 'tool_calls',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          { index: 0, message: { role: 'assistant', content: 'Listo.' }, finish_reason: 'stop' },
+        ],
+      });
+    executor.execute.mockResolvedValue({ error: 'Argumentos inválidos' });
+
+    const result = await service.sendMessage('u1', undefined, 'hola');
+    expect(result.message).toBe('Listo.');
+    expect(executor.execute).toHaveBeenCalledWith('u1', 'buscar_productos', {});
+  });
+});
+
+describe('ChatService — privacidad del prompt y límites de contexto', () => {
+  it('el system prompt NO incluye el userId interno ni datos del request', async () => {
+    const { deepSeek, service } = buildMocks();
+    let captured: { messages: { role: string; content: string | null }[] } | undefined;
+    deepSeek.chatCompletion.mockImplementation(async (req: never) => {
+      captured = req as typeof captured;
+      return {
+        choices: [
+          { index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' },
+        ],
+      } as never;
+    });
+
+    await service.sendMessage('u1', undefined, '¿Cuántos productos tengo?');
+
+    expect(captured).toBeDefined();
+    const system = captured!.messages.find((m) => m.role === 'system');
+    expect(system?.content).not.toContain('u1');
+    expect(JSON.stringify(captured!.messages)).not.toContain('u1');
+  });
+
+  it('el historial se recorta al presupuesto de caracteres conservando el último mensaje', async () => {
+    const { prisma, deepSeek, service } = buildMocks();
+    // 14 mensajes largos (3k chars) + el último del usuario (distintivo).
+    const history = Array.from({ length: 14 }, (_, i) => ({
+      id: `m${i}`,
+      role: i % 2 === 0 ? ChatRole.USER : ChatRole.ASSISTANT,
+      content: 'x'.repeat(3000),
+      function_call: null,
+    }));
+    history.push({
+      id: 'm-last',
+      role: ChatRole.USER,
+      content: 'ULTIMO_MENSAJE_DISTINTIVO',
+      function_call: null,
+    });
+    prisma.chatMessage.findMany.mockResolvedValue(history);
+
+    let captured: { messages: { role: string; content: string | null }[] } | undefined;
+    deepSeek.chatCompletion.mockImplementation(async (req: never) => {
+      captured = req as typeof captured;
+      return {
+        choices: [
+          { index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' },
+        ],
+      } as never;
+    });
+
+    await service.sendMessage('u1', undefined, 'hola');
+
+    const nonSystem = captured!.messages.filter((m) => m.role !== 'system');
+    const totalChars = nonSystem.reduce((acc, m) => acc + (m.content?.length ?? 0), 0);
+    // Presupuesto total de contexto (16000) sin contar el system prompt.
+    expect(totalChars).toBeLessThanOrEqual(16000);
+    // El último mensaje (el que dispara la llamada) SIEMPRE se conserva.
+    expect(nonSystem.some((m) => m.content === 'ULTIMO_MENSAJE_DISTINTIVO')).toBe(true);
+  });
+});

@@ -121,7 +121,15 @@ export class DeepSeekClient {
           );
         }
 
-        return (await response.json()) as ChatCompletionResponse;
+        try {
+          return (await response.json()) as ChatCompletionResponse;
+        } catch {
+          // Cuerpo no-JSON (HTML de un proxy, gateway, etc.): no se arregla
+          // reintentando; error sanitizado → el service devuelve el fallback.
+          throw new ServiceUnavailableException(
+            'El servicio de IA devolvió una respuesta inválida.',
+          );
+        }
       } catch (err) {
         const isAbort = (err as Error).name === 'AbortError';
         if (isAbort) {

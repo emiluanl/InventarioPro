@@ -25,7 +25,11 @@ function buildMocks() {
       moneda: 'USD',
     }),
   };
-  const prisma = { product };
+  const category = {
+    findMany: jest.fn().mockResolvedValue([]),
+    create: jest.fn().mockResolvedValue({ id: 'cat-new', nombre: 'Electro' }),
+  };
+  const prisma = { product, category };
   const executor = new ChatToolExecutor(prisma as never);
   return { prisma, executor };
 }
@@ -254,6 +258,167 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     });
     expect((res as { ok: boolean }).ok).toBe(true);
     expect(prisma.product.create.mock.calls[0][0].data.moneda).toBe('ARS');
+  });
+
+  // -------------------------------------------------------------------------
+  // crear_producto — deduplicación consultiva (nunca automática)
+  // -------------------------------------------------------------------------
+  it('crear_producto pide confirmación si ya existe el mismo nombre+fecha (no crea)', async () => {
+    const { prisma, executor } = buildMocks();
+    prisma.product.findMany.mockResolvedValueOnce([
+      {
+        id: 'p-old',
+        nombre: 'licuadora oster', // case distinto: el match es case-insensitive
+        fecha_compra: new Date('2026-08-15T00:00:00.000Z'),
+        precio: { toString: () => '129.99' },
+        moneda: 'USD',
+      },
+    ]);
+
+    const res = (await executor.execute('u1', 'crear_producto', {
+      nombre: 'Licuadora Oster',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 129.99,
+    })) as { needs_confirmation?: boolean; similar?: unknown[] };
+
+    expect(res.needs_confirmation).toBe(true);
+    expect(res.similar).toHaveLength(1);
+    expect(prisma.product.create).not.toHaveBeenCalled();
+  });
+
+  it('crear_producto con confirmar:true crea aunque exista un similar', async () => {
+    const { prisma, executor } = buildMocks();
+    prisma.product.findMany.mockResolvedValueOnce([
+      {
+        id: 'p-old',
+        nombre: 'Licuadora Oster',
+        fecha_compra: new Date('2026-08-15T00:00:00.000Z'),
+        precio: { toString: () => '129.99' },
+        moneda: 'USD',
+      },
+    ]);
+
+    const res = await executor.execute('u1', 'crear_producto', {
+      nombre: 'Licuadora Oster',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 129.99,
+      confirmar: true,
+    });
+
+    expect((res as { ok: boolean }).ok).toBe(true);
+    expect(prisma.product.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('crear_producto crea directo si el similar tiene OTRA fecha (no es duplicado)', async () => {
+    const { prisma, executor } = buildMocks();
+    prisma.product.findMany.mockResolvedValueOnce([
+      {
+        id: 'p-old',
+        nombre: 'Licuadora Oster',
+        fecha_compra: new Date('2025-01-01T00:00:00.000Z'), // fecha distinta
+        precio: { toString: () => '129.99' },
+        moneda: 'USD',
+      },
+    ]);
+
+    const res = await executor.execute('u1', 'crear_producto', {
+      nombre: 'Licuadora Oster',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 129.99,
+    });
+
+    expect((res as { ok: boolean }).ok).toBe(true);
+    expect(prisma.product.create).toHaveBeenCalledTimes(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // crear_producto — campos nuevos (categoría, pago, serie, tags)
+  // -------------------------------------------------------------------------
+  it('crear_producto resuelve categoria_nombre existente (case-insensitive)', async () => {
+    const { prisma, executor } = buildMocks();
+    prisma.category.findMany.mockResolvedValueOnce([{ id: 'cat-1', nombre: 'Electrodomésticos' }]);
+
+    await executor.execute('u1', 'crear_producto', {
+      nombre: 'X',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 10,
+      categoria_nombre: 'electrodomésticos',
+    });
+
+    const data = prisma.product.create.mock.calls[0][0].data;
+    expect(data.categoria_id).toBe('cat-1');
+    expect(prisma.category.create).not.toHaveBeenCalled();
+  });
+
+  it('crear_producto crea la categoría personal si no existe', async () => {
+    const { prisma, executor } = buildMocks();
+
+    await executor.execute('u1', 'crear_producto', {
+      nombre: 'X',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 10,
+      categoria_nombre: 'MiCategoría',
+    });
+
+    expect(prisma.category.create).toHaveBeenCalledWith({
+      data: { nombre: 'MiCategoría', user_id: 'u1' },
+    });
+    expect(prisma.product.create.mock.calls[0][0].data.categoria_id).toBe('cat-new');
+  });
+
+  it('crear_producto completa metodo_pago, numero_serie y tags', async () => {
+    const { prisma, executor } = buildMocks();
+
+    await executor.execute('u1', 'crear_producto', {
+      nombre: 'X',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 10,
+      metodo_pago: 'Tarjeta de crédito',
+      numero_serie: 'SN-123',
+      tags: 'cocina, nuevo',
+    });
+
+    const data = prisma.product.create.mock.calls[0][0].data;
+    expect(data.metodo_pago).toBe('Tarjeta de crédito');
+    expect(data.numero_serie).toBe('SN-123');
+    expect(data.tags).toBe('cocina, nuevo');
+  });
+
+  // -------------------------------------------------------------------------
+  // Sanitización de errores internos (Prisma nunca llega al usuario)
+  // -------------------------------------------------------------------------
+  it('un error de Prisma se devuelve genérico, sin filtrar el detalle interno', async () => {
+    const { prisma, executor } = buildMocks();
+    const prismaError = Object.assign(
+      new Error(
+        'PrismaClientValidationError: Argument `precio`: Invalid value. SELECT "id" FROM "products"...',
+      ),
+      {
+        constructor: { name: 'PrismaClientValidationError' },
+      },
+    );
+    prisma.product.findMany.mockRejectedValueOnce(prismaError);
+
+    const res = (await executor.execute('u1', 'buscar_productos', {})) as { error: string };
+
+    expect(res.error).toBe('Error interno al consultar los datos. Inténtalo de nuevo.');
+    expect(res.error).not.toContain('SELECT');
+    expect(res.error).not.toContain('prisma');
+  });
+
+  it('un error inesperado NO Prisma también se devuelve genérico', async () => {
+    const { prisma, executor } = buildMocks();
+    prisma.product.findMany.mockRejectedValueOnce(new Error('se rompió algo interno'));
+
+    const res = (await executor.execute('u1', 'buscar_productos', {})) as { error: string };
+
+    expect(res.error).toBe('Ocurrió un error al ejecutar la herramienta. Inténtalo de nuevo.');
   });
 
   // -------------------------------------------------------------------------

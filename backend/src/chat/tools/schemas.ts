@@ -291,6 +291,22 @@ export const crearProductoSchema = z
       .max(600, 'Máximo 600 meses.')
       .optional(),
     notas: z.string().optional(),
+    // Categoría por NOMBRE (la IA no conoce IDs internos). Si no existe, se
+    // crea como categoría personal del usuario (mismo patrón que importCsv).
+    categoria_nombre: z
+      .string()
+      .optional()
+      .describe('Nombre de la categoría (se crea si no existe).'),
+    metodo_pago: z.string().optional(),
+    numero_serie: z.string().optional(),
+    tags: z.string().optional().describe('Etiquetas separadas por comas.'),
+    // Deduplicación CONSULTIVA: si ya existe un producto con el mismo nombre y
+    // fecha de compra, la tool pide confirmación (needs_confirmation) y NO
+    // crea. La IA pasa true solo cuando el usuario confirmó explícitamente.
+    confirmar: z
+      .boolean()
+      .optional()
+      .describe('true solo si el usuario confirmó crear un posible duplicado.'),
   })
   .strict();
 

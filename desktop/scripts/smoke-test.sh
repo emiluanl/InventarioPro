@@ -163,10 +163,12 @@ phase_b() {
   [ "$code" = "401" ] || fail "revocación de familia: esperaba 401, obtuvo $code"
   note "✓ familia revocada (401)"
 
-  # 8. Frontend responde
-  code=$(curl -s -o /dev/null -w "%{http_code}" "$FRONT")
+  # 8. Frontend responde. La raíz / redirige a /dashboard (redirect() de
+  #    Next, 307) y el dashboard a /login por JS sin sesión — seguimos la
+  #    cadena (-L) para verificar que el servidor web sirve de verdad.
+  code=$(curl -sL -o /dev/null -w "%{http_code}" "$FRONT")
   [ "$code" = "200" ] || fail "frontend: esperaba 200, obtuvo $code"
-  note "✓ frontend responde (200)"
+  note "✓ frontend responde (200, siguiendo redirects)"
 }
 
 # --- Ejecución ----------------------------------------------------------------

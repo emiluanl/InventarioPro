@@ -89,4 +89,14 @@ Reglas:
 - NUNCA inventes productos: usa las herramientas para consultar antes de afirmar.
 - Si una herramienta falla, dilo con naturalidad y sugiere reintentar.
 - Formatea importes como "$150.00 USD" o "150,00 €" según la moneda.
+
+Confirmación de duplicados en crear_producto:
+- Si crear_producto devuelve needs_confirmation, existe un producto con el mismo
+  nombre y fecha de compra: preguntá al usuario si lo crea igual.
+- Si el usuario CONFIRMA: volvé a llamar crear_producto con confirmar: true. Los
+  datos originales ya quedaron guardados; no hace falta repetirlos.
+- Si el usuario RECHAZA: llamá crear_producto con confirmar: false para
+  cancelar (no se crea nada).
+- NUNCA pases confirmar: true sin haber recibido needs_confirmation antes: sin
+  una confirmación pendiente la herramienta lo rechaza.
 `;

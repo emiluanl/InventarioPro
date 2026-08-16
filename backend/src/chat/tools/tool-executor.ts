@@ -32,9 +32,22 @@ import type { z } from 'zod';
 
 type Args = Record<string, unknown>;
 
+/**
+ * Confirmación pendiente de crear_producto (deduplicación CONSULTIVA).
+ * Se guarda en memoria por usuario con los argumentos ORIGINALES que el
+ * usuario vio al preguntarle: suficiente para una app personal de un solo
+ * backend. Con TTL: si el usuario abandona el flujo, la entrada expira sola.
+ */
+interface PendingConfirmation {
+  args: z.infer<typeof crearProductoSchema>;
+  createdAt: number;
+}
+
 @Injectable()
 export class ChatToolExecutor {
+  private static readonly PENDING_TTL_MS = 10 * 60 * 1000; // 10 minutos
   private readonly logger = new Logger(ChatToolExecutor.name);
+  private readonly pendingConfirmations = new Map<string, PendingConfirmation>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -171,16 +184,42 @@ export class ChatToolExecutor {
   // ===========================================================================
   // crear_producto
   // ===========================================================================
+  // Deduplicación CONSULTIVA (nunca automática) con confirmación pendiente:
+  //   1) Llamada sin `confirmar` y con duplicado (mismo nombre + fecha) →
+  //      devuelve needs_confirmation y GUARDA los argumentos originales.
+  //   2) Llamada con `confirmar: true` → crea SOLO si hay una confirmación
+  //      pendiente (crea con los argumentos ORIGINALES guardados), y la limpia.
+  //   3) Llamada con `confirmar: false` → el usuario rechazó: no crea y limpia
+  //      el pendiente.
+  //   4) Sin duplicados → crea directo y descarta pendientes viejos.
+  // `confirmar: true` SIN pendiente previo se rechaza: la IA no puede
+  // auto-confirmar un duplicado que el usuario nunca vio.
   private async crearProducto(userId: string, args: z.infer<typeof crearProductoSchema>) {
     // Los required (nombre, fecha_compra, tipo_compra, precio) ya los exige el
     // schema zod: si faltan, execute() devuelve { error } sin llegar acá.
 
-    // Deduplicación CONSULTIVA (nunca automática): si ya existe un producto con
-    // el mismo nombre (case-insensitive) y la misma fecha de compra, la tool
-    // NO crea: pide confirmación. La IA solo pasa confirmar:true tras la
-    // confirmación explícita del usuario (dos compras idénticas son legítimas).
+    const pending = this.getPending(userId);
+
+    if (args.confirmar === true) {
+      if (!pending) {
+        return {
+          error:
+            'No hay una confirmación pendiente para crear este producto. Pedí confirmación primero.',
+        };
+      }
+      this.pendingConfirmations.delete(userId);
+      return this.createProductFromArgs(userId, pending.args);
+    }
+
+    if (args.confirmar === false) {
+      if (pending) this.pendingConfirmations.delete(userId);
+      return { cancelada: true, message: 'No se creó el producto.' };
+    }
+
     const similar = await this.findSimilar(userId, args.nombre, args.fecha_compra);
-    if (similar.length > 0 && args.confirmar !== true) {
+    if (similar.length > 0) {
+      // Guarda los argumentos ORIGINALES para el turno de confirmación.
+      this.pendingConfirmations.set(userId, { args, createdAt: Date.now() });
       return {
         needs_confirmation: true,
         message: `Ya existe un producto llamado "${args.nombre}" con la misma fecha de compra. ¿Lo creo igual?`,
@@ -194,6 +233,14 @@ export class ChatToolExecutor {
       };
     }
 
+    // Sin duplicados: crea directo y descarta cualquier pendiente viejo (el
+    // flujo del usuario avanzó hacia otro producto).
+    this.pendingConfirmations.delete(userId);
+    return this.createProductFromArgs(userId, args);
+  }
+
+  /** Crea el producto con argumentos ya validados (los actuales o los pendientes). */
+  private async createProductFromArgs(userId: string, args: z.infer<typeof crearProductoSchema>) {
     let fechaVencimiento: Date | null = null;
     if (args.duracion_garantia_meses) {
       // Misma convención que products.service.create: aritmética de meses en
@@ -255,6 +302,17 @@ export class ChatToolExecutor {
         moneda: product.moneda,
       },
     };
+  }
+
+  /** Devuelve la confirmación pendiente del usuario si existe y no expiró. */
+  private getPending(userId: string): PendingConfirmation | null {
+    const pending = this.pendingConfirmations.get(userId);
+    if (!pending) return null;
+    if (Date.now() - pending.createdAt > ChatToolExecutor.PENDING_TTL_MS) {
+      this.pendingConfirmations.delete(userId);
+      return null;
+    }
+    return pending;
   }
 
   /**

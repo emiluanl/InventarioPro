@@ -32,7 +32,11 @@ Todos en `/api/chat/*`.
 ## Cómo funciona el function calling
 
 1. El usuario envía un mensaje.
-2. El backend guarda el mensaje y construye el historial (últimos 50 mensajes + system prompt).
+2. El backend guarda el mensaje y construye el historial para la IA: último
+   mensaje del usuario + las últimas **50 filas** de la conversación, con un
+   **presupuesto total de 16 000 caracteres** (recorta desde los más viejos,
+   conservando siempre el último) y **4 000 caracteres por mensaje** como tope
+   individual — el contexto no crece sin límite. Más el system prompt.
 3. Llama a la API de DeepSeek con el historial + las 4 tools definidas.
 4. Si la IA decide invocar una tool:
    - El backend la ejecuta contra la base de datos del propio usuario.
@@ -49,6 +53,14 @@ Criterios: `search`, `categoria_id`, `estado`, `warranty_status`, `fecha_desde`,
 ### `crear_producto`
 Crea un producto a partir de parámetros extraídos. El usuario puede decir "acabo de comprar una licuadora Oster en Falabella por $150 hace 2 días" y la IA calcula la fecha, llena los campos y la invoca.
 
+Campos: `nombre`, `fecha_compra`, `tipo_compra`, `precio` (obligatorios) + `marca`, `modelo`, `descripcion`, `lugar_compra`, `moneda` (ISO 4217 real), `duracion_garantia_meses` (0–600), `notas`, `categoria_nombre` (se resuelve por nombre o se crea), `metodo_pago`, `numero_serie`, `tags` y `confirmar`.
+
+**Deduplicación consultiva (nunca automática):** si ya existe un producto con el mismo nombre (case-insensitive) y la misma fecha de compra, la tool devuelve `needs_confirmation` y **NO crea**; además guarda los argumentos originales como confirmación pendiente (10 min de vida).
+
+- Usuario **confirma** → la IA vuelve a llamar con `confirmar: true` → crea con los argumentos **originales** guardados.
+- Usuario **rechaza** → la IA llama con `confirmar: false` → no crea y limpia el pendiente.
+- `confirmar: true` **sin una confirmación pendiente previa se rechaza**: la IA no puede auto-crear un duplicado que el usuario nunca vio.
+
 ### `consultar_garantias_por_vencer`
 `dias` (default 30, máx 365). Devuelve productos cuya garantía vence en los próximos N días.
 
@@ -59,13 +71,17 @@ Crea un producto a partir de parámetros extraídos. El usuario puede decir "aca
 
 | Situación | Comportamiento |
 |---|---|
-| API key no configurada | El cliente lanza `ServiceUnavailableException` → frontend recibe mensaje de fallback |
-| Timeout (>10s) | Reintento automático una vez; si vuelve a fallar, mensaje amable |
-| 4xx de DeepSeek | Sin reintento (payload malo); fallback |
-| 5xx / red transitoria | Un reintento con backoff; si falla, fallback |
+| API key no configurada | El cliente lanza `ServiceUnavailableException` → frontend recibe mensaje de fallback (sin 500) |
+| Timeout del intento (>10s) | **Sin reintento** (la respuesta no va a llegar): fallback amable inmediato |
+| 4xx de DeepSeek (incl. 429) | Sin reintento (payload/key/rate limit); fallback |
+| 5xx / red transitoria | Un reintento con backoff, dentro del presupuesto total de 15s; si falla, fallback |
+| Cuerpo no-JSON (proxy/HTML) | Error sanitizado, sin reintentar; fallback |
+| Respuesta malformada (choices vacío, sin contenido) | Fallback amable |
 | Loop infinito (>5 rondas) | Mensaje de fallback |
 
-**Nunca** se devuelve un error crudo de la IA al usuario.
+**Nunca** se devuelve un error crudo de la IA al usuario, ni mensajes internos de
+Prisma (los errores de las tools se sanitizan; el detalle real queda en los logs
+Del servidor).
 
 ## Variables de entorno relevantes
 
@@ -73,14 +89,16 @@ Crea un producto a partir de parámetros extraídos. El usuario puede decir "aca
 DEEPSEEK_API_KEY=tu-clave-real
 DEEPSEEK_API_BASE=https://api.deepseek.com/v1
 DEEPSEEK_MODEL=deepseek-chat
-DEEPSEEK_TIMEOUT_MS=10000
+DEEPSEEK_TIMEOUT_MS=10000        # timeout por intento
+DEEPSEEK_TOTAL_BUDGET_MS=15000   # presupuesto TOTAL (intentos + reintentos)
 ```
 
 ## Seguridad y privacidad
 
-- El system prompt incluye solo el `userId` (no se envía ningún dato personal).
+- **El system prompt NO incluye datos internos** (ni `userId` ni tokens): el LLM solo recibe las reglas de comportamiento. El `user_id` se usa únicamente en el backend para filtrar los datos de cada usuario.
 - Las tools filtran SIEMPRE por `user_id`: la IA solo puede ver/crear productos del usuario autenticado.
 - Cada llamada a tool se audita en `ChatMessage.function_call` y `function_result`.
+- Errores internos de Prisma nunca llegan al usuario: las tools devuelven mensajes genéricos y loguean el detalle en el servidor.
 - Rate limiting por usuario: 20 msg/min, evita abuso y controla costos.
 
 ## Costos y modelo

@@ -287,28 +287,139 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     expect(prisma.product.create).not.toHaveBeenCalled();
   });
 
-  it('crear_producto con confirmar:true crea aunque exista un similar', async () => {
+  it('confirmar:true tras una confirmación pendiente crea con los argumentos ORIGINALES', async () => {
     const { prisma, executor } = buildMocks();
     prisma.product.findMany.mockResolvedValueOnce([
       {
         id: 'p-old',
         nombre: 'Licuadora Oster',
         fecha_compra: new Date('2026-08-15T00:00:00.000Z'),
-        precio: { toString: () => '129.99' },
+        precio: { toString: () => '150' },
         moneda: 'USD',
       },
     ]);
 
-    const res = await executor.execute('u1', 'crear_producto', {
+    // Turno 1: duplicado → needs_confirmation (guarda el pendiente con los args).
+    const first = await executor.execute('u1', 'crear_producto', {
       nombre: 'Licuadora Oster',
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
-      precio: 129.99,
+      precio: 150,
+    });
+    expect((first as { needs_confirmation: boolean }).needs_confirmation).toBe(true);
+    expect(prisma.product.create).not.toHaveBeenCalled();
+
+    // Turno 2: la IA confirma con OTROS args (los que repita no importan):
+    // se crea con los ORIGINALES guardados en el turno 1.
+    const res = await executor.execute('u1', 'crear_producto', {
       confirmar: true,
+      nombre: 'Otro nombre cualquiera',
+      fecha_compra: '2026-01-01',
+      tipo_compra: 'ONLINE',
+      precio: 999,
     });
 
     expect((res as { ok: boolean }).ok).toBe(true);
     expect(prisma.product.create).toHaveBeenCalledTimes(1);
+    const data = prisma.product.create.mock.calls[0][0].data;
+    expect(data.nombre).toBe('Licuadora Oster');
+    expect(data.fecha_compra).toEqual(new Date('2026-08-15T00:00:00Z'));
+    expect(data.precio.toString()).toBe('150');
+  });
+
+  it('confirmar:true SIN confirmación pendiente se rechaza (no crea ni consulta)', async () => {
+    const { prisma, executor } = buildMocks();
+    const res = await executor.execute('u1', 'crear_producto', {
+      confirmar: true,
+      nombre: 'X',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 10,
+    });
+
+    expect((res as { error: string }).error).toContain('No hay una confirmación pendiente');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+    expect(prisma.product.findMany).not.toHaveBeenCalled();
+  });
+
+  it('confirmar:false cancela y limpia el pendiente; un confirmar:true posterior se rechaza', async () => {
+    const { prisma, executor } = buildMocks();
+    prisma.product.findMany.mockResolvedValueOnce([
+      {
+        id: 'p-old',
+        nombre: 'Licuadora Oster',
+        fecha_compra: new Date('2026-08-15T00:00:00.000Z'),
+        precio: { toString: () => '150' },
+        moneda: 'USD',
+      },
+    ]);
+
+    // Turno 1: pendiente creado.
+    await executor.execute('u1', 'crear_producto', {
+      nombre: 'Licuadora Oster',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 150,
+    });
+
+    // Turno 2: el usuario rechaza → no crea y limpia.
+    const cancel = await executor.execute('u1', 'crear_producto', {
+      confirmar: false,
+      nombre: 'Licuadora Oster',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 150,
+    });
+    expect((cancel as { cancelada: boolean }).cancelada).toBe(true);
+    expect(prisma.product.create).not.toHaveBeenCalled();
+
+    // Turno 3: sin pendiente, confirmar:true se rechaza.
+    const later = await executor.execute('u1', 'crear_producto', {
+      confirmar: true,
+      nombre: 'Licuadora Oster',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 150,
+    });
+    expect((later as { error: string }).error).toContain('No hay una confirmación pendiente');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+  });
+
+  it('la confirmación pendiente expira (TTL 10 min): confirmar:true posterior se rechaza', async () => {
+    jest.useFakeTimers();
+    try {
+      const { prisma, executor } = buildMocks();
+      prisma.product.findMany.mockResolvedValueOnce([
+        {
+          id: 'p-old',
+          nombre: 'Licuadora Oster',
+          fecha_compra: new Date('2026-08-15T00:00:00.000Z'),
+          precio: { toString: () => '150' },
+          moneda: 'USD',
+        },
+      ]);
+
+      await executor.execute('u1', 'crear_producto', {
+        nombre: 'Licuadora Oster',
+        fecha_compra: '2026-08-15',
+        tipo_compra: 'FISICO',
+        precio: 150,
+      });
+
+      jest.advanceTimersByTime(11 * 60 * 1000); // +11 min: el pendiente expiró
+
+      const res = await executor.execute('u1', 'crear_producto', {
+        confirmar: true,
+        nombre: 'Licuadora Oster',
+        fecha_compra: '2026-08-15',
+        tipo_compra: 'FISICO',
+        precio: 150,
+      });
+      expect((res as { error: string }).error).toContain('No hay una confirmación pendiente');
+      expect(prisma.product.create).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('crear_producto crea directo si el similar tiene OTRA fecha (no es duplicado)', async () => {

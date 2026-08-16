@@ -12,6 +12,15 @@
 // Cada bucket del throttler es por endpoint (clave sha256(Clase+Handler+IP)),
 // así que los tests no interfieren entre sí aunque compartan el módulo.
 // No se necesita base de datos: PrismaService se sustituye por mocks.
+//
+// NOTA (hallazgo del "Jest did not exit"): al correr la suite completa sin
+// --detectOpenHandles, este spec es el que dispara el aviso de Jest. Se
+// investigó con process._getActiveHandles(): los 2 Socket[Pipe] que retienen
+// el proceso existen ANTES de crear el módulo (línea base) — son pipes
+// internos de la infraestructura de Jest/ts-jest en Windows, NO un leak de la
+// app. app.close() cierra todo lo de la app; con --detectOpenHandles el
+// proceso termina limpio (cero handles reportados). No hay nada que corregir
+// acá: es un artefacto de la runtime de Jest, no de la aplicación.
 // =============================================================================
 
 import { Test } from '@nestjs/testing';

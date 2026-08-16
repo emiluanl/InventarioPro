@@ -18,6 +18,7 @@ import {
   FRONTEND_URL,
   MOCK_AI_PORT,
   ROOT_DIR,
+  UPLOADS_DIR,
 } from './e2e/env';
 
 export default defineConfig({
@@ -78,6 +79,10 @@ export default defineConfig({
         // Forzamos SMTP_HOST vacío para caer en el modo dev (enlaces en log).
         SMTP_HOST: '',
         STORAGE_PROVIDER: 'local',
+        // Uploads aislados del dev: sin esto, el e2e de attachments escribe
+        // en backend/uploads/products y cada corrida deja dirs huérfanos
+        // (el truncado de la BD no borra archivos). Apunta a e2e/.tmp/uploads.
+        LOCAL_UPLOAD_DIR: UPLOADS_DIR,
         // El chat e2e usa el mock local de DeepSeek (e2e/mock-deepseek.cjs):
         // la "IA" responde tool_calls solo a preguntas de conteo; el resto
         // devuelve 401 y el backend degrada al fallback amable (igual que hoy

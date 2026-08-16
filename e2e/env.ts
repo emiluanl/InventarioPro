@@ -27,6 +27,12 @@ export const DATABASE_URL =
 // Archivo donde el backend (modo dev) escribe los enlaces de verificación.
 export const EMAIL_LOG = join(__dirname, '.tmp', 'dev-emails.log');
 
+// Directorio donde el backend e2e guarda los uploads (LOCAL_UPLOAD_DIR).
+// Aislado en e2e/.tmp (gitignored): si apuntara al default ./uploads (cwd del
+// backend = backend/), cada corrida del e2e de attachments dejaría directorios
+// huérfanos en backend/uploads/products que el truncado de la BD no limpia.
+export const UPLOADS_DIR = join(__dirname, '.tmp', 'uploads');
+
 export const ROOT_DIR = join(__dirname, '..');
 export const BACKEND_DIR = join(ROOT_DIR, 'backend');
 export const FRONTEND_DIR = join(ROOT_DIR, 'frontend');

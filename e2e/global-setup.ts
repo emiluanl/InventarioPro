@@ -19,7 +19,7 @@ import { createRequire } from 'node:module';
 import { mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { BACKEND_DIR, DATABASE_URL, EMAIL_LOG } from './env';
+import { BACKEND_DIR, DATABASE_URL, EMAIL_LOG, UPLOADS_DIR } from './env';
 
 // pg no es dependencia directa del root (paquete e2e): se resuelve desde el
 // node_modules del backend, donde lo instala @prisma/adapter-pg. En CI el job
@@ -30,6 +30,11 @@ const { Client } = requireFromBackend('pg');
 export default async function globalSetup(): Promise<void> {
   rmSync(EMAIL_LOG, { force: true });
   mkdirSync(dirname(EMAIL_LOG), { recursive: true });
+
+  // Uploads del e2e aislados (LOCAL_UPLOAD_DIR → e2e/.tmp/uploads): cada
+  // corrida arranca con el directorio limpio, como la BD.
+  rmSync(UPLOADS_DIR, { recursive: true, force: true });
+  mkdirSync(UPLOADS_DIR, { recursive: true });
 
   const client = new Client({ connectionString: DATABASE_URL });
   try {

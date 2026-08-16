@@ -1,6 +1,6 @@
 {
   "name": "inventariopro-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "InventarioPro - aplicación de escritorio (arranca el stack local embebido sin terminal)",
   "main": "main.js",
   "private": true,

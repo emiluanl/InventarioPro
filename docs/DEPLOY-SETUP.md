@@ -152,6 +152,14 @@ HTTPS solo y la API queda en `https://tu-dominio/api`.
 
 ### 1.7. Runbook completo — crear staging y probar el primer deploy (copiar y pegar)
 
+> ⚡ **Automatizado:** todo esta sección (clave SSH, Docker, clon, `.env.prod`
+> con secretos aleatorios, primer arranque y verificación) se ejecuta en un
+> comando con [`scripts/setup-staging.sh`](../scripts/setup-staging.sh):
+> `npm run setup:staging -- <IP_STAGING>`. Opciones: `-u/--user` (default
+> `deploy`), `-d/--domain` (default `localhost`), `-s/--setup-secrets` (configura
+> además los `STAGING_*` en GitHub si tenés `gh` autenticado). Lo que sigue es
+> la misma secuencia a mano, para entender cada paso.
+
 Secuencia única, de cero a primer deploy funcionando. Reemplaza `<IP_STAGING>`
 (y las credenciales entre `<...>`) antes de ejecutar. Genera contraseñas
 **distintas** para staging y producción.

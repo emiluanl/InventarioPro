@@ -15,7 +15,8 @@
     "test:e2e:report": "playwright show-report",
     "verify:prod": "bash scripts/verify-prod-health.sh",
     "test-users": "bash scripts/clean-test-users.sh",
-    "test-users:clean": "bash scripts/clean-test-users.sh --delete"
+    "test-users:clean": "bash scripts/clean-test-users.sh --delete",
+    "setup:staging": "bash scripts/setup-staging.sh"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1"

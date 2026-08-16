@@ -54,6 +54,7 @@
 
 ### 4.3 🟢 Backend: 2 vulnerabilidades low (transitiva de supabase-js)
 Sin acción urgente; revisar en el próximo `npm audit fix` compatible.
+- **Actualización (16-08-2026):** `npm audit fix` (compatible) NO las resuelve; el único camino es `--force` (supabase-js 2.45.6 → 2.112.3, fuera del rango declarado). Decisión: **no forzar** — es severidad low, en un path opcional que producción no usa (`STORAGE_PROVIDER=local`) y un salto de ~65 minors sin poder testear el storage Supabase. Se re-evalúa si se activa Supabase o aparece un fix dentro de rango.
 
 ## 5. Hallazgos — corrección y ambigüedades
 

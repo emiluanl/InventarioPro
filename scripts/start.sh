@@ -63,6 +63,13 @@ cleanup() {
         || warn "No se pudo restaurar el cliente Prisma de Postgres. Ejecuta: cd backend && npx prisma generate"
     fi
   fi
+  # 0b) Next regenera frontend/next-env.d.ts al arrancar (next dev lo apunta a
+  #     .next/dev/types, next build a .next/types) → el árbol queda "sucio" con
+  #     un diff que no representa un cambio real. Se restaura el estado
+  #     commiteado al salir (mismo patrón que e2e/start-frontend.cjs). Va antes
+  #     del kill de procesos: en Windows el taskkill de abajo mata este script y
+  #     no llegaría a ejecutarse después.
+  git checkout -- frontend/next-env.d.ts 2>/dev/null || true
   # 1) Windows: mata el árbol nativo que escucha en los puertos de la app.
   if command -v netstat >/dev/null 2>&1 && command -v taskkill >/dev/null 2>&1; then
     for port in "$BACKEND_PORT" 3010; do

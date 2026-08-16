@@ -18,6 +18,12 @@
 # =============================================================================
 name: Desktop
 
+# Crear GitHub Releases requiere contents: write en el GITHUB_TOKEN (el
+# default del repo es read-only). Sin esto, el paso "GitHub Release (solo
+# tags)" falla con 403 "Resource not accessible by integration".
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
   pull_request:

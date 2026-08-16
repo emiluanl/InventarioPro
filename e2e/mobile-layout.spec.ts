@@ -17,6 +17,25 @@
 //   nav móvil + filtros plegables) y 1024px (lg, salto a escritorio: cabecera
 //   superior, filtros abiertos, grid 3 columnas). Ambos sin desborde en
 //   dashboard (grid, lista, filtros abiertos) y en Reportes.
+//
+// ⚠ SERVICE WORKER (PWA) y page.route — lección para FUTUROS tests
+// -----------------------------------------------------------------------------
+// La app es una PWA: en producción (next start, como corre el e2e) el
+// sw-register.tsx registra /sw.js con caché REAL. El SW intercepta:
+//   - GETs de la API  → network-first con timeout de 3s + fallback al caché
+//   - Navegaciones    → shell cacheado (offline)
+//   - Estáticos       → stale-while-revalidate
+// Consecuencias para los tests (diagnosticado con probes en la sesión):
+//   1. page.route NO ve los GETs que intercepta el SW: el SW hace su propio
+//      fetch fuera del documento, así que el handler de la ruta nunca se
+//      dispara (los POSTs sí pasan de largo — el SW solo maneja GET).
+//   2. En arranque en frío, un GET que tarde >3s hace que el SW abort y
+//      devuelva 503 "Sin conexión y sin datos en caché" (caché vacío).
+// Solución aplicada: serviceWorkers: 'block' GLOBAL en playwright.config.ts
+// (use). Verificado con probe que aplica también a los contextos manuales
+// creados con browser.newContext (no hace falta repetirlo por test). Si algún
+// día un test NECESITA el SW real: serviceWorkers: 'allow' SOLO en ese
+// contexto, y no usar page.route sobre GETs (o bloquear el SW en el contexto).
 // =============================================================================
 
 import { expect, test } from '@playwright/test';
@@ -535,6 +554,9 @@ test.describe('tema oscuro/claro', () => {
   }) => {
     // serviceWorkers: 'block': el SW de la app (PWA) intercepta los GETs y
     // page.route no ve sus fetches; bloqueado, las rutas funcionan normal.
+    // (La config global ya lo bloquea para todos los contextos, incluidos los
+    // creados con browser.newContext; se deja explícito para documentar por
+    // qué este test necesita rutas SIN el SW en medio.)
     const ctx = await browser.newContext({
       reducedMotion: 'reduce',
       serviceWorkers: 'block',

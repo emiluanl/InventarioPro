@@ -36,6 +36,14 @@ export default defineConfig({
     baseURL: FRONTEND_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    // La app es una PWA: en producción (next start, como el e2e) sw-register
+    // registra /sw.js con caché real (network-first para API con timeout de 3s,
+    // shell offline, stale-while-revalidate). Eso rompe la determinismo de los
+    // tests: page.route no ve los GETs que intercepta el SW, y una API lenta en
+    // arranque en frío puede servir 503 del caché vacío. Ningún test e2e
+    // ejercita el SW (no hay push subscription e2e), así que lo bloqueamos
+    // globalmente: la red va directa del documento y page.route funciona.
+    serviceWorkers: 'block',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 

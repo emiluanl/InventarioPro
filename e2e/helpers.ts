@@ -1,6 +1,15 @@
 // =============================================================================
 // Helpers compartidos de los tests e2e
 // =============================================================================
+//
+// ⚠ Para tests que usen page.route: la app es una PWA y en producción (next
+// start, como corre el e2e) su service worker (/sw.js) intercepta los GETs —
+// page.route NO ve esos requests (el SW hace su propio fetch) y una API lenta
+// en frío puede devolver 503 del caché. Por eso playwright.config.ts bloquea
+// el SW globalmente (serviceWorkers: 'block', aplica también a contextos
+// manuales). No lo re-habiliten en un test salvo que el SW sea el objetivo.
+// Detalle completo en el header de e2e/mobile-layout.spec.ts.
+// =============================================================================
 
 import { readFileSync } from 'node:fs';
 

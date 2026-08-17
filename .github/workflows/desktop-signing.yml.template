@@ -1,0 +1,147 @@
+# =============================================================================
+# PLANTILLA — Microsoft Artifact Signing (DESHABILITADA)
+# =============================================================================
+# Este archivo es una PLANTILLA: termina en `.template` para que GitHub NO lo
+# ejecute. Para activarla: renombrar a `desktop-signing.yml`, configurar los
+# recursos de Azure y los secretos (ver docs/ARTIFACT-SIGNING.md) y dispararla
+# manualmente con un tag de prueba.
+#
+# Objetivo: firmar el instalador NSIS de 1.0.3+ y sus ejecutables internos con
+# Microsoft Artifact Signing desde CI/CD, sin PFX ni claves privadas en GitHub.
+#
+# Requiere (configurado manualmente por el propietario, NO automatizado):
+#   - Cuenta de Artifact Signing + validación de identidad + perfil Public Trust
+#   - Rol "Artifact Signing Certificate Profile Signer" asignado al App Registration
+#   - App Registration + Federated Credential (OIDC) para este repo
+#   - Secrets:  AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+#   - Variables: AS_ENDPOINT, AS_SIGNING_ACCOUNT, AS_CERT_PROFILE
+#   - Environment protegido "release" (reviewers) en Settings → Environments
+# =============================================================================
+
+name: Desktop Signing (Artifact Signing) — TEMPLATE
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag de la release a firmar (ej: v1.0.3)'
+        required: true
+  # push:
+  #   tags: ['v*']
+
+# id-token: write es OBLIGATORIO para OIDC → Azure. Sin contents: write
+# (la firma no lo necesita; la GitHub Release la hace el workflow existente).
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: signing-${{ inputs.release_tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sign-release:
+    name: Firmar instalador con Artifact Signing
+    runs-on: windows-2022
+    timeout-minutes: 60
+    # Environment protegido: un PR jamás llega acá (solo dispatch manual o tag v*).
+    environment: release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install desktop deps
+        working-directory: desktop
+        run: npm ci
+
+      # build.sh SIN certificados en desktop/certs/ → empaqueta SIN firmar.
+      # Los PNG del logo se generan desde SVG dentro del build (hook).
+      - name: Build stack + instalador (sin firma local)
+        working-directory: desktop
+        shell: bash
+        run: bash scripts/build.sh --installer
+
+      # Autenticación OIDC → Azure (sin client-secret).
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Firma el instalador + los exes de win-unpacked. Timestamp RFC3161
+      # OBLIGATORIO: los certificados de Artifact Signing valen ~3 días.
+      - name: Firmar instalador y ejecutables internos
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AS_ENDPOINT }}
+          signing-account-name: ${{ vars.AS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AS_CERT_PROFILE }}
+          files-folder: ${{ github.workspace }}\desktop\dist\win-unpacked
+          files-folder-filter: exe,dll
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Firmar instalador (exe)
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AS_ENDPOINT }}
+          signing-account-name: ${{ vars.AS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AS_CERT_PROFILE }}
+          files: ${{ github.workspace }}\desktop\dist\InventarioPro-Setup-*.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      # Validación posterior a la firma: NotSigned o sin firmante = fallo.
+      # En un runner limpio Status puede ser UnknownError (no hay raíz de
+      # confianza local) — se valida el firmante, no el estatus local.
+      - name: Verificar firma tras firmar
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem "desktop/dist/InventarioPro-Setup-*.exe") +
+            @(Get-ChildItem "desktop/dist/win-unpacked/*.exe" -ErrorAction SilentlyContinue)
+          foreach ($f in $files) {
+            $sig = Get-AuthenticodeSignature $f.FullName
+            if ($sig.Status -eq 'NotSigned' -or -not $sig.SignerCertificate) {
+              throw "NO firmado: $($f.Name) (Status=$($sig.Status))"
+            }
+            Write-Host "OK: $($f.Name) — $($sig.SignerCertificate.Subject) — timestamp=$([bool]$sig.TimeStamperCertificate)"
+          }
+
+      - name: Checksums del instalador firmado
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem "desktop/dist/InventarioPro-Setup-*.exe" |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          "SHA256 ($($exe.Name)) = $hash" | Set-Content "desktop/dist/checksums.txt"
+          Get-Content "desktop/dist/checksums.txt"
+
+      - name: Upload instalador firmado
+        uses: actions/upload-artifact@v4
+        with:
+          name: InventarioPro-Setup-firmado
+          path: |
+            desktop/dist/InventarioPro-Setup-*.exe
+            desktop/dist/checksums.txt
+          retention-days: 14

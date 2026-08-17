@@ -182,10 +182,16 @@ jobs:
       - name: Test (Vitest)
         run: npm test
 
+      # El build genera los assets del logo (npm run build incluye
+      # generate:logo-assets); la validación falla si faltara cualquiera de
+      # los PNG/SVG/favicon requeridos (los PNG no viven en git).
       - name: Build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:3001/api
         run: npm run build
+
+      - name: Validate logo assets
+        run: npm run validate:logo-assets
 
   # =============================================================================
   # Frontend standalone: verifica que el build autónomo (output: standalone, el

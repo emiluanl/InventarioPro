@@ -84,6 +84,13 @@ mkdir -p "$RES/frontend/.next"
 cp -r "$ROOT/frontend/.next/static" "$RES/frontend/.next/static"
 cp -r "$ROOT/frontend/public" "$RES/frontend/public"
 
+# ---------- 4b. Validación de assets del logo --------------------------------
+# El build del frontend (paso 4) ya generó los PNG/favicon (generate:logo-assets
+# va dentro de `npm run build`). Validarlos acá garantiza que el empaquetado
+# nunca corra con iconos faltantes (los PNG no viven en git).
+log "Validando assets del logo (PNG generados + SVG fuente)…"
+( cd "$ROOT/frontend" && npm run validate:logo-assets )
+
 # ---------- 5. Icono de la app (reutiliza el de la PWA) ----------------------
 mkdir -p "$DESK/build"
 cp "$ROOT/frontend/public/icons/icon-512x512.png" "$DESK/build/icon.png"

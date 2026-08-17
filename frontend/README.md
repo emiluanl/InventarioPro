@@ -77,3 +77,27 @@ npm run dev
 ```
 
 Abre http://localhost:3000 y prueba el flujo register → email (en consola del backend) → login → dashboard.
+
+## 🎨 Logo y assets generados (PNG desde SVG)
+
+Los **SVG fuente** del logo viven versionados en `frontend/public/logo/`
+(`logo-symbol-dark.svg`, `logo-symbol-light.svg`, `logo-horizontal-dark.svg`,
+`logo-horizontal-light.svg` y `favicon.svg`). Los **PNG** (favicon, iconos PWA,
+apple-touch-icon, maskable y splash de iOS) y el `app/favicon.ico` **no se
+versionan**: se generan desde los SVG en cada build.
+
+| Script | Qué hace | Cuándo corre |
+|---|---|---|
+| `npm run generate:logo-assets` | Genera `public/icons/*.png` + `app/favicon.ico` (sharp, determinista) | Manual, y **automáticamente** en `npm run build` |
+| `npm run validate:logo-assets` | Falla si falta cualquier asset requerido o tiene dimensiones/formato incorrectos; verifica que las rutas de `layout.tsx` y `manifest.ts` existan | Manual, en CI (frontend) y antes del empaquetado desktop |
+
+Flujo: `npm run build` (y por tanto el Dockerfile, el desktop `build.sh` y el CI)
+ejecutan la generación antes de `next build`. Si un checkout limpio no tiene los
+PNG, el build los crea solos; `validate:logo-assets` garantiza que nunca se
+empaquete con iconos faltantes.
+
+```bash
+cd frontend
+npm run generate:logo-assets   # regenerar desde los SVG fuente
+npm run validate:logo-assets   # verificar que todo está presente y válido
+```

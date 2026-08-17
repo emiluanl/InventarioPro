@@ -8,11 +8,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3010",
-    "build": "next build",
+    "build": "npm run generate:logo-assets && next build",
     "start": "next start -p 3000",
     "lint": "eslint . --max-warnings=0",
     "type-check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "generate:logo-assets": "node scripts/generate-logo-pngs.mjs",
+    "validate:logo-assets": "node scripts/validate-logo-assets.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "3.9.1",

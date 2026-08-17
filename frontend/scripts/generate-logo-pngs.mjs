@@ -1,20 +1,33 @@
 // =============================================================================
-// Genera los PNG del logo (favicon, iconos PWA, apple-touch-icon y splash de
-// iOS) a partir del SVG del símbolo con sharp. Sin dependencias nuevas
-// (sharp es dependencia de Next). Ejecutar: node scripts/generate-logo-pngs.mjs
+// Genera los PNG del logo (favicon, iconos PWA, apple-touch-icon, splash de
+// iOS) y el favicon.ico a partir de los SVG fuente de public/logo. Con sharp
+// (dependencia de Next). Determinista: mismos SVG → mismos bytes.
+//
+// Uso:
+//   node scripts/generate-logo-pngs.mjs
+//   npm run generate:logo-assets
+//
+// Salida (rutas gitignored, se generan en cada build):
+//   public/icons/favicon-16x16.png, favicon-32x32.png, apple-touch-icon.png,
+//   icon-192x192.png, icon-512x512.png, maskable-512.png,
+//   public/icons/splash-<W>x<H>.png (16 splash screens iOS)
+//   app/favicon.ico (ICO con PNG 16 y 32 embebidos — logo nuevo en el tab)
 // =============================================================================
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const iconsDir = join(root, 'public', 'icons');
+const appDir = join(root, 'app');
 const symbol = readFileSync(join(root, 'public', 'logo', 'logo-symbol-dark.svg'));
 const favicon = readFileSync(join(root, 'public', 'logo', 'favicon.svg'));
 
 const BG = '#0a0a0b'; // fondo de marca (tema oscuro predeterminado)
+
+mkdirSync(iconsDir, { recursive: true });
 
 async function renderSymbol(size) {
   return sharp(symbol).resize(size, size).png().toBuffer();
@@ -55,6 +68,33 @@ async function splash(w, h) {
     .toBuffer();
 }
 
+// ---------------------------------------------------------------------------
+// favicon.ico: contenedor ICO con PNG embebidos (soportado por todos los
+// navegadores modernos). Next sirve app/favicon.ico en /favicon.ico.
+// ---------------------------------------------------------------------------
+function encodeIco(images) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(images.length, 4);
+  const entries = [];
+  let offset = 6 + 16 * images.length;
+  for (const { size, png } of images) {
+    const entry = Buffer.alloc(16);
+    entry[0] = size >= 256 ? 0 : size;
+    entry[1] = size >= 256 ? 0 : size;
+    entry[2] = 0;
+    entry[3] = 0;
+    entry.writeUInt16LE(1, 4);
+    entry.writeUInt16LE(32, 6);
+    entry.writeUInt32LE(png.length, 8);
+    entry.writeUInt32LE(offset, 12);
+    entries.push(entry);
+    offset += png.length;
+  }
+  return Buffer.concat([header, ...entries, ...images.map((i) => i.png)]);
+}
+
 const SPLASHES = [
   [640, 1136], [750, 1334], [1125, 2436], [1242, 2688], [1170, 2532],
   [2532, 1170], [1179, 2556], [1284, 2778], [1290, 2796], [2796, 1290],
@@ -75,6 +115,14 @@ const jobs = [
 for (const [name, fn] of jobs) {
   const out = join(iconsDir, name);
   writeFileSync(out, await fn());
-  console.log(`✓ ${name}`);
+  console.log(`✓ public/icons/${name}`);
 }
+
+// favicon.ico con el MISMO símbolo (PNG 16 y 32 embebidos).
+const ico = encodeIco([
+  { size: 16, png: await sharp(favicon).resize(16, 16).png().toBuffer() },
+  { size: 32, png: await sharp(favicon).resize(32, 32).png().toBuffer() },
+]);
+writeFileSync(join(appDir, 'favicon.ico'), ico);
+console.log(`✓ app/favicon.ico (${ico.length} bytes)`);
 console.log('Listo.');

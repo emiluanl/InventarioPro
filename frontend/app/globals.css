@@ -33,6 +33,22 @@
     /* ======================================================================
        TOKENS SEMÁNTICOS — fondo, superficies, bordes, texto, acento, estado.
        ====================================================================== */
+    /* Escala de ACENTO por tema (mismo patrón que la gray): la escala
+       eléctrica se define acá y tailwind.config.ts la mapea con
+       rgb(var(--tw-accent-N) / <alpha-value>). El tema claro oscurece
+       300/400 para que enlaces y textos de acento cumplan WCAG AA (≥4.5:1)
+       sobre blanco, sin tocar el acento del tema oscuro. */
+    --tw-accent-50: 232 242 255;
+    --tw-accent-100: 207 229 255;
+    --tw-accent-200: 163 203 255;
+    --tw-accent-300: 109 177 255;
+    --tw-accent-400: 59 141 255;
+    --tw-accent-500: 10 132 255;
+    --tw-accent-600: 0 102 214;
+    --tw-accent-700: 0 82 171;
+    --tw-accent-800: 0 63 130;
+    --tw-accent-900: 0 44 92;
+
     --bg: #0a0a0b; /* fondo principal (página) */
     --surface: #141417; /* superficie base (cards, inputs, header) */
     --surface-raised: #1c1c1f; /* superficie elevada (hover, dropdowns) */
@@ -100,9 +116,19 @@
     --accent-hover: #0066d6;
     --focus-ring: 59 141 255;
 
-    --tw-success: 5 150 105; /* éxito (emerald-600, legible sobre blanco) */
-    --tw-warning: 217 119 6; /* advertencia (amber-600) */
-    --tw-error: 220 38 38; /* error / destructivo (red-600) */
+    /* Estados 800-level: el texto queda ≥4.5:1 sobre blanco incluso cuando
+       se pinta sobre los fondos al 10-15% de alpha de badges y alerts (los
+       700-level quedaban en 4.0-4.4:1 sobre el tinte). */
+    --tw-success: 6 95 70; /* éxito (emerald-800) */
+    --tw-warning: 146 64 14; /* advertencia (amber-800) */
+    --tw-error: 153 27 27; /* error / destructivo (red-800) */
+
+    /* Enlaces de acento en tema claro: el eléctrico claro (400) queda por
+       debajo de AA sobre blanco; se oscurece a accent-600 y el hover a
+       accent-700 (más oscuro que el estado base: hover/focus se distinguen
+       por luminosidad, no solo por el anillo). */
+    --tw-accent-300: 0 82 171; /* hover de enlaces (accent-700) */
+    --tw-accent-400: 0 102 214; /* enlaces y texto de acento (accent-600) */
 
     --elev-1: 0 1px 2px rgba(0, 0, 0, 0.06);
     --elev-2: 0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);

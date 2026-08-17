@@ -31,20 +31,21 @@ const config: Config = {
           950: 'rgb(var(--tw-gray-950) / <alpha-value>)',
         },
         // Acento eléctrico (azul brillante, único de la marca InventarioPro).
-        // Escala monótona (50 = más claro, 900 = más oscuro), como Tailwind:
-        //   texto/link  -> 300/400 (claros, sobre fondo oscuro)
-        //   botones     -> 500 base, 400 hover (aclara), 600 active
+        // Escala por TEMA vía variables CSS (--tw-accent-* en globals.css):
+        // el oscuro usa el eléctrico claro (texto/link 300/400, botón 500),
+        // y el claro oscurece 300/400 para cumplir WCAG AA (≥4.5:1) sobre
+        // blanco. Igual patrón que la escala gray: rgb(var() / alpha).
         accent: {
-          50: '#e8f2ff',
-          100: '#cfe5ff',
-          200: '#a3cbff',
-          300: '#6db1ff',
-          400: '#3b8dff',
-          500: '#0a84ff', // eléctrico base
-          600: '#0066d6',
-          700: '#0052ab',
-          800: '#003f82',
-          900: '#002c5c',
+          50: 'rgb(var(--tw-accent-50) / <alpha-value>)',
+          100: 'rgb(var(--tw-accent-100) / <alpha-value>)',
+          200: 'rgb(var(--tw-accent-200) / <alpha-value>)',
+          300: 'rgb(var(--tw-accent-300) / <alpha-value>)',
+          400: 'rgb(var(--tw-accent-400) / <alpha-value>)',
+          500: 'rgb(var(--tw-accent-500) / <alpha-value>)',
+          600: 'rgb(var(--tw-accent-600) / <alpha-value>)',
+          700: 'rgb(var(--tw-accent-700) / <alpha-value>)',
+          800: 'rgb(var(--tw-accent-800) / <alpha-value>)',
+          900: 'rgb(var(--tw-accent-900) / <alpha-value>)',
         },
         // Colores de ESTADO por tokens semánticos (definidos en globals.css):
         // se usan con alpha (bg-success/10, text-error, border-warning/40…).

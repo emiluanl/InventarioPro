@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert } from '@/components/ui/alert';
+import { Logo } from '@/components/ui/logo';
 
 function LoginForm(): JSX.Element {
   const { login } = useAuth();
@@ -40,6 +41,7 @@ function LoginForm(): JSX.Element {
 
   return (
     <div className="space-y-6">
+      <Logo className="mb-2" />
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Inicia sesión</h1>
         <p className="mt-1 text-sm text-gray-700">
@@ -104,7 +106,15 @@ function LoginForm(): JSX.Element {
 
 export default function LoginPage(): JSX.Element {
   return (
-    <Suspense fallback={<div className="space-y-6"><h1 className="text-2xl font-semibold text-gray-900">Inicia sesión</h1><p className="text-sm text-gray-700">Cargando…</p></div>}>
+    <Suspense
+      fallback={
+        <div className="space-y-6">
+          <Logo symbolClassName="h-12 w-12" />
+          <h1 className="text-2xl font-semibold text-gray-900">Inicia sesión</h1>
+          <p className="text-sm text-gray-700">Cargando…</p>
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

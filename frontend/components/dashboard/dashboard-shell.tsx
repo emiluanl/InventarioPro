@@ -11,6 +11,7 @@ import { NotificationsBell } from '@/components/dashboard/notifications-bell';
 import { MobileNav } from '@/components/dashboard/mobile-nav';
 import { ChatWidget } from '@/components/chat/chat-widget';
 import { PrefsBadges } from '@/components/dashboard/prefs-badges';
+import { Logo } from '@/components/ui/logo';
 
 /**
  * Chrome del área logueada. Aplica el modo de layout:
@@ -34,11 +35,8 @@ export function DashboardShell({ children }: { children: ReactNode }): JSX.Eleme
           )}
         >
           <div className="flex items-center gap-2">
-            <Link
-              href="/dashboard"
-              className="text-lg font-semibold tracking-tight text-[var(--text)]"
-            >
-              Inventario<span className="text-accent-400">Pro</span>
+            <Link href="/dashboard" aria-label="InventarioPro — inicio">
+              <Logo symbolClassName="h-7 w-7" textClassName="hidden text-base sm:inline" />
             </Link>
             <PrefsBadges />
           </div>

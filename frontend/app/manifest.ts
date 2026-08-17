@@ -15,7 +15,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'Registra tus productos, garantías y gastos.',
     start_url: '/',
     display: 'standalone',
-    background_color: '#f9fafb',
+    // Fondo de marca: el tema predeterminado de la app es oscuro (#0a0a0b).
+    background_color: '#0a0a0b',
     theme_color: '#0a84ff',
     icons: [
       {

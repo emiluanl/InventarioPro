@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
+import { Logo } from '@/components/ui/logo';
 
 interface NavItemProps {
   href: string;
@@ -59,11 +60,9 @@ export function MobileNav({ forced = false, hidden = false }: MobileNavProps): J
       )}
     >
       <div className="mx-auto flex max-w-lg items-stretch px-2">
+        {/* Inicio usa el símbolo de la marca (el logo también es la home). */}
         <NavItem href="/dashboard" active={isActive(pathname, '/dashboard')} label="Inicio">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-            <polyline points="9 22 9 12 15 12 15 22" />
-          </svg>
+          <Logo variant="symbol" symbolClassName="h-[22px] w-[22px]" />
         </NavItem>
 
         <NavItem href="/reports" active={isActive(pathname, '/reports')} label="Reportes">

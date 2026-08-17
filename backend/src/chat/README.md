@@ -53,15 +53,17 @@ Criterios: `search`, `categoria_id`, `estado`, `warranty_status`, `fecha_desde`,
 ### `crear_producto`
 Crea un producto a partir de parámetros extraídos. El usuario puede decir "acabo de comprar una licuadora Oster en Falabella por $150 hace 2 días" y la IA calcula la fecha, llena los campos y la invoca.
 
-Campos: `nombre`, `fecha_compra`, `tipo_compra`, `precio` (obligatorios) + `marca`, `modelo`, `descripcion`, `lugar_compra`, `moneda` (ISO 4217 real), `duracion_garantia_meses` (0–600), `notas`, `categoria_nombre` (se resuelve por nombre o se crea), `metodo_pago`, `numero_serie`, `tags` y `confirmar`.
+Campos: `nombre`, `fecha_compra`, `tipo_compra`, `precio` (obligatorios) + `marca`, `modelo`, `descripcion`, `lugar_compra`, `moneda` (ISO 4217 real), `duracion_garantia_meses` (0–600), `notas`, `categoria_nombre` (se resuelve por nombre o se crea), `metodo_pago`, `numero_serie`, `tags`. Todos los `MaxLength` replican los límites del DTO HTTP.
 
-**Deduplicación consultiva (nunca automática):** si ya existe un producto con el mismo nombre (case-insensitive) y la misma fecha de compra, la tool devuelve `needs_confirmation` y **NO crea**; además guarda los argumentos originales como confirmación pendiente.
+**Deduplicación consultiva (nunca automática):** si ya existe un producto con el mismo nombre (case-insensitive) y la misma fecha de compra, la tool devuelve `needs_confirmation` con un **`confirmation_id` opaco** (uuid aleatorio) y **NO crea**; además guarda los argumentos originales como confirmación pendiente.
 
-El pendiente se guarda **en memoria, aislado por conversación** (clave `userId:conversationId`): confirmar desde otra conversación del mismo usuario se rechaza. Tiene **TTL de 10 minutos** y al reiniciar el proceso se pierde de forma **segura** — el usuario solo tiene que reintentar y la tool vuelve a preguntar; nunca queda un `confirmar` huérfano que cree algo sin confirmación real.
+La confirmación y la cancelación son herramientas SEPARADAS (la IA ya no puede repetir ni alterar los datos del producto al confirmar):
 
-- Usuario **confirma** → la IA vuelve a llamar con `confirmar: true` → crea con los argumentos **originales** guardados.
-- Usuario **rechaza** → la IA llama con `confirmar: false` → no crea y limpia el pendiente.
-- `confirmar: true` **sin una confirmación pendiente previa se rechaza**: la IA no puede auto-crear un duplicado que el usuario nunca vio.
+- Usuario **confirma** → la IA llama `confirmar_creacion_producto` con el `confirmation_id` → crea con los argumentos **originales** guardados (el schema de esta tool solo acepta `confirmation_id`).
+- Usuario **rechaza** → la IA llama `cancelar_creacion_producto` (id opcional) → no crea y limpia el pendiente. Es segura aunque no exista pendiente.
+- Una confirmación es **idempotente**: al crear se consume, así que el mismo `confirmation_id` no puede crear dos productos.
+- El pendiente se guarda **en memoria, aislado por conversación**: confirmar desde otra conversación del mismo usuario se rechaza. TTL de **10 minutos** y al reiniciar el proceso se pierde de forma **segura** — el usuario solo tiene que reintentar y la tool vuelve a preguntar; nunca queda una confirmación huérfana que cree algo sin confirmación real.
+- La lista de similares **no expone IDs internos de productos** al LLM.
 
 ### `consultar_garantias_por_vencer`
 `dias` (default 30, máx 365). Devuelve productos cuya garantía vence en los próximos N días.

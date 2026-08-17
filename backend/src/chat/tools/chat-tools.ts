@@ -1,9 +1,9 @@
 // =============================================================================
 // ChatTools - definiciones de las herramientas (function calling) para la IA
 // =============================================================================
-// Estas son las 4 funciones del brief. La IA puede invocarlas cuando el
-// usuario hace una pregunta relevante. La ejecución corre del lado del
-// backend (ver ToolExecutor), NUNCA en el cliente.
+// Estas son las 6 funciones del brief (crear/confirmar/cancelar separadas).
+// La IA puede invocarlas cuando el usuario hace una pregunta relevante. La
+// ejecución corre del lado del backend (ver ToolExecutor), NUNCA en el cliente.
 //
 // Los JSON schemas NO se escriben a mano: se GENERAN a partir de los schemas
 // zod de ./schemas (zod-to-json-schema). Así el contrato que ve DeepSeek y el
@@ -16,6 +16,8 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import { ChatTool } from '../DeepSeek/chat.types';
 import {
   buscarProductosSchema,
+  confirmarCreacionProductoSchema,
+  cancelarCreacionProductoSchema,
   crearProductoSchema,
   garantiasPorVencerSchema,
   resumenGastosSchema,
@@ -56,8 +58,18 @@ export const CHAT_TOOLS: ChatTool[] = [
   ),
   buildTool(
     'crear_producto',
-    'Crea un producto a partir de datos extraídos de lenguaje natural. Úsala cuando el usuario diga algo como "acabo de comprar X en Y por $Z".',
+    'Crea un producto a partir de datos extraídos de lenguaje natural. Úsala cuando el usuario diga algo como "acabo de comprar X en Y por $Z". Si devuelve needs_confirmation (posible duplicado), pregunta al usuario y luego usa confirmar_creacion_producto o cancelar_creacion_producto.',
     crearProductoSchema,
+  ),
+  buildTool(
+    'confirmar_creacion_producto',
+    'Confirma la creación de un posible duplicado que el usuario aprobó. Acepta SOLO el confirmation_id que devolvió needs_confirmation. El producto se crea con los datos originales que el usuario ya vio.',
+    confirmarCreacionProductoSchema,
+  ),
+  buildTool(
+    'cancelar_creacion_producto',
+    'Cancela la creación de un posible duplicado que el usuario rechazó. Acepta el confirmation_id que devolvió needs_confirmation (opcional). No crea nada.',
+    cancelarCreacionProductoSchema,
   ),
   buildTool(
     'consultar_garantias_por_vencer',
@@ -93,10 +105,14 @@ Reglas:
 Confirmación de duplicados en crear_producto:
 - Si crear_producto devuelve needs_confirmation, existe un producto con el mismo
   nombre y fecha de compra: preguntá al usuario si lo crea igual.
-- Si el usuario CONFIRMA: volvé a llamar crear_producto con confirmar: true. Los
-  datos originales ya quedaron guardados; no hace falta repetirlos.
-- Si el usuario RECHAZA: llamá crear_producto con confirmar: false para
-  cancelar (no se crea nada).
-- NUNCA pases confirmar: true sin haber recibido needs_confirmation antes: sin
-  una confirmación pendiente la herramienta lo rechaza.
+- La respuesta trae un confirmation_id. NUNCA lo inventes ni lo modifiques:
+  usá exactamente el que devolvió la herramienta.
+- Si el usuario CONFIRMA: llamá confirmar_creacion_producto con ESE
+  confirmation_id. El producto se crea con los datos originales guardados;
+  no hace falta repetirlos.
+- Si el usuario RECHAZA: llamá cancelar_creacion_producto con ESE
+  confirmation_id (no se crea nada).
+- Si confirmar_creacion_producto dice que la confirmación no existe, ya fue
+  usada o expiró, o si cancelar_creacion_producto no cancela nada: informá al
+  usuario con naturalidad y proponé reintentar la creación.
 `;

@@ -7,8 +7,11 @@
 //   2. warranty_status SÍ filtra en SQL (el bug silencioso: estaba declarado en
 //      el schema pero ignorado en el where).
 //   3. Límites por tool: limit 1..50, fechas YYYY-MM-DD, precio >= 0, moneda
-//      ISO 4217, enums (estado, tipo_compra, periodo).
+//      ISO 4217, enums (estado, tipo_compra, periodo) y MaxLength de todos los
+//      campos (mismos límites del DTO HTTP).
 //   4. El flujo feliz construye el where correcto y crea con Decimal.
+//   5. Deduplicación consultiva con confirmation_id OPACO y tools separadas
+//      (confirmar/cancelar): idempotencia, TTL y aislamiento por conversación.
 // =============================================================================
 
 import { Prisma } from '../src/generated/prisma/client';
@@ -172,6 +175,7 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
   });
 
   it.each([
+    ['sin nombre', { fecha_compra: '2026-08-15', tipo_compra: 'FISICO', precio: 10 }],
     [
       'precio negativo',
       { nombre: 'X', fecha_compra: '2026-08-15', tipo_compra: 'FISICO', precio: -1 },
@@ -231,29 +235,6 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     expect(prisma.product.create).not.toHaveBeenCalled();
   });
 
-  it('crear_producto sin confirmar y con campos obligatorios faltantes devuelve error descriptivo (sin crear)', async () => {
-    const { prisma, executor } = buildMocks();
-    // El schema los deja opcionales para permitir { confirmar: true } solo;
-    // el camino de creación real (sin confirmar) los exige acá.
-    const res = (await executor.execute('u1', 'conv-1', 'crear_producto', {
-      fecha_compra: '2026-08-15',
-      tipo_compra: 'FISICO',
-      precio: 10,
-    } as never)) as { error: string };
-    expect(res.error).toContain('Faltan datos obligatorios');
-    expect(res.error).toContain('nombre');
-    expect(prisma.product.create).not.toHaveBeenCalled();
-
-    const res2 = (await executor.execute('u1', 'conv-1', 'crear_producto', {
-      nombre: 'X',
-    } as never)) as { error: string };
-    expect(res2.error).toContain('Faltan datos obligatorios');
-    expect(res2.error).toContain('fecha_compra');
-    expect(res2.error).toContain('tipo_compra');
-    expect(res2.error).toContain('precio');
-    expect(prisma.product.create).not.toHaveBeenCalled();
-  });
-
   it('crear_producto acepta duracion_garantia_meses=0 (sin garantía)', async () => {
     const { prisma, executor } = buildMocks();
     const res = await executor.execute('u1', 'conv-1', 'crear_producto', {
@@ -283,9 +264,45 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
   });
 
   // -------------------------------------------------------------------------
+  // crear_producto — límites de longitud (mismos MaxLength del DTO HTTP)
+  // -------------------------------------------------------------------------
+  it.each([
+    ['nombre > 200', { nombre: 'x'.repeat(201) }],
+    ['marca > 120', { marca: 'x'.repeat(121) }],
+    ['modelo > 120', { modelo: 'x'.repeat(121) }],
+    ['descripcion > 2000', { descripcion: 'x'.repeat(2001) }],
+    ['lugar_compra > 200', { lugar_compra: 'x'.repeat(201) }],
+    ['metodo_pago > 80', { metodo_pago: 'x'.repeat(81) }],
+    ['numero_serie > 120', { numero_serie: 'x'.repeat(121) }],
+    ['notas > 2000', { notas: 'x'.repeat(2001) }],
+    ['tags > 500', { tags: 'x'.repeat(501) }],
+    ['categoria_nombre > 60', { categoria_nombre: 'x'.repeat(61) }],
+  ])('crear_producto rechaza %s', async (_label, extra) => {
+    const { prisma, executor } = buildMocks();
+    const res = await executor.execute('u1', 'conv-1', 'crear_producto', {
+      nombre: 'X',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 10,
+      ...extra,
+    } as never);
+    expect((res as { error: string }).error).toContain('Argumentos inválidos');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+  });
+
+  it('buscar_productos rechaza search > 100 caracteres', async () => {
+    const { prisma, executor } = buildMocks();
+    const res = await executor.execute('u1', 'conv-1', 'buscar_productos', {
+      search: 'x'.repeat(101),
+    });
+    expect((res as { error: string }).error).toContain('search');
+    expect(prisma.product.findMany).not.toHaveBeenCalled();
+  });
+
+  // -------------------------------------------------------------------------
   // crear_producto — deduplicación consultiva (nunca automática)
   // -------------------------------------------------------------------------
-  it('crear_producto pide confirmación si ya existe el mismo nombre+fecha (no crea)', async () => {
+  it('crear_producto pide confirmación si ya existe el mismo nombre+fecha (no crea, id opaco, sin IDs internos)', async () => {
     const { prisma, executor } = buildMocks();
     prisma.product.findMany.mockResolvedValueOnce([
       {
@@ -302,14 +319,24 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
       precio: 129.99,
-    })) as { needs_confirmation?: boolean; similar?: unknown[] };
+    })) as {
+      needs_confirmation?: boolean;
+      confirmation_id?: string;
+      similar?: unknown[];
+    };
 
     expect(res.needs_confirmation).toBe(true);
+    // Id OPACO (uuid) — nunca la clave interna ni IDs de productos.
+    expect(res.confirmation_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
     expect(res.similar).toHaveLength(1);
+    // Los similares NO exponen el id interno del producto al LLM.
+    expect(res.similar![0]).not.toHaveProperty('id');
     expect(prisma.product.create).not.toHaveBeenCalled();
   });
 
-  it('confirmar:true tras una confirmación pendiente crea con los argumentos ORIGINALES', async () => {
+  it('confirmar_creacion_producto con el confirmation_id crea con los argumentos ORIGINALES (sin repetir datos)', async () => {
     const { prisma, executor } = buildMocks();
     prisma.product.findMany.mockResolvedValueOnce([
       {
@@ -321,24 +348,20 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
       },
     ]);
 
-    // Turno 1: duplicado → needs_confirmation (guarda el pendiente con los args).
-    const first = await executor.execute('u1', 'conv-1', 'crear_producto', {
+    // Turno 1: duplicado → needs_confirmation + confirmation_id.
+    const first = (await executor.execute('u1', 'conv-1', 'crear_producto', {
       nombre: 'Licuadora Oster',
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
       precio: 150,
-    });
-    expect((first as { needs_confirmation: boolean }).needs_confirmation).toBe(true);
+      lugar_compra: 'Falabella',
+    })) as { confirmation_id: string };
     expect(prisma.product.create).not.toHaveBeenCalled();
 
-    // Turno 2: la IA confirma con OTROS args (los que repita no importan):
-    // se crea con los ORIGINALES guardados en el turno 1.
-    const res = await executor.execute('u1', 'conv-1', 'crear_producto', {
-      confirmar: true,
-      nombre: 'Otro nombre cualquiera',
-      fecha_compra: '2026-01-01',
-      tipo_compra: 'ONLINE',
-      precio: 999,
+    // Turno 2: la tool de confirmación acepta SOLO el id — crea con los
+    // ORIGINALES (la IA no puede repetir ni alterar datos: ni los acepta).
+    const res = await executor.execute('u1', 'conv-1', 'confirmar_creacion_producto', {
+      confirmation_id: first.confirmation_id,
     });
 
     expect((res as { ok: boolean }).ok).toBe(true);
@@ -347,43 +370,10 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
     expect(data.nombre).toBe('Licuadora Oster');
     expect(data.fecha_compra).toEqual(new Date('2026-08-15T00:00:00Z'));
     expect(data.precio.toString()).toBe('150');
-  });
-
-  it('{ confirmar: true } SOLO (sin repetir datos) crea con los argumentos ORIGINALES', async () => {
-    const { prisma, executor } = buildMocks();
-    prisma.product.findMany.mockResolvedValueOnce([
-      {
-        id: 'p-old',
-        nombre: 'Licuadora Oster',
-        fecha_compra: new Date('2026-08-15T00:00:00.000Z'),
-        precio: { toString: () => '150' },
-        moneda: 'USD',
-      },
-    ]);
-
-    // Turno 1: duplicado → pendiente con los args originales.
-    await executor.execute('u1', 'conv-1', 'crear_producto', {
-      nombre: 'Licuadora Oster',
-      fecha_compra: '2026-08-15',
-      tipo_compra: 'FISICO',
-      precio: 150,
-      lugar_compra: 'Falabella',
-    });
-
-    // Turno 2: SOLO { confirmar: true } — sin nombre/fecha/tipo/precio.
-    const res = (await executor.execute('u1', 'conv-1', 'crear_producto', {
-      confirmar: true,
-    })) as { ok: boolean };
-    expect(res.ok).toBe(true);
-    expect(prisma.product.create).toHaveBeenCalledTimes(1);
-    const data = prisma.product.create.mock.calls[0][0].data;
-    expect(data.nombre).toBe('Licuadora Oster');
-    expect(data.fecha_compra).toEqual(new Date('2026-08-15T00:00:00Z'));
-    expect(data.precio.toString()).toBe('150');
     expect(data.lugar_compra).toBe('Falabella');
   });
 
-  it('{ confirmar: false } SOLO cancela y limpia el pendiente (sin datos del producto)', async () => {
+  it('confirmar_creacion_producto es IDEMPOTENTE: la misma confirmación no crea dos productos', async () => {
     const { prisma, executor } = buildMocks();
     prisma.product.findMany.mockResolvedValueOnce([
       {
@@ -395,127 +385,127 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
       },
     ]);
 
-    await executor.execute('u1', 'conv-1', 'crear_producto', {
+    const first = (await executor.execute('u1', 'conv-1', 'crear_producto', {
       nombre: 'Licuadora Oster',
       fecha_compra: '2026-08-15',
       tipo_compra: 'FISICO',
       precio: 150,
-    });
+    })) as { confirmation_id: string };
 
-    const cancel = (await executor.execute('u1', 'conv-1', 'crear_producto', {
-      confirmar: false,
+    const ok = await executor.execute('u1', 'conv-1', 'confirmar_creacion_producto', {
+      confirmation_id: first.confirmation_id,
+    });
+    expect((ok as { ok: boolean }).ok).toBe(true);
+    expect(prisma.product.create).toHaveBeenCalledTimes(1);
+
+    // Segunda llamada con el MISMO id: la confirmación ya fue consumida.
+    const again = (await executor.execute('u1', 'conv-1', 'confirmar_creacion_producto', {
+      confirmation_id: first.confirmation_id,
+    })) as { error: string };
+    expect(again.error).toContain('no existe, ya fue usada o expiró');
+    expect(prisma.product.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('confirmar_creacion_producto con id desconocido se rechaza (no crea)', async () => {
+    const { prisma, executor } = buildMocks();
+    const res = (await executor.execute('u1', 'conv-1', 'confirmar_creacion_producto', {
+      confirmation_id: 'no-existe',
+    })) as { error: string };
+    expect(res.error).toContain('no existe, ya fue usada o expiró');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+  });
+
+  it('confirmar_creacion_producto desde OTRA conversación se rechaza (aislamiento por conversación)', async () => {
+    const { prisma, executor } = buildMocks();
+    prisma.product.findMany.mockResolvedValueOnce([
+      {
+        id: 'p-old',
+        nombre: 'Licuadora Oster',
+        fecha_compra: new Date('2026-08-15T00:00:00.000Z'),
+        precio: { toString: () => '150' },
+        moneda: 'USD',
+      },
+    ]);
+
+    const first = (await executor.execute('u1', 'conv-1', 'crear_producto', {
+      nombre: 'Licuadora Oster',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 150,
+    })) as { confirmation_id: string };
+
+    // Mismo usuario, OTRA conversación: se rechaza (el pendiente es de conv-1).
+    const res = (await executor.execute('u1', 'conv-2', 'confirmar_creacion_producto', {
+      confirmation_id: first.confirmation_id,
+    })) as { error: string };
+    expect(res.error).toContain('no corresponde a esta conversación');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+  });
+
+  it('confirmar_creacion_producto rechaza argumentos fuera del contrato (solo confirmation_id)', async () => {
+    const { prisma, executor } = buildMocks();
+    const res = (await executor.execute('u1', 'conv-1', 'confirmar_creacion_producto', {
+      confirmation_id: 'x',
+      nombre: 'Intento de alterar el producto',
+      precio: 999,
+    })) as { error: string };
+    expect(res.error).toContain('Argumentos inválidos');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+  });
+
+  it('cancelar_creacion_producto cancela y limpia; un confirmar posterior se rechaza', async () => {
+    const { prisma, executor } = buildMocks();
+    prisma.product.findMany.mockResolvedValueOnce([
+      {
+        id: 'p-old',
+        nombre: 'Licuadora Oster',
+        fecha_compra: new Date('2026-08-15T00:00:00.000Z'),
+        precio: { toString: () => '150' },
+        moneda: 'USD',
+      },
+    ]);
+
+    const first = (await executor.execute('u1', 'conv-1', 'crear_producto', {
+      nombre: 'Licuadora Oster',
+      fecha_compra: '2026-08-15',
+      tipo_compra: 'FISICO',
+      precio: 150,
+    })) as { confirmation_id: string };
+
+    const cancel = (await executor.execute('u1', 'conv-1', 'cancelar_creacion_producto', {
+      confirmation_id: first.confirmation_id,
     })) as { cancelada: boolean };
     expect(cancel.cancelada).toBe(true);
     expect(prisma.product.create).not.toHaveBeenCalled();
 
-    // El pendiente quedó limpio: confirmar:true posterior se rechaza.
-    const later = (await executor.execute('u1', 'conv-1', 'crear_producto', {
-      confirmar: true,
+    // El pendiente quedó limpio: confirmar con el mismo id se rechaza.
+    const later = (await executor.execute('u1', 'conv-1', 'confirmar_creacion_producto', {
+      confirmation_id: first.confirmation_id,
     })) as { error: string };
-    expect(later.error).toContain('No hay una confirmación pendiente');
+    expect(later.error).toContain('no existe, ya fue usada o expiró');
     expect(prisma.product.create).not.toHaveBeenCalled();
   });
 
-  it('confirmar con argumentos inválidos se rechaza sin crear NI consumir el pendiente', async () => {
+  it('cancelar_creacion_producto es segura aunque no exista pendiente (con o sin id)', async () => {
     const { prisma, executor } = buildMocks();
-    prisma.product.findMany.mockResolvedValueOnce([
-      {
-        id: 'p-old',
-        nombre: 'Licuadora Oster',
-        fecha_compra: new Date('2026-08-15T00:00:00.000Z'),
-        precio: { toString: () => '150' },
-        moneda: 'USD',
-      },
-    ]);
+    const withId = (await executor.execute('u1', 'conv-1', 'cancelar_creacion_producto', {
+      confirmation_id: 'nada-por-acá',
+    })) as { cancelada: boolean };
+    expect(withId.cancelada).toBe(true);
 
-    await executor.execute('u1', 'conv-1', 'crear_producto', {
-      nombre: 'Licuadora Oster',
-      fecha_compra: '2026-08-15',
-      tipo_compra: 'FISICO',
-      precio: 150,
-    });
-
-    // Args inválidos (precio no numérico) → zod rechaza la llamada completa.
-    const bad = (await executor.execute('u1', 'conv-1', 'crear_producto', {
-      confirmar: true,
-      precio: 'caro',
-    })) as { error: string };
-    expect(bad.error).toContain('Argumentos inválidos');
-    expect(prisma.product.create).not.toHaveBeenCalled();
-
-    // El pendiente NO se consumió: un confirmar limpio posterior crea con los
-    // argumentos ORIGINALES (no con los alterados).
-    const good = (await executor.execute('u1', 'conv-1', 'crear_producto', {
-      confirmar: true,
-      precio: 999,
-      nombre: 'Otro',
-    })) as { ok: boolean };
-    expect(good.ok).toBe(true);
-    expect(prisma.product.create).toHaveBeenCalledTimes(1);
-    const data = prisma.product.create.mock.calls[0][0].data;
-    expect(data.nombre).toBe('Licuadora Oster');
-    expect(data.precio.toString()).toBe('150');
-  });
-
-  it('confirmar:true SIN confirmación pendiente se rechaza (no crea ni consulta)', async () => {
-    const { prisma, executor } = buildMocks();
-    const res = await executor.execute('u1', 'conv-1', 'crear_producto', {
-      confirmar: true,
-      nombre: 'X',
-      fecha_compra: '2026-08-15',
-      tipo_compra: 'FISICO',
-      precio: 10,
-    });
-
-    expect((res as { error: string }).error).toContain('No hay una confirmación pendiente');
-    expect(prisma.product.create).not.toHaveBeenCalled();
-    expect(prisma.product.findMany).not.toHaveBeenCalled();
-  });
-
-  it('confirmar:false cancela y limpia el pendiente; un confirmar:true posterior se rechaza', async () => {
-    const { prisma, executor } = buildMocks();
-    prisma.product.findMany.mockResolvedValueOnce([
-      {
-        id: 'p-old',
-        nombre: 'Licuadora Oster',
-        fecha_compra: new Date('2026-08-15T00:00:00.000Z'),
-        precio: { toString: () => '150' },
-        moneda: 'USD',
-      },
-    ]);
-
-    // Turno 1: pendiente creado.
-    await executor.execute('u1', 'conv-1', 'crear_producto', {
-      nombre: 'Licuadora Oster',
-      fecha_compra: '2026-08-15',
-      tipo_compra: 'FISICO',
-      precio: 150,
-    });
-
-    // Turno 2: el usuario rechaza → no crea y limpia.
-    const cancel = await executor.execute('u1', 'conv-1', 'crear_producto', {
-      confirmar: false,
-      nombre: 'Licuadora Oster',
-      fecha_compra: '2026-08-15',
-      tipo_compra: 'FISICO',
-      precio: 150,
-    });
-    expect((cancel as { cancelada: boolean }).cancelada).toBe(true);
-    expect(prisma.product.create).not.toHaveBeenCalled();
-
-    // Turno 3: sin pendiente, confirmar:true se rechaza.
-    const later = await executor.execute('u1', 'conv-1', 'crear_producto', {
-      confirmar: true,
-      nombre: 'Licuadora Oster',
-      fecha_compra: '2026-08-15',
-      tipo_compra: 'FISICO',
-      precio: 150,
-    });
-    expect((later as { error: string }).error).toContain('No hay una confirmación pendiente');
+    const withoutId = (await executor.execute(
+      'u1',
+      'conv-1',
+      'cancelar_creacion_producto',
+      {},
+    )) as {
+      cancelada: boolean;
+    };
+    expect(withoutId.cancelada).toBe(true);
     expect(prisma.product.create).not.toHaveBeenCalled();
   });
 
-  it('la confirmación pendiente expira (TTL 10 min): confirmar:true posterior se rechaza', async () => {
+  it('la confirmación pendiente expira (TTL 10 min): confirmar posterior se rechaza', async () => {
     jest.useFakeTimers();
     try {
       const { prisma, executor } = buildMocks();
@@ -529,23 +519,19 @@ describe('ChatToolExecutor — validación y ejecución de tools', () => {
         },
       ]);
 
-      await executor.execute('u1', 'conv-1', 'crear_producto', {
+      const first = (await executor.execute('u1', 'conv-1', 'crear_producto', {
         nombre: 'Licuadora Oster',
         fecha_compra: '2026-08-15',
         tipo_compra: 'FISICO',
         precio: 150,
-      });
+      })) as { confirmation_id: string };
 
       jest.advanceTimersByTime(11 * 60 * 1000); // +11 min: el pendiente expiró
 
-      const res = await executor.execute('u1', 'conv-1', 'crear_producto', {
-        confirmar: true,
-        nombre: 'Licuadora Oster',
-        fecha_compra: '2026-08-15',
-        tipo_compra: 'FISICO',
-        precio: 150,
-      });
-      expect((res as { error: string }).error).toContain('No hay una confirmación pendiente');
+      const res = (await executor.execute('u1', 'conv-1', 'confirmar_creacion_producto', {
+        confirmation_id: first.confirmation_id,
+      })) as { error: string };
+      expect(res.error).toContain('no existe, ya fue usada o expiró');
       expect(prisma.product.create).not.toHaveBeenCalled();
     } finally {
       jest.useRealTimers();

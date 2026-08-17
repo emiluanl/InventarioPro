@@ -250,6 +250,7 @@ export const buscarProductosSchema = z
   .object({
     search: z
       .string()
+      .max(100, 'Máximo 100 caracteres.')
       .optional()
       .describe('Texto a buscar en nombre, marca, modelo o descripción.'),
     categoria_id: z.string().optional().describe('ID de la categoría para filtrar.'),
@@ -265,33 +266,50 @@ export const buscarProductosSchema = z
       .optional()
       .describe('Máximo de resultados. Por defecto 20.'),
   })
-  .strict();
-
-// =============================================================================
+  .strict(); // =============================================================================
 // crear_producto
 // =============================================================================
-// Los campos del producto son OPCIONALES en el schema a propósito: la
-// confirmación puede llegar SOLA como { confirmar: true } o { confirmar: false }
-// sin repetir nombre/fecha/tipo/precio. Los obligatorios los verifica el
-// executor SOLO en el camino de creación real (sin confirmar) — el backend
-// siempre crea con los argumentos ORIGINALES guardados, nunca con los que la
-// IA repita al confirmar.
+// SOLO crea una INTENCIÓN de producto. Los obligatorios (nombre, fecha_compra,
+// tipo_compra, precio) son REQUIRED en el contrato del LLM. Si ya existe un
+// producto con el mismo nombre + fecha, NO crea: devuelve needs_confirmation
+// con un confirmation_id opaco (el executor guarda los args originales).
+// La confirmación/cancelación son herramientas SEPARADAS
+// (confirmar_creacion_producto / cancelar_creacion_producto).
+// Los MaxLength replican los límites del DTO HTTP (create-product.dto.ts) para
+// que la IA no pueda crear datos que el resto de la app rechazaría.
 export const crearProductoSchema = z
   .object({
     nombre: z
       .string()
       .min(1, 'No puede estar vacío.')
       .max(200, 'Máximo 200 caracteres.')
-      .optional(),
-    marca: z.string().optional(),
-    modelo: z.string().optional(),
-    descripcion: z.string().optional(),
-    fecha_compra: isoDate
-      .describe('ISO date. Si el usuario dice "hace 2 días", calcula tú la fecha.')
-      .optional(),
-    lugar_compra: z.string().optional(),
-    tipo_compra: z.enum(PURCHASE_TYPE).optional(),
-    precio: z.number().finite('Debe ser un número.').min(0, 'No puede ser negativo.').optional(),
+      .describe('Nombre del producto.'),
+    marca: z.string().max(120, 'Máximo 120 caracteres.').optional().describe('Marca del producto.'),
+    modelo: z
+      .string()
+      .max(120, 'Máximo 120 caracteres.')
+      .optional()
+      .describe('Modelo del producto.'),
+    descripcion: z
+      .string()
+      .max(2000, 'Máximo 2000 caracteres.')
+      .optional()
+      .describe('Descripción breve.'),
+    fecha_compra: isoDate.describe(
+      'ISO date. Si el usuario dice "hace 2 días", calcula tú la fecha.',
+    ),
+    lugar_compra: z
+      .string()
+      .max(200, 'Máximo 200 caracteres.')
+      .optional()
+      .describe('Tienda o lugar donde se compró.'),
+    tipo_compra: z.enum(PURCHASE_TYPE).describe('FISICO u ONLINE.'),
+    precio: z
+      .number()
+      .finite('Debe ser un número.')
+      .min(0, 'No puede ser negativo.')
+      .multipleOf(0.01, 'Máximo 2 decimales.')
+      .describe('Precio en la moneda indicada (0 es válido para regalos).'),
     moneda: isoCurrency.optional().describe('Código ISO 4217 (USD, EUR, ARS...). Por defecto USD.'),
     // 0 = sin garantía (dato válido, como en el resto de la app); tope 600 meses.
     duracion_garantia_meses: z
@@ -299,27 +317,64 @@ export const crearProductoSchema = z
       .int('Debe ser un entero.')
       .min(0, 'Mínimo 0.')
       .max(600, 'Máximo 600 meses.')
-      .optional(),
-    notas: z.string().optional(),
+      .optional()
+      .describe('Garantía en meses (0 = sin garantía). Máximo 600.'),
+    notas: z
+      .string()
+      .max(2000, 'Máximo 2000 caracteres.')
+      .optional()
+      .describe('Notas adicionales.'),
     // Categoría por NOMBRE (la IA no conoce IDs internos). Si no existe, se
     // crea como categoría personal del usuario (mismo patrón que importCsv).
     categoria_nombre: z
       .string()
+      .max(60, 'Máximo 60 caracteres.')
       .optional()
       .describe('Nombre de la categoría (se crea si no existe).'),
-    metodo_pago: z.string().optional(),
-    numero_serie: z.string().optional(),
-    tags: z.string().optional().describe('Etiquetas separadas por comas.'),
-    // Deduplicación CONSULTIVA: si ya existe un producto con el mismo nombre y
-    // fecha de compra, la tool pide confirmación (needs_confirmation) y NO
-    // crea. La IA pasa true solo cuando el usuario confirmó explícitamente.
-    // Puede llegar SOLO ({ confirmar: true } / { confirmar: false }) sin
-    // repetir los datos del producto: el backend usa los ORIGINALES guardados.
-    confirmar: z
-      .boolean()
+    metodo_pago: z
+      .string()
+      .max(80, 'Máximo 80 caracteres.')
+      .optional()
+      .describe('Método de pago (efectivo, tarjeta...).'),
+    numero_serie: z
+      .string()
+      .max(120, 'Máximo 120 caracteres.')
+      .optional()
+      .describe('Número de serie del producto.'),
+    tags: z
+      .string()
+      .max(500, 'Máximo 500 caracteres.')
+      .optional()
+      .describe('Etiquetas separadas por comas.'),
+  })
+  .strict();
+
+// =============================================================================
+// confirmar_creacion_producto / cancelar_creacion_producto
+// =============================================================================
+// La confirmación se identifica por el confirmation_id OPACO que devolvió
+// needs_confirmation (uuid aleatorio): nunca viajan IDs internos de productos
+// ni claves de estado al LLM. La cancelación acepta el id opcional (si se
+// omite, cancela el pendiente de la conversación actual si existe).
+export const confirmarCreacionProductoSchema = z
+  .object({
+    confirmation_id: z
+      .string()
+      .min(1, 'No puede estar vacío.')
+      .max(64, 'Máximo 64 caracteres.')
+      .describe('ID opaco devuelto por needs_confirmation al pedir confirmación.'),
+  })
+  .strict();
+
+export const cancelarCreacionProductoSchema = z
+  .object({
+    confirmation_id: z
+      .string()
+      .min(1, 'No puede estar vacío.')
+      .max(64, 'Máximo 64 caracteres.')
       .optional()
       .describe(
-        'Solo para confirmar/cancelar un duplicado: puede ir solo. true = el usuario confirmó crear (se usan los datos originales guardados); false = el usuario rechazó. Sin esto, se crea un producto nuevo.',
+        'ID opaco del pendiente a cancelar. Si se omite, cancela el pendiente de la conversación actual.',
       ),
   })
   .strict();
@@ -352,10 +407,12 @@ export const resumenGastosSchema = z
   })
   .strict();
 
-/** Mapa nombre de tool → schema zod (las 4 funciones del brief). */
+/** Mapa nombre de tool → schema zod (las 6 funciones). */
 export const TOOL_SCHEMAS = {
   buscar_productos: buscarProductosSchema,
   crear_producto: crearProductoSchema,
+  confirmar_creacion_producto: confirmarCreacionProductoSchema,
+  cancelar_creacion_producto: cancelarCreacionProductoSchema,
   consultar_garantias_por_vencer: garantiasPorVencerSchema,
   resumen_gastos: resumenGastosSchema,
 } as const;

@@ -92,7 +92,9 @@ wait_ready() { # $1 = timeout segundos; llena ACTIVE_LOG
 phase_a() {
   note "Fase A: arranque headless + STACK_READY…"
   launch exit
-  if wait_ready 120; then
+  # Presupuesto de la app: APP_STARTUP_TIMEOUT_MS=180s por defecto; esperamos
+  # un poco más para no cortar un primer arranque en frío (migraciones SQLite).
+  if wait_ready 200; then
     note "✓ STACK_READY (log: ${ACTIVE_LOG#*Roaming/})"
   else
     note "primer intento sin STACK_READY (transitorio conocido); reintento…"

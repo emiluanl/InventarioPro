@@ -20,11 +20,25 @@ const { spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const net = require('node:net');
+
+const {
+  DEFAULT_STARTUP_TIMEOUT_MS,
+  portInUse,
+  waitForServices,
+  withDeadline,
+  killTree,
+  waitPortsFree,
+} = require('./lib/startup');
 
 const BACKEND_PORT = 3001;
 const FRONTEND_PORT = 3010;
 const APP_URL = `http://localhost:${FRONTEND_PORT}`;
+
+// Presupuesto total de arranque (migraciones SQLite + backend + frontend).
+// El primer arranque en frío aplica migraciones y puede tardar >60 s en
+// máquinas lentas o con AV escaneando el stack recién extraído; 180 s cubre
+// el arranque observado (~107 s) con margen. Configurable vía env.
+const STARTUP_TIMEOUT_MS = Number(process.env.APP_STARTUP_TIMEOUT_MS) || DEFAULT_STARTUP_TIMEOUT_MS;
 
 // En desarrollo (npm start dentro de desktop/) usa resources/ local; empaquetado
 // usa resources/stack al lado del ejecutable (extraResources de electron-builder).
@@ -58,33 +72,11 @@ function log(...args) {
 }
 
 // =============================================================================
-// Utilidades
+// Utilidades (portInUse / waitForServices / killTree / waitPortsFree viven en
+// ./lib/startup para poder probarse con node:test).
 // =============================================================================
-function portInUse(port) {
-  return new Promise((resolve) => {
-    const s = net.connect(port, '127.0.0.1');
-    s.once('connect', () => { s.destroy(); resolve(true); });
-    s.once('error', () => resolve(false));
-  });
-}
-
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-async function waitForUrl(url, timeoutMs, label) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
-      if (res.ok) return true;
-    } catch {
-      /* aún no responde */
-    }
-    await sleep(1200);
-  }
-  log(`timeout esperando a ${label} (${url})`);
-  return false;
 }
 
 function spawnStackProc(scriptRel, cwdRel, extraEnv) {
@@ -121,28 +113,30 @@ function spawnStackProc(scriptRel, cwdRel, extraEnv) {
   return proc;
 }
 
-function killTree(proc) {
-  if (!proc || proc.exitCode !== null || proc.signalCode === 'SIGTERM') return;
-  try {
-    if (process.platform === 'win32') {
-      spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true });
-    } else {
-      proc.kill('SIGTERM');
-      setTimeout(() => proc.kill('SIGKILL'), 3000).unref();
-    }
-  } catch (err) {
-    log('error matando proceso:', err.message);
+// Detiene los procesos hijos y espera a que los puertos queden libres.
+// En el camino de fallo se AWAITA antes de app.quit() para no dejar
+// backend/frontend huérfanos (el taskkill es asíncrono; sin espera, el
+// cierre de Electron podía ganarle la carrera y dejar los hijos vivos).
+async function shutdownStack({ checkPorts = true } = {}) {
+  await Promise.all([killTree(backendProc, { log }), killTree(frontendProc, { log })]);
+  backendProc = null;
+  frontendProc = null;
+  if (checkPorts) {
+    await waitPortsFree([BACKEND_PORT, FRONTEND_PORT], { log });
   }
 }
 
-function fatal(message) {
+async function fatal(message) {
   log('FALLO:', message);
   if (!process.env.INVENTARIOPRO_HEADLESS) {
     dialog.showErrorBox('InventarioPro', message);
   }
   quitting = true;
-  killTree(backendProc);
-  killTree(frontendProc);
+  try {
+    await shutdownStack();
+  } catch (err) {
+    log('error en cleanup tras FALLO:', err.message);
+  }
   app.quit();
 }
 
@@ -168,7 +162,7 @@ async function ensureUserData() {
   return { dataDir, jwtSecret };
 }
 
-async function runMigrations(dataDir) {
+async function runMigrations(dataDir, deadline) {
   const cli = path.join(STACK_DIR, 'backend', 'node_modules', 'prisma', 'build', 'index.js');
   if (!fs.existsSync(cli)) {
     throw new Error(`CLI de Prisma no encontrado en el stack: ${cli}`);
@@ -176,7 +170,7 @@ async function runMigrations(dataDir) {
   const dbFile = path.join(dataDir, 'dev.db');
   const dbUrl = 'file:' + dbFile.split(path.sep).join('/');
   log('aplicando migraciones SQLite…');
-  await new Promise((resolve, reject) => {
+  const migrate = new Promise((resolve, reject) => {
     const p = spawn(
       nodeBin,
       [cli, 'migrate', 'deploy'],
@@ -204,12 +198,17 @@ async function runMigrations(dataDir) {
     p.stderr.on('data', tee(process.stderr, 'err'));
     p.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`migrate deploy falló (code=${code}): ${out.slice(-500)}`))));
   });
+  // Las migraciones comparten el presupuesto total de arranque: si no
+  // terminan, el error es claro y el cleanup corre (sin espera infinita).
+  await withDeadline(migrate, Math.max(1000, deadline - Date.now()), 'Migraciones SQLite', log);
   return dbUrl;
 }
 
 async function startStack() {
+  // Presupuesto ÚNICO desde el inicio del arranque: migraciones + servicios.
+  const deadline = Date.now() + STARTUP_TIMEOUT_MS;
   const { dataDir, jwtSecret } = await ensureUserData();
-  const dbUrl = await runMigrations(dataDir);
+  const dbUrl = await runMigrations(dataDir, deadline);
   const uploadsDir = path.join(dataDir, 'uploads');
 
   // Puertos libres (la app usa puertos fijos como el arranque local).
@@ -249,12 +248,20 @@ async function startStack() {
     NEXT_TELEMETRY_DISABLED: '1',
   });
 
-  const [backendOk, frontendOk] = await Promise.all([
-    waitForUrl(`http://127.0.0.1:${BACKEND_PORT}/api/health`, 60_000, 'backend'),
-    waitForUrl(`http://127.0.0.1:${FRONTEND_PORT}`, 60_000, 'frontend'),
-  ]);
-  if (!backendOk || !frontendOk) {
-    throw new Error('El stack no arrancó a tiempo. Revisa los logs en la carpeta de datos de la app.');
+  const remaining = Math.max(1000, deadline - Date.now());
+  const missing = await waitForServices(
+    [
+      { label: 'backend', url: `http://127.0.0.1:${BACKEND_PORT}/api/health` },
+      { label: 'frontend', url: `http://127.0.0.1:${FRONTEND_PORT}` },
+    ],
+    { timeoutMs: remaining, log },
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `El stack no arrancó a tiempo (pendientes: ${missing.join(', ')}). ` +
+        `Presupuesto total: ${Math.round(STARTUP_TIMEOUT_MS / 1000)}s. ` +
+        'Revisa los logs en la carpeta de datos de la app.',
+    );
   }
   return { dataDir, dbUrl };
 }
@@ -323,9 +330,22 @@ if (!gotLock) {
     if (process.platform !== 'darwin') app.quit();
   });
 
-  app.on('before-quit', () => {
+  // Cleanup garantizado antes de salir: si no se espera al taskkill, Electron
+  // podía cerrar antes de que los hijos murieran → backend/frontend huérfanos
+  // que bloquean el siguiente arranque (puertos ocupados).
+  let cleanupDone = false;
+  app.on('before-quit', (event) => {
+    if (cleanupDone) return;
+    event.preventDefault();
     quitting = true;
-    killTree(backendProc);
-    killTree(frontendProc);
+    (async () => {
+      try {
+        await shutdownStack();
+      } catch (err) {
+        log('error en cleanup al salir:', err.message);
+      }
+      cleanupDone = true;
+      app.quit();
+    })();
   });
 }

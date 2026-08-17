@@ -10,7 +10,8 @@
     "start": "electron .",
     "build": "bash scripts/build.sh",
     "build:installer": "bash scripts/build.sh --installer",
-    "rebuild:native": "electron-builder install-app-deps"
+    "rebuild:native": "electron-builder install-app-deps",
+    "test": "node --test"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",

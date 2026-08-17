@@ -48,7 +48,11 @@ PRISMA_VER="$(sed -n 's/.*"prisma": "\^\([0-9.]*\)".*/\1/p' "$ROOT/backend/packa
   # CLI de Prisma + dotenv: devDeps del backend que el runtime SÍ necesita
   # para `migrate deploy` contra el dev.db del usuario (prisma.config.ts hace
   # `import 'dotenv/config'`). npm instala sus transitivas (effect, …).
-  npm install --no-save --no-audit --no-fund "prisma@${PRISMA_VER:-7.9.1}" dotenv
+  # OJO: sin --omit=dev, este `npm install` REINSTALA todas las devDependencies
+  # del backend (jest, typescript, eslint, …) → el stack empaquetado crecía a
+  # ~600 paquetes y la extracción/instalación era mucho más lenta (Defender
+  # escanea cada archivo). Con --omit=dev queda solo runtime + prisma + dotenv.
+  npm install --no-save --omit=dev --no-audit --no-fund "prisma@${PRISMA_VER:-7.9.1}" dotenv
 )
 
 # ---------- 3. Ensamblar resources/backend -----------------------------------

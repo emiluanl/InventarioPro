@@ -6,22 +6,12 @@
 # (ver docs/ARTIFACT-SIGNING.md), y dispararla MANUALMENTE (workflow_dispatch)
 # la primera vez — sin tags ni GitHub Release.
 #
-# ORDEN CORRECTO de firma (validado en la revisión del release gate):
-#   1. Construir los binarios (win-unpacked SIN firmar).
-#   2. Firmar los binarios del stack que electron-builder copia tal cual a la
-#      instalación (resources/stack → schema-engine-windows.exe, etc.).
-#   3. Empaquetar (electron-builder NSIS) — así los binarios firmados QUEDAN
-#      dentro del instalador.
-#   4. Firmar el instalador final (exe).
-#   5. Verificar TODAS las firmas (instalador + binarios internos) y SHA-256.
-#   6. Subir instalador + checksums como artifacts (sin tag, sin release).
-#
-# LIMITACIÓN documentada: los exes que GENERA electron-builder (InventarioPro.exe
-# = electron, elevate.exe y el __uninstaller) se firman con su hook `sign`/certs;
-# sin credenciales quedan sin firma dentro del instalador. La cobertura total
-# (incluidos esos 3) requiere el hook `sign` de electron-builder con el SDK de
-# Artifact Signing (paso posterior documentado en §9 de ARTIFACT-SIGNING.md).
-# Este template firma el instalador final + los binarios del stack embebidos.
+# FIRMA (hook de electron-builder, scripts/sign-with-artifact-signing.js):
+#   electron-builder invoca el hook para InventarioPro.exe, elevate.exe y el
+#   __uninstaller.exe DURANTE el empaquetado → quedan firmados DENTRO del
+#   instalador. El instalador final se firma aparte (paso post-empaquetado).
+#   El hook usa Artifact Signing si AS_* está definido; fallback PFX si
+#   WIN_CSC_LINK está definido; sin credenciales → sin firma.
 #
 # Requiere (configurado manualmente por el propietario, NO automatizado):
 #   - Cuenta de Artifact Signing + validación de identidad + perfil Public Trust
@@ -30,6 +20,8 @@
 #   - Secrets:  AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
 #   - Variables: AS_ENDPOINT, AS_SIGNING_ACCOUNT, AS_CERT_PROFILE
 #   - Environment protegido "release" (reviewers) en Settings → Environments
+#   - Runner: Windows SDK signtool (windows-2022 lo incluye) + .NET 8 runtime
+#     + "Artifact Signing Client Tools" (dlib) — se instalan/descubren abajo.
 # =============================================================================
 
 name: Desktop Signing (Artifact Signing) — TEMPLATE
@@ -50,7 +42,7 @@ on:
   #   tags: ['v*']
 
 # id-token: write es OBLIGATORIO para OIDC → Azure. contents: read es el mínimo.
-# Sin contents: write: este workflow JAMÁS crea releases.
+# Sin contents: write este workflow JAMÁS crea releases.
 permissions:
   id-token: write
   contents: read
@@ -60,11 +52,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: 1. Construir binarios (sin firmar)
+  build-and-sign:
+    name: Build + firma (hook electron-builder) + instalador final
     runs-on: windows-2022
-    timeout-minutes: 60
+    timeout-minutes: 90
     environment: release
+
     steps:
       - uses: actions/checkout@v4
 
@@ -89,48 +82,54 @@ jobs:
         working-directory: desktop
         run: npm ci
 
-      # build.sh SIN certificados en desktop/certs/ → empaqueta SIN firmar.
-      # Los PNG del logo se generan desde SVG dentro del build (hook).
-      - name: Build stack + win-unpacked (--dir, sin firma)
-        working-directory: desktop
-        shell: bash
-        run: bash scripts/build.sh
+      # ------------------------------------------------------------------
+      # Prerrequisitos de firma (sin PFX, sin secretos): cliente de
+      # Artifact Signing + signtool del Windows SDK + .NET 8.
+      # ------------------------------------------------------------------
+      - name: Instalar Artifact Signing Client Tools (dlib)
+        shell: pwsh
+        run: |
+          winget install --id Microsoft.Azure.ArtifactSigningClientTools `
+            --accept-source-agreements --accept-package-agreements --silent
+          if ($LASTEXITCODE -ne 0) {
+            # Fallback: MSI oficial documentado en Microsoft Learn.
+            $ProgressPreference = 'SilentlyContinue'
+            $msi = "$env:TEMP\ArtifactSigningClientTools.msi"
+            Invoke-WebRequest -Uri "https://download.microsoft.com/download/70ad2c3b-761f-4aa9-a9de-e7405aa2b4c1/ArtifactSigningClientTools.msi" -OutFile $msi
+            Start-Process msiexec.exe -Wait -ArgumentList "/I $msi /quiet"
+          }
+          Write-Host "Client tools OK"
 
-      # Los binarios firmados viven en win-unpacked/ → se conservan para el
-      # job de firma (upload/download entre jobs).
-      - name: Upload win-unpacked
-        uses: actions/upload-artifact@v4
-        with:
-          name: win-unpacked-unsigned
-          path: desktop/dist/win-unpacked
-          retention-days: 1
+      - name: Descubrir signtool.exe (Windows SDK) y Azure.CodeSigning.Dlib.dll
+        shell: pwsh
+        run: |
+          $sdk = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Directory |
+            Where-Object { $_.Name -match '^\d+\.' } |
+            Sort-Object Name -Descending | Select-Object -First 1
+          $signtool = Join-Path $sdk.FullName "x64\signtool.exe"
+          if (-not (Test-Path $signtool)) { throw "Falta signtool.exe en el Windows SDK del runner" }
+          "SIGNTOOL_PATH=$signtool" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $dlib = Get-ChildItem "C:\Program Files" -Recurse -Filter "Azure.CodeSigning.Dlib.dll" -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $dlib) { throw "Falta Azure.CodeSigning.Dlib.dll (Artifact Signing Client Tools)" }
+          "AS_DLIB_PATH=$($dlib.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "signtool: $signtool"
+          Write-Host "dlib: $($dlib.FullName)"
 
-  sign:
-    name: 2-4. Firmar stack + instalador final
-    needs: build
-    runs-on: windows-2022
-    timeout-minutes: 60
-    environment: release
-    steps:
-      - uses: actions/checkout@v4
+      - name: Verificar .NET 8 runtime (requerido por el dlib)
+        shell: pwsh
+        run: |
+          $runtimes = dotnet --list-runtimes
+          if ($runtimes -notmatch 'Microsoft.NETCore.App 8\.') {
+            Write-Host "Falta .NET 8 runtime — el dlib de Artifact Signing no funcionará."
+            Write-Host ($runtimes -join "`n")
+            throw "Se requiere .NET 8 runtime para el dlib (instalar: winget install Microsoft.DotNet.Runtime.8)"
+          }
+          Write-Host "".NET 8 runtime OK""
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
-
-      - name: Install desktop deps
-        working-directory: desktop
-        run: npm ci
-
-      - name: Download win-unpacked (sin firmar)
-        uses: actions/download-artifact@v4
-        with:
-          name: win-unpacked-unsigned
-          path: desktop/dist/win-unpacked
-
+      # ------------------------------------------------------------------
       # Autenticación OIDC → Azure (sin client-secret, sin PFX).
+      # ------------------------------------------------------------------
       - name: Azure login (OIDC)
         uses: azure/login@v3
         with:
@@ -138,30 +137,24 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # 2) FIRMAR PRIMERO los binarios del stack que viajan DENTRO del
-      # instalador (antes de empaquetar). Timestamp RFC3161 OBLIGATORIO
-      # (certificados de Artifact Signing valen ~3 días).
-      - name: Firmar binarios del stack (pre-empaquetado)
-        uses: azure/artifact-signing-action@v2
-        with:
-          endpoint: ${{ vars.AS_ENDPOINT }}
-          signing-account-name: ${{ vars.AS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.AS_CERT_PROFILE }}
-          files-folder: ${{ github.workspace }}\desktop\dist\win-unpacked\resources\stack
-          files-folder-filter: exe,dll
-          files-folder-recurse: true
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-
-      # 3) Empaquetar NSIS: los binarios ya firmados quedan DENTRO del exe.
-      # Sin WIN_CSC_LINK (no hay PFX) → electron-builder no re-firma.
-      - name: Empaquetar instalador NSIS
+      # ------------------------------------------------------------------
+      # Build + empaquetado. El hook de firma (electron-builder) firma
+      # InventarioPro.exe, elevate.exe y el __uninstaller DURANTE el
+      # empaquetado con Artifact Signing (AS_* definidos).
+      # ------------------------------------------------------------------
+      - name: Build stack + instalador (hook firma los internos)
         working-directory: desktop
         shell: bash
-        run: npx electron-builder --win nsis
+        env:
+          AS_ENDPOINT: ${{ vars.AS_ENDPOINT }}
+          AS_SIGNING_ACCOUNT: ${{ vars.AS_SIGNING_ACCOUNT }}
+          AS_CERT_PROFILE: ${{ vars.AS_CERT_PROFILE }}
+          SIGNTOOL_PATH: ${{ env.SIGNTOOL_PATH }}
+          AS_DLIB_PATH: ${{ env.AS_DLIB_PATH }}
+        run: bash scripts/build.sh --installer
 
-      # 4) Firmar el instalador final.
+      # Instalador final (exe): se firma DESPUÉS del empaquetado con la
+      # acción de Artifact Signing. Timestamp RFC3161 obligatorio.
       - name: Firmar instalador final
         uses: azure/artifact-signing-action@v2
         with:
@@ -173,13 +166,19 @@ jobs:
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
 
-      # 5) Verificar TODAS las firmas (Status, Subject, timestamp) + SHA-256.
+      # ------------------------------------------------------------------
+      # Verificación posterior: TODOS los ejecutables (instalador, exes
+      # internos, uninstaller) deben estar firmados, con timestamp, y el
+      # Subject NO debe ser el certificado autofirmado local.
+      # ------------------------------------------------------------------
       - name: Verificar firmas (instalador + binarios internos)
         shell: pwsh
         run: |
           $targets = @()
           $targets += Get-ChildItem "desktop/dist/InventarioPro-Setup-*.exe"
-          $targets += Get-ChildItem "desktop/dist/win-unpacked/resources/stack" -Recurse -Include *.exe,*.dll -ErrorAction SilentlyContinue
+          $targets += Get-ChildItem "desktop/dist/win-unpacked\*.exe" -ErrorAction SilentlyContinue
+          $targets += Get-ChildItem "desktop/dist/win-unpacked\resources" -Recurse -Include *.exe -ErrorAction SilentlyContinue
+          $localThumb = "885634401FAD34FC52D7FC16A38955D682DF456C"
           foreach ($f in $targets) {
             $sig = Get-AuthenticodeSignature $f.FullName
             if ($sig.Status -eq 'NotSigned' -or -not $sig.SignerCertificate) {
@@ -188,7 +187,10 @@ jobs:
             if (-not $sig.TimeStamperCertificate) {
               throw "SIN TIMESTAMP: $($f.Name)"
             }
-            Write-Host "OK: $($f.Name) | $($sig.SignerCertificate.Subject) | ts=$([bool]$sig.TimeStamperCertificate)"
+            if ($sig.SignerCertificate.Thumbprint -eq $localThumb) {
+              throw "FIRMA AUTOFIRMADA (no Artifact Signing): $($f.Name)"
+            }
+            Write-Host "OK: $($f.Name) | $($sig.SignerCertificate.Subject) | ts=True"
           }
 
       - name: Generar SHA-256 del instalador
@@ -200,7 +202,6 @@ jobs:
           "SHA256 ($($exe.Name)) = $hash" | Set-Content "desktop/dist/checksums.txt"
           Get-Content "desktop/dist/checksums.txt"
 
-      # 6) Subir artifacts. SIN tags, SIN GitHub Release (contents: read).
       - name: Upload instalador + checksums
         uses: actions/upload-artifact@v4
         with:

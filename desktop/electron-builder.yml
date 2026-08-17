@@ -15,6 +15,12 @@ directories:
   output: dist
   buildResources: build
 
+# Firma personalizada (hook): Artifact Signing si AS_* está definido, PFX
+# autofirmado si WIN_CSC_LINK está definido, sin firma si no hay credenciales.
+# Electron llama al hook para InventarioPro.exe, elevate.exe, el uninstaller
+# y cualquier otro PE del empaquetado. Ver scripts/sign-with-artifact-signing.js.
+sign: ./scripts/sign-with-artifact-signing.js
+
 files:
   - main.js
   - preload.js

@@ -45,14 +45,16 @@ function blockTokens(block: ':root' | '.light'): Record<string, string> {
   const body = GLOBALS_CSS.slice(start, end);
   const tokens: Record<string, string> = {};
   for (const line of body.split('\n')) {
-    const vm = /^\s*--([\w-]+):\s*([\d\s.]+);/.exec(line);
+    const vm = /^\s*--([\w-]+):\s*([^;]+);/.exec(line);
     if (vm) tokens[vm[1]] = vm[2].trim();
   }
   return tokens;
 }
 
 function tokenToHex(token: string): string {
-  const [r, g, b] = token.split(/\s+/).slice(0, 3).map(Number);
+  const trimmed = token.trim();
+  if (trimmed.startsWith('#')) return trimmed.slice(0, 7);
+  const [r, g, b] = trimmed.split(/\s+/).slice(0, 3).map(Number);
   const hex = (v: number): string => v.toString(16).padStart(2, '0');
   return `#${hex(r)}${hex(g)}${hex(b)}`;
 }
@@ -68,6 +70,8 @@ describe('contraste WCAG de tokens de tema (globals.css)', () => {
     ['tw-success', 'badge/alert éxito'],
     ['tw-warning', 'badge/alert advertencia'],
     ['tw-error', 'badge/alert error'],
+    // P3: el texto muted (metadatos) también cumple AA en ambos temas.
+    ['text-muted', 'texto muted (metadatos)'],
   ];
 
   it('los tokens del tema claro cumplen AA (≥4.5:1) sobre blanco', () => {

@@ -87,7 +87,7 @@ exports[`UI components (snapshot) > Input: normal, con error y disabled 1`] = `
 <div>
   <div>
     <input
-      class="block w-full rounded-md border bg-gray-100 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 transition-all duration-150 ease-out focus:outline-none focus:ring-2 focus:ring-accent-400/50 disabled:opacity-40 disabled:cursor-not-allowed border-gray-300 hover:border-gray-400 focus:border-accent-500"
+      class="block w-full rounded-md border bg-gray-100 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 transition-all duration-150 ease-out focus:outline-none focus:ring-2 focus:ring-accent-400/50 disabled:opacity-40 disabled:cursor-not-allowed border-gray-400 hover:border-gray-500 focus:border-accent-500"
       placeholder="Normal"
     />
     <input
@@ -95,7 +95,7 @@ exports[`UI components (snapshot) > Input: normal, con error y disabled 1`] = `
       placeholder="Con error"
     />
     <input
-      class="block w-full rounded-md border bg-gray-100 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 transition-all duration-150 ease-out focus:outline-none focus:ring-2 focus:ring-accent-400/50 disabled:opacity-40 disabled:cursor-not-allowed border-gray-300 hover:border-gray-400 focus:border-accent-500"
+      class="block w-full rounded-md border bg-gray-100 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 transition-all duration-150 ease-out focus:outline-none focus:ring-2 focus:ring-accent-400/50 disabled:opacity-40 disabled:cursor-not-allowed border-gray-400 hover:border-gray-500 focus:border-accent-500"
       disabled=""
       placeholder="Deshabilitado"
     />

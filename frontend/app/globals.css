@@ -60,6 +60,13 @@
     --duration-fast: 150ms;
     --duration-base: 200ms;
     --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+    /* Logo (caja abierta en perspectiva con infinito): colores por tema. */
+    --logo-face-a: #1c1c1f; /* cara izquierda */
+    --logo-face-b: #26262a; /* cara derecha */
+    --logo-void: #0a0a0b; /* interior de la caja (el hueco) */
+    --logo-edge: #3a3a40; /* arista del borde superior */
+    --logo-infinity: #0a84ff; /* el infinito (acento eléctrico) */
   }
 
   /* --------------------------------------------------------------------------
@@ -100,6 +107,12 @@
     --elev-1: 0 1px 2px rgba(0, 0, 0, 0.06);
     --elev-2: 0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
     --elev-3: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+
+    --logo-face-a: #f3f4f6;
+    --logo-face-b: #e5e7eb;
+    --logo-void: #d1d5db;
+    --logo-edge: #9ca3af;
+    --logo-infinity: #0066d6;
   }
 
   html {

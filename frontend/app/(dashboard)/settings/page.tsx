@@ -180,7 +180,7 @@ export default function SettingsPage(): JSX.Element {
               error={errors.current_password?.message}
             />
             {errors.current_password?.message && (
-              <p className="mt-1 text-xs text-red-600">{errors.current_password.message}</p>
+              <p className="mt-1 text-xs text-error">{errors.current_password.message}</p>
             )}
           </div>
 
@@ -195,7 +195,7 @@ export default function SettingsPage(): JSX.Element {
             />
             <p className="text-xs text-gray-600">Mínimo 8 caracteres, con letras y números.</p>
             {errors.new_password?.message && (
-              <p className="mt-1 text-xs text-red-600">{errors.new_password.message}</p>
+              <p className="mt-1 text-xs text-error">{errors.new_password.message}</p>
             )}
           </div>
 
@@ -209,7 +209,7 @@ export default function SettingsPage(): JSX.Element {
               error={errors.confirm_password?.message}
             />
             {errors.confirm_password?.message && (
-              <p className="mt-1 text-xs text-red-600">{errors.confirm_password.message}</p>
+              <p className="mt-1 text-xs text-error">{errors.confirm_password.message}</p>
             )}
           </div>
 
@@ -222,9 +222,9 @@ export default function SettingsPage(): JSX.Element {
       {/* --------------------------------------------------------------------- */}
       {/* ELIMINACIÓN DE CUENTA                                                 */}
       {/* --------------------------------------------------------------------- */}
-      <section className="rounded-lg border border-red-500/30 bg-red-500/10 p-6">
-        <h2 className="text-lg font-semibold text-red-300">Zona de peligro</h2>
-        <p className="mt-1 text-sm text-red-300/80">
+      <section className="rounded-lg border border-error/30 bg-error/10 p-6">
+        <h2 className="text-lg font-semibold text-error">Zona de peligro</h2>
+        <p className="mt-1 text-sm text-error/80">
           Eliminar tu cuenta borra de forma permanente tu usuario, productos, adjuntos,
           notificaciones y conversaciones. Esta acción no se puede deshacer.
         </p>

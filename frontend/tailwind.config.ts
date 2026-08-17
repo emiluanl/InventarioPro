@@ -30,7 +30,7 @@ const config: Config = {
           900: 'rgb(var(--tw-gray-900) / <alpha-value>)',
           950: 'rgb(var(--tw-gray-950) / <alpha-value>)',
         },
-        // Acento eléctrico: azul brillante estilo Starlink/#0A84FF (Apple).
+        // Acento eléctrico (azul brillante, único de la marca InventarioPro).
         // Escala monótona (50 = más claro, 900 = más oscuro), como Tailwind:
         //   texto/link  -> 300/400 (claros, sobre fondo oscuro)
         //   botones     -> 500 base, 400 hover (aclara), 600 active
@@ -46,12 +46,17 @@ const config: Config = {
           800: '#003f82',
           900: '#002c5c',
         },
+        // Colores de ESTADO por tokens semánticos (definidos en globals.css):
+        // se usan con alpha (bg-success/10, text-error, border-warning/40…).
+        success: 'rgb(var(--tw-success) / <alpha-value>)',
+        warning: 'rgb(var(--tw-warning) / <alpha-value>)',
+        error: 'rgb(var(--tw-error) / <alpha-value>)',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
-        // Radios generosos estilo Grok/X (píldoras en acciones, suaves en cajas).
+        // Radios: suaves en cajas (xl2), píldoras en acciones (pill).
         xl2: '1rem',
         pill: '9999px',
       },

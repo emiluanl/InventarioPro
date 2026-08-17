@@ -25,8 +25,8 @@ export function DashboardShell({ children }: { children: ReactNode }): JSX.Eleme
   const { forcedMobile, forcedDesktop } = useLayoutMode();
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-gray-100">
+    <div className="min-h-screen bg-[var(--bg)]">
+      <header className="border-b border-[var(--border)] bg-[var(--surface)]">
         <div
           className={cn(
             'mx-auto flex max-w-6xl items-center justify-between px-4 py-3',
@@ -34,7 +34,10 @@ export function DashboardShell({ children }: { children: ReactNode }): JSX.Eleme
           )}
         >
           <div className="flex items-center gap-2">
-            <Link href="/dashboard" className="text-lg font-semibold text-gray-900">
+            <Link
+              href="/dashboard"
+              className="text-lg font-semibold tracking-tight text-[var(--text)]"
+            >
               Inventario<span className="text-accent-400">Pro</span>
             </Link>
             <PrefsBadges />
@@ -52,10 +55,16 @@ export function DashboardShell({ children }: { children: ReactNode }): JSX.Eleme
                   : 'hidden lg:flex',
             )}
           >
-            <Link href="/reports" className="font-medium text-gray-700 hover:text-accent-300">
+            <Link
+              href="/reports"
+              className="font-medium text-[var(--text-secondary)] hover:text-accent-300"
+            >
               Reportes
             </Link>
-            <Link href="/settings" className="font-medium text-gray-700 hover:text-accent-300">
+            <Link
+              href="/settings"
+              className="font-medium text-[var(--text-secondary)] hover:text-accent-300"
+            >
               Configuración
             </Link>
             <Link

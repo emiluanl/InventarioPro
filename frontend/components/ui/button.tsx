@@ -26,10 +26,11 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       // Acento eléctrico: sólido con glow al hover.
       primary:
         'bg-accent-500 text-white hover:bg-accent-400 hover:shadow-glow active:bg-accent-600',
-      // Superficie tonal: base sutil, hover aclara (Grok style).
+      // Superficie tonal: base sutil, hover aclara.
       secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 active:bg-gray-400/60',
       ghost: 'bg-transparent text-gray-700 hover:bg-gray-300/60 hover:text-gray-900 active:bg-gray-300',
-      danger: 'bg-red-500/90 text-white hover:bg-red-400 hover:shadow-[0_0_16px_rgba(239,68,68,0.25)] active:bg-red-600',
+      // Destructivo por token de estado (--tw-error).
+      danger: 'bg-error/90 text-white hover:bg-error/80 hover:shadow-[0_0_16px_rgba(248,113,113,0.25)] active:bg-error',
     };
 
     const sizes: Record<string, string> = {

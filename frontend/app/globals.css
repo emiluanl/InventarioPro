@@ -1,19 +1,20 @@
 @tailwind base;
 @tailwind components;
-@tailwind utilities;
-
-/* =============================================================================
-   Estilos globales — tema DARK-FIRST (estilo Musk/Grok/X/Starlink)
+@tailwind utilities;/* =============================================================================
+   Estilos globales — tema DARK-FIRST (industrial / aeroespacial / precisión)
    ==========================================================================
-   El tema oscuro es el predeterminado; el claro se activa con la clase `.light`
-   en el <html> (la gestiona ThemeProvider desde lib/theme-mode). La escala
-   gray de Tailwind son variables --tw-gray-* que cambian según el tema, así los
-   componentes se adaptan sin tocar sus clases.
+   Dirección visual: oscura, premium, industrial, tecnológica y precisa —
+   inspirada en ingeniería aeroespacial y productos de alta confiabilidad
+   (instrumentación de vuelo, paneles de control). Original: sin copiar marcas
+   ni estéticas ajenas. El tema oscuro es el predeterminado; el claro se
+   activa con la clase `.light` en el <html> (la gestiona ThemeProvider desde
+   lib/theme-mode). La escala gray de Tailwind son variables --tw-gray-* que
+   cambian según el tema, así los componentes se adaptan sin tocar sus clases.
    ========================================================================== */
 
 @layer base {
   /* --------------------------------------------------------------------------
-     Tema OSCURO (predeterminado): grises invertidos estilo Musk/Grok/X.
+     Tema OSCURO (predeterminado): grises invertidos.
      La escala va de fondo (bajo) a texto (alto).
      -------------------------------------------------------------------------- */
   :root {
@@ -29,18 +30,36 @@
     --tw-gray-900: 245 245 247; /* texto principal (casi blanco) */
     --tw-gray-950: 255 255 255; /* textos que necesitan blanco puro */
 
-    /* Fondo y superficies (tonal: se separan por valor, no por bordes duros). */
-    --bg: #0a0a0b;
-    --surface: #141417;
-    --surface-raised: #1c1c1f;
-    --border: #26262a;
-    --border-hover: #3a3a40;
-    --text: #f5f5f7;
-    --text-secondary: #9e9ea6;
-    --text-muted: #6e6e73;
-    /* Acento eléctrico (igual en ambos temas). */
-    --accent: #0a84ff;
+    /* ======================================================================
+       TOKENS SEMÁNTICOS — fondo, superficies, bordes, texto, acento, estado.
+       ====================================================================== */
+    --bg: #0a0a0b; /* fondo principal (página) */
+    --surface: #141417; /* superficie base (cards, inputs, header) */
+    --surface-raised: #1c1c1f; /* superficie elevada (hover, dropdowns) */
+    --border: #26262a; /* borde por defecto */
+    --border-hover: #3a3a40; /* borde hover / separadores fuertes */
+    --text: #f5f5f7; /* texto primario */
+    --text-secondary: #9e9ea6; /* texto secundario */
+    --text-muted: #6e6e73; /* texto terciario / metadatos */
+    --text-disabled: #4a4a50; /* texto deshabilitado */
+    --accent: #0a84ff; /* acento (eléctrico, igual en ambos temas) */
     --accent-hover: #0071e3;
+    --focus-ring: 59 141 255; /* anillo de foco (accent-400, triplet rgb) */
+
+    /* Colores de ESTADO (triplets rgb para usarlos con alphas Tailwind). */
+    --tw-success: 52 211 153; /* éxito (emerald-400) */
+    --tw-warning: 251 191 36; /* advertencia (amber-400) */
+    --tw-error: 248 113 113; /* error / destructivo (red-400) */
+
+    /* Elevación: sombras discretas para profundidad por capas. */
+    --elev-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --elev-2: 0 4px 12px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.4);
+    --elev-3: 0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
+
+    /* Movimiento: duraciones y easing estándar de micro-interacciones. */
+    --duration-fast: 150ms;
+    --duration-base: 200ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   /* --------------------------------------------------------------------------
@@ -68,9 +87,19 @@
     --text: #111827;
     --text-secondary: #4b5563;
     --text-muted: #6b7280;
+    --text-disabled: #9ca3af;
     /* Acento: el eléctrico se oscurece levemente para mantener contraste sobre blanco. */
     --accent: #0071e3;
     --accent-hover: #0066d6;
+    --focus-ring: 59 141 255;
+
+    --tw-success: 5 150 105; /* éxito (emerald-600, legible sobre blanco) */
+    --tw-warning: 217 119 6; /* advertencia (amber-600) */
+    --tw-error: 220 38 38; /* error / destructivo (red-600) */
+
+    --elev-1: 0 1px 2px rgba(0, 0, 0, 0.06);
+    --elev-2: 0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
+    --elev-3: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
   }
 
   html {
@@ -147,5 +176,56 @@ html.theme-transition *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* =============================================================================
+   UTILIDADES DEL DESIGN SYSTEM — tipografía y elevación por tokens.
+   Uso: t-title / t-label / t-num para texto; elev-1/2/3 para sombras.
+   ========================================================================== */
+@layer utilities {
+  /* Título de sección / pantalla. */
+  .t-title {
+    font-size: 1.25rem;
+    line-height: 1.35;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  /* Subtítulo / texto destacado. */
+  .t-subtitle {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  /* Etiqueta (label / metadato, mayúsculas compactas). */
+  .t-label {
+    font-size: 0.75rem;
+    line-height: 1.5;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  /* Números y métricas: dígitos monoespaciados de ancho fijo. */
+  .t-num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* Elevación por tokens (sombra sutil → flotante). */
+  .elev-1 {
+    box-shadow: var(--elev-1);
+  }
+
+  .elev-2 {
+    box-shadow: var(--elev-2);
+  }
+
+  .elev-3 {
+    box-shadow: var(--elev-3);
   }
 }

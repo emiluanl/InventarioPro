@@ -4,7 +4,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 interface AlertProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: 'error' | 'success' | 'info';
+  variant?: 'error' | 'success' | 'warning' | 'info';
 }
 
 export function Alert({
@@ -14,8 +14,9 @@ export function Alert({
   ...props
 }: AlertProps): React.JSX.Element {
   const variants: Record<string, string> = {
-    error: 'border-red-400/30 bg-red-400/10 text-red-300',
-    success: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300',
+    error: 'border-error/30 bg-error/10 text-error',
+    success: 'border-success/30 bg-success/10 text-success',
+    warning: 'border-warning/40 bg-warning/10 text-warning',
     info: 'border-accent-400/30 bg-accent-400/10 text-accent-400',
   };
 

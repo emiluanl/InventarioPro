@@ -18,7 +18,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         'focus:outline-none focus:ring-2 focus:ring-accent-400/50',
         'disabled:opacity-40 disabled:cursor-not-allowed',
         error
-          ? 'border-red-400/70 focus:border-red-400 focus:ring-red-400/40'
+          ? 'border-error/70 focus:border-error focus:ring-error/40'
           : 'border-gray-300 hover:border-gray-400 focus:border-accent-500',
         className,
       )}

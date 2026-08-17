@@ -4,13 +4,13 @@ exports[`UI components (snapshot) > Alert: error, success e info 1`] = `
 <div>
   <div>
     <div
-      class="rounded-md border px-4 py-3 text-sm backdrop-blur-sm border-red-400/30 bg-red-400/10 text-red-300"
+      class="rounded-md border px-4 py-3 text-sm backdrop-blur-sm border-error/30 bg-error/10 text-error"
       role="alert"
     >
       Algo salió mal
     </div>
     <div
-      class="rounded-md border px-4 py-3 text-sm backdrop-blur-sm border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+      class="rounded-md border px-4 py-3 text-sm backdrop-blur-sm border-success/30 bg-success/10 text-success"
       role="alert"
     >
       Todo bien
@@ -44,7 +44,7 @@ exports[`UI components (snapshot) > Button: variantes y carga 1`] = `
       Ghost
     </button>
     <button
-      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-red-500/90 text-white hover:bg-red-400 hover:shadow-[0_0_16px_rgba(239,68,68,0.25)] active:bg-red-600"
+      class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none px-4 py-2 text-sm bg-error/90 text-white hover:bg-error/80 hover:shadow-[0_0_16px_rgba(248,113,113,0.25)] active:bg-error"
     >
       Peligro
     </button>
@@ -91,7 +91,7 @@ exports[`UI components (snapshot) > Input: normal, con error y disabled 1`] = `
       placeholder="Normal"
     />
     <input
-      class="block w-full rounded-md border bg-gray-100 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 transition-all duration-150 ease-out focus:outline-none focus:ring-2 disabled:opacity-40 disabled:cursor-not-allowed border-red-400/70 focus:border-red-400 focus:ring-red-400/40"
+      class="block w-full rounded-md border bg-gray-100 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 transition-all duration-150 ease-out focus:outline-none focus:ring-2 disabled:opacity-40 disabled:cursor-not-allowed border-error/70 focus:border-error focus:ring-error/40"
       placeholder="Con error"
     />
     <input

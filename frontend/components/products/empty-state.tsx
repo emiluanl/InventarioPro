@@ -4,12 +4,12 @@ import Link from 'next/link';
 
 export function EmptyState(): JSX.Element {
   return (
-    <div className="rounded-lg border border-dashed border-gray-300 bg-gray-100 p-12 text-center">
-      <div className="mx-auto h-12 w-12 rounded-full bg-accent-500/15 text-accent-300 flex items-center justify-center text-xl">
+    <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface)] p-12 text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent-500/15 text-xl text-accent-300">
         📦
       </div>
-      <h2 className="mt-4 text-lg font-medium text-gray-900">Tu inventario está vacío</h2>
-      <p className="mt-1 text-sm text-gray-700">
+      <h2 className="t-title mt-4 text-[var(--text)]">Tu inventario está vacío</h2>
+      <p className="mt-1 text-sm text-[var(--text-secondary)]">
         Empieza registrando tu primer producto.
       </p>
       <Link

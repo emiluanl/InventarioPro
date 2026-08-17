@@ -72,8 +72,10 @@ export class ChatService {
 
     // 5) Auditoría: registrar las herramientas ejecutadas (qué se llamó, con
     //    qué argumentos y qué devolvió). Son filas auxiliares marcadas por
-    //    function_call (content ''): no van al historial de la IA (buildHistory
-    //    las filtra) ni a la UI (getMessages filtra function_call null).
+    //    function_call (content ''): no van a la UI (getMessages filtra
+    //    function_call null), pero buildHistory las materializa en el contexto
+    //    del LLM como el intercambio assistant tool_calls + tool result para
+    //    que la IA pueda continuar (p. ej. confirmar con el confirmation_id).
     for (const detail of result.toolDetails) {
       await this.prisma.chatMessage.create({
         data: {
@@ -154,36 +156,88 @@ export class ChatService {
   }
 
   private async buildHistory(conversationId: string): Promise<ApiChatMessage[]> {
-    const messages = (
-      await this.prisma.chatMessage.findMany({
-        where: { conversation_id: conversationId },
-        orderBy: { created_at: 'asc' },
-        take: MAX_HISTORY_MESSAGES, // límite para no enviar historiales infinitos
-      })
-    ).filter(
-      // Las filas de auditoría (function_call seteado) no se envían al LLM.
-      (m) => m.function_call === null,
-    );
+    const rows = await this.prisma.chatMessage.findMany({
+      where: { conversation_id: conversationId },
+      orderBy: { created_at: 'asc' },
+      take: MAX_HISTORY_MESSAGES, // límite para no enviar historiales infinitos
+    });
 
-    // Mensajes acotados por tamaño individual y por presupuesto TOTAL de
-    // caracteres: se recorta desde los más viejos, conservando SIEMPRE el
-    // último mensaje (el del usuario que dispara esta llamada).
+    // Cada fila se materializa en los mensajes que el LLM necesita para
+    // CONTINUAR la conversación (patrón estándar de function calling):
+    //   - Fila normal (function_call null) → mensaje user/assistant con texto.
+    //   - Fila de auditoría (function_call seteado) → el intercambio completo:
+    //     assistant con tool_calls + tool con el resultado. Sin esto, los
+    //     resultados de las tools (p. ej. el confirmation_id del flujo
+    //     consultivo de crear_producto) se pierden entre turnos y la IA no
+    //     podría confirmar ni cancelar en la siguiente respuesta.
+    const messages: ApiChatMessage[] = [];
+    for (const row of rows) {
+      if (row.function_call === null) {
+        if (!row.content) continue;
+        messages.push({
+          role: row.role.toLowerCase() as ApiChatMessage['role'],
+          content: row.content.slice(0, MAX_MESSAGE_CHARS),
+        });
+        continue;
+      }
+      let fn: { name: string; arguments: string };
+      try {
+        fn = JSON.parse(row.function_call);
+      } catch {
+        continue; // auditoría ilegible: se omite, el resto del historial sigue intacto
+      }
+      // Id determinístico derivado del id de la fila: el par assistant
+      // tool_calls ↔ tool debe referenciar el MISMO id (lo exige la API).
+      const toolCallId = `call_${row.id}`;
+      messages.push({
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: toolCallId,
+            type: 'function',
+            function: { name: fn.name, arguments: fn.arguments },
+          },
+        ],
+      });
+      messages.push({
+        role: 'tool',
+        content: (row.function_result ?? '{}').slice(0, MAX_MESSAGE_CHARS),
+        tool_call_id: toolCallId,
+        name: fn.name,
+      });
+    }
+
+    // Podar por GRUPO ATÓMICO: un intercambio de tool (assistant con tool_calls
+    // + su tool result, materializados de UNA misma fila de auditoría) se
+    // descarta COMPLETO o entra COMPLETO. Así NUNCA se envía al proveedor un
+    // resultado `tool` sin su `assistant.tool_calls` asociado (lo rechazaría
+    // la API y rompería el flujo). Se recorta desde los más viejos,
+    // conservando SIEMPRE el último grupo (el del usuario que dispara).
+    const groups: ApiChatMessage[][] = [];
+    for (const m of messages) {
+      const prev = groups[groups.length - 1];
+      if (m.role === 'tool' && prev && prev.length === 1 && prev[0].tool_calls) {
+        // El tool result completa el intercambio del assistant tool_calls previo.
+        prev.push(m);
+      } else {
+        groups.push([m]);
+      }
+    }
+
     let budget = MAX_CONTEXT_CHARS;
     const capped: ApiChatMessage[] = [];
-    for (const m of [...messages].reverse()) {
-      const content = m.content ? m.content.slice(0, MAX_MESSAGE_CHARS) : m.content;
-      const size = content?.length ?? 0;
-      if (size <= budget) {
-        capped.unshift({ role: m.role.toLowerCase() as ApiChatMessage['role'], content });
+    for (let i = groups.length - 1; i >= 0; i--) {
+      const size = groups[i].reduce((acc, m) => acc + (JSON.stringify(m)?.length ?? 0), 0);
+      if (capped.length === 0) {
+        // El último mensaje siempre entra (el del usuario que dispara la llamada).
+        capped.unshift(...groups[i]);
+        budget = Math.max(0, budget - size);
+      } else if (size <= budget) {
+        capped.unshift(...groups[i]);
         budget -= size;
-      } else if (capped.length === 0 && size > 0) {
-        // El último mensaje siempre entra, recortado al presupuesto restante.
-        capped.unshift({
-          role: m.role.toLowerCase() as ApiChatMessage['role'],
-          content: content.slice(0, budget),
-        });
-        budget = 0;
       }
+      // Si un grupo viejo no entra, se descarta COMPLETO (nunca a medias).
       if (budget <= 0) break;
     }
 

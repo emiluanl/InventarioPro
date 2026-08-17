@@ -241,6 +241,121 @@ describe('ChatService — privacidad del prompt y límites de contexto', () => {
     expect(JSON.stringify(captured!.messages)).not.toContain('u1');
   });
 
+  it('buildHistory materializa las filas de auditoría como assistant tool_calls + tool result (continuidad del function calling)', async () => {
+    const { prisma, deepSeek, service } = buildMocks();
+    prisma.chatMessage.findMany.mockResolvedValue([
+      { id: 'm1', role: ChatRole.USER, content: 'Compré una licuadora', function_call: null },
+      {
+        id: 'm2',
+        role: ChatRole.ASSISTANT,
+        content: '',
+        function_call: JSON.stringify({ name: 'crear_producto', arguments: '{}' }),
+        function_result: JSON.stringify({
+          needs_confirmation: true,
+          confirmation_id: 'id-opaco-123',
+        }),
+      },
+      { id: 'm3', role: ChatRole.ASSISTANT, content: '¿La creo igual?', function_call: null },
+    ]);
+
+    let captured:
+      | {
+          messages: {
+            role: string;
+            content: string | null;
+            tool_call_id?: string;
+            tool_calls?: unknown[];
+          }[];
+        }
+      | undefined;
+    deepSeek.chatCompletion.mockImplementation(async (req: never) => {
+      captured = req as typeof captured;
+      return {
+        choices: [
+          { index: 0, message: { role: 'assistant', content: 'sí' }, finish_reason: 'stop' },
+        ],
+      } as never;
+    });
+
+    await service.sendMessage('u1', undefined, 'sí');
+
+    const nonSystem = captured!.messages.filter((m) => m.role !== 'system');
+    // El confirmation_id viaja al LLM en el tool result del turno anterior.
+    expect(JSON.stringify(nonSystem)).toContain('id-opaco-123');
+    // El par assistant tool_calls ↔ tool usa el MISMO id (lo exige la API).
+    const assistantToolCall = nonSystem.find((m) => m.role === 'assistant' && m.tool_calls);
+    const toolMsg = nonSystem.find((m) => m.role === 'tool');
+    const callId = (assistantToolCall!.tool_calls as { id: string }[])[0].id;
+    expect(toolMsg?.tool_call_id).toBe(callId);
+    expect(toolMsg?.content).toContain('id-opaco-123');
+  });
+
+  it('la poda es ATÓMICA por intercambio de tool: nunca envía un tool sin su assistant.tool_calls (aunque el presupuesto corte)', async () => {
+    const { prisma, deepSeek, service } = buildMocks();
+    // 6 intercambios grandes (~4100 chars c/u = ~24.6k) + el mensaje del usuario:
+    // superan el presupuesto de 16k, así que la poda recorta varios.
+    const history = [];
+    for (let i = 0; i < 6; i++) {
+      history.push({
+        id: `m-user-${i}`,
+        role: ChatRole.USER,
+        content: `Pregunta ${i}`,
+        function_call: null,
+      });
+      history.push({
+        id: `m-audit-${i}`,
+        role: ChatRole.ASSISTANT,
+        content: '',
+        function_call: JSON.stringify({ name: 'buscar_productos', arguments: '{}' }),
+        function_result: JSON.stringify({ data: 'x'.repeat(4000), n: i }),
+      });
+    }
+    history.push({
+      id: 'm-final-user',
+      role: ChatRole.USER,
+      content: 'Última pregunta',
+      function_call: null,
+    });
+    prisma.chatMessage.findMany.mockResolvedValue(history);
+
+    let captured:
+      | {
+          messages: {
+            role: string;
+            content: string | null;
+            tool_call_id?: string;
+            tool_calls?: { id: string }[];
+          }[];
+        }
+      | undefined;
+    deepSeek.chatCompletion.mockImplementation(async (req: never) => {
+      captured = req as typeof captured;
+      return {
+        choices: [
+          { index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' },
+        ],
+      } as never;
+    });
+
+    await service.sendMessage('u1', undefined, 'hola');
+
+    const msgs = captured!.messages.filter((m) => m.role !== 'system');
+    // Invariante: todo mensaje tool tiene SU assistant tool_calls ANTES con el
+    // MISMO tool_call_id (nunca un resultado huérfano).
+    const assistantIds = new Set(
+      msgs
+        .filter((m) => m.role === 'assistant' && m.tool_calls)
+        .flatMap((m) => m.tool_calls!.map((t) => t.id)),
+    );
+    for (const m of msgs.filter((m) => m.role === 'tool')) {
+      expect(assistantIds.has(m.tool_call_id!)).toBe(true);
+    }
+    // El último mensaje del usuario siempre se conserva.
+    expect(msgs[msgs.length - 1].content).toBe('Última pregunta');
+    // La poda recortó (no cabe todo en 16k).
+    expect(msgs.length).toBeLessThan(history.length + 1);
+  });
+
   it('el historial se recorta al presupuesto de caracteres conservando el último mensaje', async () => {
     const { prisma, deepSeek, service } = buildMocks();
     // 14 mensajes largos (3k chars) + el último del usuario (distintivo).

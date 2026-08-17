@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert } from '@/components/ui/alert';
+import { Logo } from '@/components/ui/logo';
 
 interface ChatPanelProps {
   onClose: () => void;
@@ -61,11 +62,13 @@ export function ChatPanel({ onClose }: ChatPanelProps): JSX.Element {
   };
 
   return (
-    <div className="fixed bottom-24 right-4 z-50 flex h-[560px] w-[380px] flex-col rounded-2xl border border-gray-200 bg-gray-100 shadow-xl sm:right-6">
+    // w-[min(92vw,380px)]: en móvil el panel nunca desborda el ancho del
+    // teléfono (380px fijos desbordaban en pantallas < 400px).
+    <div className="elev-3 fixed bottom-24 right-4 z-50 flex h-[min(560px,calc(100dvh-7rem))] w-[min(92vw,380px)] flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] sm:right-6">
       {/* Header */}
-      <header className="flex items-center justify-between rounded-t-2xl border-b border-gray-200 bg-accent-600 px-4 py-3 text-white">
+      <header className="flex items-center justify-between rounded-t-2xl border-b border-[var(--border)] bg-accent-600 px-4 py-3 text-white">
         <div className="flex items-center gap-2">
-          <span className="text-lg">💬</span>
+          <Logo variant="symbol" symbolClassName="h-6 w-6" />
           <div>
             <h2 className="text-sm font-semibold">Asistente InventarioPro</h2>
             <p className="text-xs opacity-80">Pregúntame sobre tus productos</p>
@@ -89,14 +92,14 @@ export function ChatPanel({ onClose }: ChatPanelProps): JSX.Element {
         {/* Mientras cargan las conversaciones (o los mensajes de la activa). */}
         {((conversationsLoading && !activeConversationId) ||
           (isLoading && activeConversationId)) && (
-          <p className="text-center text-xs text-gray-500">Cargando mensajes…</p>
+          <p className="text-center text-xs text-[var(--text-muted)]">Cargando mensajes…</p>
         )}
 
         {/* Sin conversaciones cargadas aún no aplica: el saludo solo cuando
             sabemos que no hay ninguna, o cuando la activa está vacía. */}
         {(!conversationsLoading && !activeConversationId) ||
           (messages && messages.length === 0) ? (
-          <div className="flex h-full flex-col items-center justify-center text-center text-sm text-gray-600">
+          <div className="flex h-full flex-col items-center justify-center text-center text-sm text-[var(--text-secondary)]">
             <p className="font-medium">¡Hola! Soy tu asistente.</p>
             <p className="mt-1 text-xs">
               Prueba: "¿Qué compré en enero?" o "Registra una licuadora Oster que compré ayer por $150".
@@ -121,7 +124,7 @@ export function ChatPanel({ onClose }: ChatPanelProps): JSX.Element {
           e.preventDefault();
           void onSend();
         }}
-        className="flex items-center gap-2 border-t border-gray-200 p-3"
+        className="flex items-center gap-2 border-t border-[var(--border)] p-3"
       >
         <Input
           placeholder="Escribe un mensaje…"
@@ -139,7 +142,7 @@ export function ChatPanel({ onClose }: ChatPanelProps): JSX.Element {
         <button
           type="button"
           onClick={() => setConversationId(undefined)}
-          className="border-t border-gray-200 px-3 py-1.5 text-center text-xs text-gray-700 hover:bg-gray-200"
+          className="min-h-11 border-t border-[var(--border)] px-3 py-1.5 text-center text-xs text-[var(--text-secondary)] transition hover:bg-[var(--surface-raised)] hover:text-[var(--text)]"
         >
           + Nueva conversación
         </button>

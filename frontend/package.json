@@ -7,7 +7,7 @@
   "description": "Frontend del InventarioPro (Next.js + Tailwind + React Query)",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3010",
+    "dev": "npm run generate:logo-assets && next dev -p 3010",
     "build": "npm run generate:logo-assets && next build",
     "start": "next start -p 3000",
     "lint": "eslint . --max-warnings=0",

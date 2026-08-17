@@ -273,7 +273,7 @@ npm run dev
 Tres capas, todas en el CI:
 
 ```bash
-# 1) Backend — Jest (133 tests, incluye la paridad de esquemas Prisma pg/sqlite)
+# 1) Backend — Jest (215 tests, incluye la paridad de esquemas Prisma pg/sqlite)
 cd backend && npm test
 
 # 2) Frontend — Vitest + Testing Library (71 tests)
@@ -293,6 +293,19 @@ dedicada y frontend en `:3102` con build aislado en `.next-e2e`), así que no
 interfiere con el dev server ni con la BD de desarrollo. El token de verificación
 se recupera del log de emails del backend en modo dev (`DEV_EMAIL_LOG`);
 el informe HTML queda en `playwright-report/`.
+
+### Prueba de carga local (sin API key, sin VPS)
+
+```bash
+npm run test:load            # 50 iteraciones, 5 workers, puerto 3007
+npm run test:load -- --iters 200 --concurrency 10 --port 3007
+```
+
+Compila el backend con el cliente Prisma SQLite (lo restaura al salir), arranca
+el proceso contra una copia descartable de `backend/prisma/dev.db` y mide la
+latencia real de registro → verificación de email (link del log) → login →
+creación de productos, listado con filtros y una fase mixta concurrente.
+Reporta p50/p95 y tasa de éxito; falla (exit != 0) si hubo errores HTTP.
 
 `npm run test:e2e:local` hace el ciclo completo: levanta el stack de desarrollo
 (`docker compose up -d`), espera a que Postgres/Redis estén healthy, crea la BD

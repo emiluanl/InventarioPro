@@ -8,9 +8,11 @@
 #   2. Restauración real en una BD descartable (--clean --if-exists --no-owner,
 #      igual que backup/restore.sh).
 #   3. Verificación: conteos de users/products/categories + una fila de muestra.
-#   4. Si se pasa un tar de uploads (--uploads), verificación BÁSICA: lista el
-#      contenido y cuenta archivos (no extrae ni compara los archivos
-#      restaurados — eso queda como extensión futura del drill).
+#   4. Si se pasa un tar de uploads (--uploads), verificación REAL:
+#      a. gzip -t: el tar no está truncado ni corrupto.
+#      b. Se EXTRAE el tar dentro del contenedor efímero y se comparan los
+#         conteos (archivos listados vs archivos extraídos) + tamaño total.
+#      c. Cruce informativo con product_attachments de la BD restaurada.
 #   5. Limpieza total (el contenedor efímero se elimina SIEMPRE, pase o falle).
 #
 # Uso:
@@ -34,6 +36,7 @@ cd "$ROOT"
 
 UPLOADS_TAR=""
 DUMP=""
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --uploads)
@@ -71,6 +74,17 @@ DUMP_FILE="$(basename "$DUMP")"
 # En Git Bash/Windows el path del volumen debe ser Windows; en Linux queda igual.
 DUMP_DIR_HOST="$(cygpath -w "$DUMP_DIR" 2>/dev/null || echo "$DUMP_DIR")"
 
+UPLOADS_DIR_HOST=""
+UPLOADS_FILE=""
+UPLOADS_ARGS=()
+if [ -n "$UPLOADS_TAR" ]; then
+  [ -f "$UPLOADS_TAR" ] || { echo "ERROR: el tar de uploads no existe: $UPLOADS_TAR" >&2; exit 1; }
+  UPLOADS_DIR_HOST="$(cd "$(dirname "$UPLOADS_TAR")" && pwd)"
+  UPLOADS_DIR_HOST="$(cygpath -w "$UPLOADS_DIR_HOST" 2>/dev/null || echo "$UPLOADS_DIR_HOST")"
+  UPLOADS_FILE="$(basename "$UPLOADS_TAR")"
+  UPLOADS_ARGS=(-v "$UPLOADS_DIR_HOST:/uploads-tar:ro")
+fi
+
 cleanup() {
   docker rm -f "$CID" >/dev/null 2>&1 || true
 }
@@ -79,7 +93,7 @@ trap cleanup EXIT
 echo "[drill] 1/5 Levantando BD descartable ($TAG)…"
 docker run -d --name "$CID" \
   -e POSTGRES_USER=drill -e POSTGRES_PASSWORD=drillpass -e POSTGRES_DB=drilldb \
-  -v "$DUMP_DIR_HOST:/dump:ro" \
+  -v "$DUMP_DIR_HOST:/dump:ro" "${UPLOADS_ARGS[@]}" \
   "$TAG" >/dev/null
 
 echo "[drill] 2/5 Esperando a que postgres esté listo…"
@@ -114,15 +128,37 @@ SAMPLE="$(docker exec "$CID" psql -U drill -d drilldb -tA -c \
 echo "  users:      $USERS"
 echo "  products:   $PRODUCTS"
 echo "  categories: $CATEGORIES"
-[ -n "$SAMPLE" ] && echo "  muestra:    $SAMPLE"  if [ -n "$UPLOADS_TAR" ]; then
-    if [ ! -f "$UPLOADS_TAR" ]; then
-      echo "ERROR: el tar de uploads no existe: $UPLOADS_TAR" >&2
+[ -n "$SAMPLE" ] && echo "  muestra:    $SAMPLE"
+if [ -n "$UPLOADS_TAR" ]; then
+    echo "[drill] Uploads — verificación REAL del tar: $UPLOADS_TAR"
+
+    # a) Integridad gzip: un tar truncado/corrupto falla acá sin extraer nada.
+    echo "[drill]   a) gzip -t (integridad del contenedor gzip)…"
+    gzip -t "$UPLOADS_TAR" || { echo "ERROR: el tar de uploads está truncado o corrupto." >&2; exit 1; }
+
+    # b) Extracción REAL dentro del contenedor efímero + comparación de conteos.
+    echo "[drill]   b) extrayendo en el contenedor efímero…"
+    if ! docker exec "$CID" sh -c "mkdir -p /extracted && tar -xzf /uploads-tar/$UPLOADS_FILE -C /extracted"; then
+      echo "ERROR: falló la extracción del tar de uploads." >&2
       exit 1
     fi
-    N_FILES="$(tar -tzf "$UPLOADS_TAR" 2>/dev/null | grep -v '/$' | wc -l)"
-    echo "[drill] Uploads (verificación básica): $UPLOADS_TAR → $N_FILES archivos"
-    echo "[drill]   (solo lista el contenido; no extrae ni compara los archivos)"
-    [ "$N_FILES" -gt 0 ] || { echo "ERROR: el tar de uploads está vacío." >&2; exit 1; }
+    LISTED="$(tar -tzf "$UPLOADS_TAR" 2>/dev/null | grep -v '/$' | wc -l)"
+    EXTRACTED="$(docker exec "$CID" sh -c 'find /extracted -type f | wc -l' | tr -d ' \r')"
+    TOTAL_BYTES="$(docker exec "$CID" sh -c 'du -sb /extracted | cut -f1' | tr -d ' \r')"
+    echo "[drill]     listados:  $LISTED"
+    echo "[drill]     extraídos: $EXTRACTED"
+    echo "[drill]     tamaño:    $((TOTAL_BYTES / 1024)) KiB"
+    [ "$LISTED" -gt 0 ] || { echo "ERROR: el tar de uploads está vacío." >&2; exit 1; }
+    [ "$EXTRACTED" -eq "$LISTED" ] || {
+      echo "ERROR: el tar lista $LISTED archivos pero solo se extrajeron $EXTRACTED (posible corrupción)." >&2
+      exit 1
+    }
+
+    # c) Cruce informativo con la BD restaurada (los tar pueden incluir
+    #    attachments borrados lógicamente, por eso es informativo, no bloquea).
+    ATTACH_ROWS="$(count product_attachments)"
+    echo "[drill]   c) cruce informativo: filas de product_attachments en la BD restaurada = $ATTACH_ROWS"
+    echo "[drill]     (si difieren del conteo del tar, suele ser por attachments soft-deleted; revisar en el drill manual)"
   fi
 
 echo

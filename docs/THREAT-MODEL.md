@@ -6,10 +6,12 @@ decisión olvidada.
 
 ## 1. Archivos subidos (`/uploads/*`)
 
-**Estado hoy: riesgo aceptado.** La app es de **un solo usuario** (el dueño de
-los datos) y los archivos se sirven sin autenticación.
+**Estado hoy: riesgo aceptado TEMPORALMENTE, no vulnerabilidad corregida.**
+La app es de **un solo usuario** (el dueño de los datos) y los archivos se
+sirven sin autenticación. Esta decisión NO debe leerse como un control de
+seguridad implementado: es un costo asumido a corto plazo.
 
-### Por qué es aceptable hoy
+### Por qué es aceptable hoy (y solo hoy)
 
 - **No hay multi-tenancy**: no existe el vector "usuario A ve archivos de
   usuario B" (hay un solo usuario).
@@ -18,6 +20,10 @@ los datos) y los archivos se sirven sin autenticación.
   `LocalStorageProvider.upload`). 16 hex = **64 bits de entropía**: un atacante
   no puede enumerar URLs.
 - **La URL solo se filtra si el usuario la comparte** (enlace, screenshot, logs).
+
+**Importante:** los nombres aleatorios dificultan la ENUMERACIÓN, pero NO
+sustituyen la AUTORIZACIÓN. Si una URL es conocida (o se filtra), cualquiera
+puede descargar el archivo sin credenciales.
 
 ### Dónde vive
 
@@ -30,14 +36,33 @@ los datos) y los archivos se sirven sin autenticación.
 
 ### Gatillos de cambio (cuándo deja de ser aceptable)
 
-| Gatillo | Acción requerida |
-|---|---|
-| **Segundo usuario** (cualquier multi-tenancy) | **Obligatorio**: autenticar el acceso a `/uploads/*` (guard de cookie/sesión en los estáticos o URLs firmadas cortas) |
-| **Archivos sensibles compartidos** | URLs privadas temporales en lugar de URL pública permanente |
-| **Storage externo** (S3/R2/Supabase como modelo definitivo) | URLs firmadas de **5–15 minutos** re-firmadas en el servidor al leer |
-| Migración a storage externo | Acompañarla SIEMPRE del pipeline de backups del storage (ver §3) |
+Cualquiera de estos eventos **obliga** a implementar autenticación antes de
+activarse:
+
+| # | Gatillo (evento concreto) | Acción requerida |
+|---|---|---|
+| 1 | **Antes de crear un segundo usuario real** (cualquier multi-tenancy) | Autenticar el acceso a `/uploads/*` (guard de sesión en los estáticos o URLs firmadas cortas) |
+| 2 | **Antes de habilitar colaboración o inventarios compartidos** | Autorización por usuario y producto; endpoint autenticado de descarga |
+| 3 | **Antes de permitir URLs de archivos fuera del entorno local** (enlaces públicos, share) | URLs privadas temporales en lugar de URL pública permanente |
+| 4 | **Antes de publicar la aplicación en un entorno multiusuario** | Autenticación obligatoria de todos los archivos, con pruebas de acceso permitido/denegado |
+| 5 | **Antes de migrar los archivos a almacenamiento externo** (S3/R2/Supabase como modelo definitivo) | URLs firmadas de **5–15 minutos** re-firmadas en el servidor al leer + pipeline de backups del storage (ver §3) |
 
 **Regla:** nunca dejar las URLs firmadas de 1 año como modelo definitivo.
+
+### Solución futura obligatoria (cuando se dispare un gatillo)
+
+- **Autorización por usuario y producto**: un archivo solo es descargable por
+  su dueño (o quien comparta el inventario).
+- **Endpoint autenticado para descargar archivos** (p. ej. `GET
+  /api/attachments/:id/file` con el JWT), en lugar de servir la carpeta pública.
+- **Validación de ownership** antes de servir: el archivo debe pertenecer a un
+  producto del usuario autenticado.
+- **URLs firmadas de corta duración** (5–15 min) si el storage es externo,
+  re-firmadas en el servidor al leer.
+- **Prohibición de servir directamente una carpeta pública** (`useStaticAssets`
+  de `/uploads/` se elimina o se restringe a un token de sesión).
+- **Pruebas de acceso permitido y denegado** (e2e: dueño descarga OK, otro
+  usuario 401/403, URL pública ya no existe).
 
 ## 2. Herramientas de IA (function calling)
 

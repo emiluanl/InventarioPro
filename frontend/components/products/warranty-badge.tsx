@@ -10,11 +10,12 @@ interface WarrantyBadgeProps {
   daysUntilExpiry?: number | null;
 }
 
-// Variantes dark: fondo tintado oscuro + texto claro (legibles sobre #141417).
+// Variantes por token de estado (--tw-success/warning/error): mismo tono en
+// fondo/borde/texto, legible en oscuro y claro.
 const COLORS: Record<WarrantyStatus, string> = {
-  vigente: 'bg-green-500/15 text-green-300 border-green-500/30',
-  por_vencer: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30',
-  vencida: 'bg-red-500/15 text-red-300 border-red-500/30',
+  vigente: 'bg-success/15 text-success border-success/30',
+  por_vencer: 'bg-warning/15 text-warning border-warning/30',
+  vencida: 'bg-error/15 text-error border-error/30',
 };
 
 export function WarrantyBadge({

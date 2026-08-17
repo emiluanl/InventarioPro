@@ -74,7 +74,7 @@ export function ProductImages({ productId, attachments }: ProductImagesProps): J
       {serverError && <Alert variant="error">{serverError}</Alert>}
 
       {/* Uploader */}
-      <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed border-gray-300 bg-gray-100 p-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed border-[var(--border)] bg-[var(--surface)] p-4">
         <select
           value={tipo}
           onChange={(e) => setTipo(e.target.value as AttachmentType)}
@@ -119,7 +119,7 @@ export function ProductImages({ productId, attachments }: ProductImagesProps): J
               <div
                 key={a.id}
                 className={cn(
-                  'group relative overflow-hidden rounded-md border border-gray-200',
+                  'group relative overflow-hidden rounded-md border border-[var(--border)]',
                 )}
               >
                 <a href={resolveFileUrl(a.url)} target="_blank" rel="noopener noreferrer">
@@ -132,10 +132,12 @@ export function ProductImages({ productId, attachments }: ProductImagesProps): J
                     className="aspect-square w-full object-cover transition group-hover:scale-105"
                   />
                 </a>
+                {/* Visible siempre (no solo hover): el borrado es accesible
+                    también en táctil, donde no existe group-hover. */}
                 <button
                   type="button"
                   onClick={() => remove.mutate(a.id)}
-                  className="absolute right-1 top-1 rounded-full bg-red-600 px-2 py-0.5 text-xs text-white opacity-0 transition group-hover:opacity-100"
+                  className="absolute right-1 top-1 rounded-full bg-error px-2 py-1 text-xs font-medium text-white shadow-sm transition hover:bg-error/90"
                 >
                   Borrar
                 </button>
@@ -153,23 +155,23 @@ export function ProductImages({ productId, attachments }: ProductImagesProps): J
             {recibos.map((a) => (
               <li
                 key={a.id}
-                className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-100 p-3"
+                className="flex items-center justify-between rounded-md border border-[var(--border)] bg-[var(--surface)] p-3"
               >
                 <div className="min-w-0">
                   <a
                     href={resolveFileUrl(a.url)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="truncate font-medium text-gray-900 hover:text-accent-300"
+                    className="truncate font-medium text-[var(--text)] hover:text-accent-300"
                   >
                     {a.nombre ?? resolveFileUrl(a.url).split('/').pop() ?? 'archivo'}
                   </a>
-                  <p className="text-xs text-gray-600">{a.tipo}</p>
+                  <p className="text-xs text-[var(--text-secondary)]">{a.tipo}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => remove.mutate(a.id)}
-                  className="text-sm text-red-600 hover:text-red-700"
+                  className="text-sm text-error transition hover:text-error"
                 >
                   Borrar
                 </button>

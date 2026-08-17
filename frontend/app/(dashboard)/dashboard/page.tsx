@@ -82,7 +82,7 @@ function DashboardInner(): JSX.Element {
       {isLoading && <DashboardSkeleton view={view} />}
 
       {isError && (
-        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+        <div className="rounded-md border border-error/30 bg-error/10 p-4 text-sm text-error">
           {error.message}
         </div>
       )}
@@ -149,31 +149,33 @@ function ProductsTable({
         {products.map((p) => (
           <div
             key={p.id}
-            className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-100 p-3"
+            className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3"
           >
             <div className="min-w-0 flex-1">
               <Link
                 href={`/products/${p.id}`}
-                className="block truncate font-medium text-gray-900 hover:text-accent-300"
+                className="block truncate font-medium text-[var(--text)] hover:text-accent-300"
               >
                 {p.nombre}
               </Link>
-              <p className="mt-0.5 truncate text-xs text-gray-600">
+              <p className="mt-0.5 truncate text-xs text-[var(--text-secondary)]">
                 {[p.marca && p.marca, p.categoria?.nombre && p.categoria.nombre]
                   .filter(Boolean)
                   .join(' · ')}
               </p>
-              <p className="mt-0.5 text-xs text-gray-600">
+              <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
                 {formatCurrency(p.precio, p.moneda)} · {p.tiempo_posesion}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <span className="text-xs text-gray-700">{PRODUCT_STATUS_LABELS[p.estado]}</span>
+              <span className="text-xs text-[var(--text-secondary)]">
+                {PRODUCT_STATUS_LABELS[p.estado]}
+              </span>
               <button
                 type="button"
                 onClick={() => onDelete(p.id)}
                 aria-label={`Borrar ${p.nombre}`}
-                className="rounded-md p-1.5 text-red-600 transition hover:bg-red-50 hover:text-red-700"
+                className="rounded-md p-1.5 text-error transition hover:bg-error/10 hover:text-error"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="3 6 5 6 21 6" />
@@ -187,12 +189,12 @@ function ProductsTable({
 
       <div
         className={cn(
-          'overflow-x-auto rounded-lg border border-gray-200 bg-gray-100',
+          'overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]',
           forcedDesktop ? '' : forcedMobile ? 'hidden' : 'hidden md:block',
         )}
       >
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50 text-left text-xs font-medium uppercase text-gray-600">
+      <table className="min-w-full divide-y divide-[var(--border)]">
+        <thead className="bg-[var(--surface-raised)] text-left text-xs font-medium uppercase text-[var(--text-secondary)]">
           <tr>
             <th className="px-4 py-2">Producto</th>
             <th className="px-4 py-2">Categoría</th>
@@ -202,29 +204,31 @@ function ProductsTable({
             <th className="px-4 py-2 text-right">Acciones</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100 text-sm">
+        <tbody className="divide-y divide-[var(--border)] text-sm">
           {products.map((p) => (
-            <tr key={p.id} className="hover:bg-gray-200">
+            <tr key={p.id} className="transition hover:bg-[var(--surface-raised)]">
               <td className="px-4 py-2">
                 <Link
                   href={`/products/${p.id}`}
-                  className="font-medium text-gray-900 hover:text-accent-300"
+                  className="font-medium text-[var(--text)] hover:text-accent-300"
                 >
                   {p.nombre}
                 </Link>
-                {p.marca && <p className="text-xs text-gray-600">{p.marca}</p>}
+                {p.marca && <p className="text-xs text-[var(--text-secondary)]">{p.marca}</p>}
               </td>
-              <td className="px-4 py-2 text-gray-800">{p.categoria?.nombre ?? '—'}</td>
-              <td className="px-4 py-2 font-medium text-gray-900">
+              <td className="px-4 py-2 text-[var(--text-secondary)]">{p.categoria?.nombre ?? '—'}</td>
+              <td className="t-num px-4 py-2 font-medium text-[var(--text)]">
                 {formatCurrency(p.precio, p.moneda)}
               </td>
-              <td className="px-4 py-2 text-gray-800">{p.tiempo_posesion}</td>
-              <td className="px-4 py-2 text-gray-800">{PRODUCT_STATUS_LABELS[p.estado]}</td>
+              <td className="px-4 py-2 text-[var(--text-secondary)]">{p.tiempo_posesion}</td>
+              <td className="px-4 py-2 text-[var(--text-secondary)]">
+                {PRODUCT_STATUS_LABELS[p.estado]}
+              </td>
               <td className="px-4 py-2 text-right">
                 <button
                   type="button"
                   onClick={() => onDelete(p.id)}
-                  className="text-sm text-red-600 hover:text-red-700"
+                  className="text-sm text-error transition hover:text-error"
                 >
                   Borrar
                 </button>

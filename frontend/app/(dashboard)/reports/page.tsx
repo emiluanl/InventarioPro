@@ -51,7 +51,7 @@ export default function ReportsPage(): JSX.Element {
       {isLoading && <ReportsSkeleton />}
 
       {isError && (
-        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+        <div className="rounded-md border border-error/30 bg-error/10 p-4 text-sm text-error">
           {error.message}
         </div>
       )}
@@ -88,29 +88,29 @@ export default function ReportsPage(): JSX.Element {
 
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Por categoría */}
-            <section className="rounded-lg border border-gray-200 bg-gray-100 p-5">
-              <h2 className="text-sm font-semibold text-gray-900">Por categoría</h2>
+            <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5">
+              <h2 className="t-label">Por categoría</h2>
               <CategoryBreakdown categories={data.by_category} currency={data.currency} total={data.total} />
             </section>
 
             {/* Por mes */}
-            <section className="rounded-lg border border-gray-200 bg-gray-100 p-5">
-              <h2 className="text-sm font-semibold text-gray-900">Por mes</h2>
+            <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5">
+              <h2 className="t-label">Por mes</h2>
               <MonthChart months={data.by_month} currency={data.currency} />
             </section>
           </div>
 
           {/* Por moneda (solo si hay más de una) */}
           {data.by_currency.length > 1 && (
-            <section className="rounded-lg border border-gray-200 bg-gray-100 p-5">
-              <h2 className="text-sm font-semibold text-gray-900">Por moneda</h2>
+            <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5">
+              <h2 className="t-label">Por moneda</h2>
               <ul className="mt-3 space-y-1 text-sm">
                 {data.by_currency.map((c) => (
                   <li key={c.moneda} className="flex items-center justify-between">
-                    <span className="text-gray-800">{c.moneda}</span>
-                    <span className="font-medium text-gray-900">
+                    <span className="text-[var(--text-secondary)]">{c.moneda}</span>
+                    <span className="t-num font-medium text-[var(--text)]">
                       {formatCurrency(c.total.toFixed(2), c.moneda)}
-                      <span className="ml-2 text-xs font-normal text-gray-500">
+                      <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">
                         {c.cantidad} compra{c.cantidad === 1 ? '' : 's'}
                       </span>
                     </span>
@@ -127,9 +127,9 @@ export default function ReportsPage(): JSX.Element {
 
 function SummaryCard({ label, value }: { label: string; value: string }): JSX.Element {
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-100 p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-600">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5">
+      <p className="t-label">{label}</p>
+      <p className="t-num mt-1 text-2xl font-semibold text-[var(--text)]">{value}</p>
     </div>
   );
 }
@@ -150,20 +150,23 @@ function CategoryBreakdown({
         return (
           <li key={c.categoria_id ?? 'sin-categoria'}>
             <div className="flex items-center justify-between text-sm">
-              <span className="font-medium text-gray-900">{c.nombre}</span>
-              <span className="text-gray-700">
+              <span className="font-medium text-[var(--text)]">{c.nombre}</span>
+              <span className="t-num text-[var(--text-secondary)]">
                 {formatCurrency(c.total.toFixed(2), currency)}
-                <span className="ml-2 text-xs text-gray-500">
+                <span className="ml-2 text-xs text-[var(--text-muted)]">
                   {c.cantidad} {c.cantidad === 1 ? 'compra' : 'compras'}
                 </span>
               </span>
             </div>
-            <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100">
+            {/* Alternativa textual: la barra es decorativa; el dato completo
+                está en el texto visible de la fila. */}
+            <div
+              className="mt-1 h-2 overflow-hidden rounded-full bg-[var(--surface-raised)]"
+              aria-hidden="true"
+            >
               <div
                 className="h-full rounded-full bg-accent-600"
                 style={{ width: `${share}%` }}
-                role="img"
-                aria-label={`${c.nombre}: ${share.toFixed(0)}% del gasto`}
               />
             </div>
           </li>
@@ -182,28 +185,35 @@ function MonthChart({
 }): JSX.Element {
   const max = Math.max(...months.map((m) => m.total), 1);
   return (
-    <div className="mt-4 flex h-40 items-end gap-1.5">
+    <figure className="mt-4">
+    {/* Alternativa textual del gráfico (para lectores de pantalla). */}
+    <figcaption className="sr-only">
+      Gasto mensual: {months.map((m) => `${m.label} ${formatCurrency(m.total.toFixed(2), currency)}`).join('; ')}.
+    </figcaption>
+    <div className="flex h-40 items-end gap-1.5">
       {months.map((m) => {
         const height = max > 0 ? (m.total / max) * 100 : 0;
         return (
           <div key={m.mes} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-            <span className="text-[10px] text-gray-600" title={formatCurrency(m.total.toFixed(2), currency)}>
+            <span className="t-num text-[10px] text-[var(--text-secondary)]" title={formatCurrency(m.total.toFixed(2), currency)}>
               {m.total > 0 ? formatCurrency(m.total.toFixed(2), currency).replace(/[,.]\d{2}.*/, '') : ''}
             </span>
+            {/* La barra es decorativa (aria-hidden): cada dato está disponible
+                en el <ul> sr-only que acompaña al gráfico. */}
             <div
               className={cn(
                 'w-full rounded-t',
-                m.total > 0 ? 'bg-accent-600' : 'bg-gray-100',
+                m.total > 0 ? 'bg-accent-600' : 'bg-[var(--surface-raised)]',
               )}
               style={{ height: `${height}%` }}
-              role="img"
-              aria-label={`${m.label}: ${formatCurrency(m.total.toFixed(2), currency)}`}
+              aria-hidden="true"
             />
-            <span className="text-[10px] text-gray-500">{m.label}</span>
+            <span className="text-[10px] text-[var(--text-muted)]">{m.label}</span>
           </div>
         );
       })}
     </div>
+    </figure>
   );
 }
 

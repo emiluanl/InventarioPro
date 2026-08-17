@@ -99,8 +99,8 @@ export default function ProductDetailPage({ params }: PageProps): JSX.Element {
         <Stat label="Precio" value={formatCurrency(product.precio, product.moneda)} />
       </div>
 
-      <section className="rounded-lg border border-gray-200 bg-gray-100 p-6">
-        <h2 className="text-sm font-medium uppercase text-gray-600">Detalles</h2>
+      <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-6">
+        <h2 className="t-label">Detalles</h2>
         <dl className="mt-4 grid gap-3 sm:grid-cols-2">
           <Row label="Categoría" value={product.categoria?.nombre ?? '—'} />
           <Row label="Estado" value={PRODUCT_STATUS_LABELS[product.estado]} />
@@ -118,10 +118,8 @@ export default function ProductDetailPage({ params }: PageProps): JSX.Element {
         </dl>
       </section>
 
-      <section className="rounded-lg border border-gray-200 bg-gray-100 p-6">
-        <h2 className="mb-4 text-sm font-medium uppercase text-gray-600">
-          Adjuntos ({product.attachments?.length ?? 0})
-        </h2>
+      <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-6">
+        <h2 className="t-label mb-4">Adjuntos ({product.attachments?.length ?? 0})</h2>
         <ProductImages productId={product.id} attachments={product.attachments ?? []} />
       </section>
     </div>
@@ -130,9 +128,9 @@ export default function ProductDetailPage({ params }: PageProps): JSX.Element {
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }): JSX.Element {
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-100 p-4">
-      <p className="text-xs uppercase text-gray-600">{label}</p>
-      <div className="mt-1 text-base font-medium text-gray-900">{value}</div>
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+      <p className="t-label">{label}</p>
+      <div className="t-num mt-1 text-base font-medium text-[var(--text)]">{value}</div>
     </div>
   );
 }
@@ -148,8 +146,8 @@ function Row({
 }): JSX.Element {
   return (
     <div className={fullWidth ? 'sm:col-span-2' : ''}>
-      <dt className="text-xs uppercase text-gray-600">{label}</dt>
-      <dd className="mt-1 text-sm text-gray-900">{value}</dd>
+      <dt className="t-label">{label}</dt>
+      <dd className="mt-1 text-sm text-[var(--text)]">{value}</dd>
     </div>
   );
 }

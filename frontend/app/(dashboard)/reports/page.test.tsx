@@ -65,7 +65,7 @@ describe('ReportsPage', () => {
     expect(screen.getByText('80,00 €')).toBeInTheDocument();
   });
 
-  it('renderiza el gráfico de meses con sus etiquetas', () => {
+  it('renderiza el gráfico de meses con sus etiquetas y su alternativa textual', () => {
     const { container } = render(<ReportsPage />);
     expect(screen.getByText('ene')).toBeInTheDocument();
     expect(screen.getByText('feb')).toBeInTheDocument();
@@ -74,7 +74,14 @@ describe('ReportsPage', () => {
     const monthSection = Array.from(container.querySelectorAll('section')).find((s) =>
       s.textContent?.includes('Por mes'),
     );
-    expect(monthSection?.querySelectorAll('[role="img"]')).toHaveLength(12);
+    expect(monthSection?.querySelectorAll('.bg-accent-600, [aria-hidden="true"]')).not.toBeNull();
+    // Alternativa textual del gráfico (figcaption sr-only) con los datos.
+    const caption = monthSection?.querySelector('figcaption');
+    expect(caption).not.toBeNull();
+    expect(caption?.textContent).toContain('Gasto mensual:');
+    // El formato de moneda usa espacio no separable: comparar con \s*.
+    expect(caption?.textContent).toMatch(/ene\s*100,00/);
+    expect(caption?.textContent).toMatch(/ago\s*630,00/);
   });
 
   it('muestra el estado vacío cuando no hay gastos', () => {

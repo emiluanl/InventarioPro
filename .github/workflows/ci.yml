@@ -60,7 +60,9 @@ jobs:
 
       # Estricto: sin --fix, falla ante violaciones (npm run lint:fix para
       # auto-corregir en local). src/generated/ está excluido via .eslintignore.
-      - name: Lint (estricto: falla ante violaciones)
+      # El name va entre comillas: "estricto:" con dos puntos+espacio dentro del
+      # scalar lo hace ambiguo para parsers YAML estrictos.
+      - name: "Lint (estricto: falla ante violaciones)"
         run: npm run lint --if-present
 
       - name: Type-check
@@ -81,6 +83,72 @@ jobs:
           name: backend-coverage
           path: backend/coverage/
           retention-days: 7
+
+  # =============================================================================
+  # Backend contra SQLite: el mismo código que corre con Postgres, compilado y
+  # verificado contra el proveedor SQLite (modo local sin Docker de la app).
+  #   - prisma generate con el schema sqlite (mismo paso que scripts/start.sh).
+  #   - build del backend con ese cliente.
+  #   - migraciones SQLite aplicadas + smoke: node dist/main.js → /api/health.
+  #   - suite de tests completa en modo sqlite.
+  # =============================================================================
+  backend-sqlite:
+    name: Backend (SQLite — compile + smoke + tests)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client (SQLite)
+        run: DB_PROVIDER=sqlite npx prisma generate
+
+      - name: Build (cliente SQLite)
+        run: npm run build
+
+      - name: Apply SQLite migrations
+        run: DB_PROVIDER=sqlite DATABASE_URL=file:./prisma/ci-sqlite.db npx prisma migrate deploy
+
+      - name: Smoke — boot dist y /api/health
+        env:
+          DB_PROVIDER: sqlite
+          DATABASE_URL: file:./prisma/ci-sqlite.db
+          PORT: '3110'
+          JWT_ACCESS_SECRET: ci-sqlite-access-secret-32chars-min
+          JWT_REFRESH_SECRET: ci-sqlite-refresh-secret-32chars-min
+          SMTP_HOST: ''
+          REDIS_HOST: ''
+          NODE_ENV: test
+        run: |
+          node dist/main.js > /tmp/backend-sqlite.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:3110/api/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3110/api/health || { cat /tmp/backend-sqlite.log; exit 1; }
+          kill $PID || true
+
+      - name: Test (SQLite)
+        env:
+          DB_PROVIDER: sqlite
+          DATABASE_URL: file:./prisma/ci-sqlite.db
+          JWT_ACCESS_SECRET: ci-sqlite-access-secret-32chars-min
+          JWT_REFRESH_SECRET: ci-sqlite-refresh-secret-32chars-min
+          NODE_ENV: test
+        run: npm test -- --runInBand
 
   # =============================================================================
   # Frontend: install, lint, type-check, build
@@ -118,6 +186,106 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:3001/api
         run: npm run build
+
+  # =============================================================================
+  # Frontend standalone: verifica que el build autónomo (output: standalone, el
+  # mismo que usa el Dockerfile de escritorio) arranca y sirve la app sin el
+  # dev server — smoke real de .next/standalone/server.js.
+  # =============================================================================
+  frontend-standalone:
+    name: Frontend (standalone smoke)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (standalone)
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001/api
+        run: npm run build
+
+      - name: Smoke — .next/standalone/server.js responde
+        run: |
+          # El server standalone necesita .next/static junto al server.js
+          # (en el Dockerfile lo copia un COPY; acá se replica para el smoke).
+          cp -r .next/static .next/standalone/.next/static
+          PORT=3111 HOSTNAME=127.0.0.1 node .next/standalone/server.js > /tmp/next-standalone.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3111/ >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3111/ | grep -qi '<html' || { cat /tmp/next-standalone.log; exit 1; }
+          kill $PID || true
+
+  # =============================================================================
+  # Load test (INFORMATIVO — no bloquea el workflow): mide la latencia real del
+  # backend COMPILADO contra una BD SQLite TEMPORAL creada con las migraciones
+  # actuales (sin depender de dev.db, sin Postgres externo, sin API key).
+  #   · continue-on-error: true → si falla, el job queda fallido pero el resto
+  #     del workflow continúa y nadie depende de él.
+  #   · El paso de upload usa if: always() → el reporte y el log se suben SIEMPRE
+  #     (también cuando el job falla), para que la causa quede visible.
+  #   · El exit code NO se oculta: el script termina != 0 si hubo fallos HTTP.
+  # =============================================================================
+  load-test:
+    name: Load test (informativo, no bloquea)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Crear BD SQLite temporal (migraciones actuales, sin dev.db)
+        working-directory: backend
+        run: DB_PROVIDER=sqlite DATABASE_URL=file:./prisma/ci-load.db npx prisma migrate deploy
+
+      - name: Ejecutar load test (compila + arranca el backend + mide)
+        env:
+          LOAD_TEST_SOURCE_DB: ${{ github.workspace }}/backend/prisma/ci-load.db
+          LOAD_TEST_REPORT: load-test-results.json
+          LOAD_TEST_PORT: '3112'
+          LOAD_TEST_ITERS: '60'
+          LOAD_TEST_CONCURRENCY: '5'
+        run: |
+          set -o pipefail
+          node scripts/load-test.js \
+            --source-db "$LOAD_TEST_SOURCE_DB" \
+            --report "$LOAD_TEST_REPORT" \
+            --port "$LOAD_TEST_PORT" 2>&1 | tee load-test-run.log
+
+      - name: Subir resultados del load test (siempre, incluso si falla)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: |
+            load-test-results.json
+            load-test-run.log
+          retention-days: 7
 
   # =============================================================================
   # E2E: flujos de navegador con Playwright (registro, verificación, login, alta)

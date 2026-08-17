@@ -18,6 +18,8 @@ directories:
 files:
   - main.js
   - preload.js
+  - lib/**              # helpers del arranque (startup.js) — sin esto, la app
+                        # instalada falla al require('./lib/startup')
 
 extraResources:
   - from: resources

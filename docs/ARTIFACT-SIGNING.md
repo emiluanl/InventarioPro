@@ -68,7 +68,8 @@ permissions:
 
 - **Runner:** solo Windows (`windows-2022`/`windows-2025`).
 - **Timestamp:** los certificados de Artifact Signing tienen **validez de 3 días**; el timestamp RFC 3161 con `http://timestamp.acs.microsoft.com` es obligatorio para que la firma siga siendo válida después.
-- **Instalador y ejecutables internos:** firmar el `.exe` del instalador **y** los ejecutables de `dist/win-unpacked` (InventarioPro.exe, elevate.exe, schema-engine-windows.exe, etc.). Para que los ejecutables **embebidos dentro** del instalador queden firmados hay que firmarlos **antes** de empaquetar: integrar la firma vía hook `sign` de electron-builder (SDK/SignTool dlib) en `build.sh`. El template firma los artefactos ya empaquetados (instalador + win-unpacked); eso cubre la reputación del instalador, pero la firma de los exes embebidos requiere el hook (paso posterior documentado en §9).
+- **Instalador y ejecutables internos — ORDEN correcto (validado en el release gate):** ① construir binarios sin firmar (`build.sh --dir`); ② **firmar ANTES de empaquetar** los binarios del stack que electron-builder copia tal cual (`resources/stack` → schema-engine-windows.exe, etc.); ③ empaquetar NSIS (los binarios firmados quedan DENTRO del instalador); ④ firmar el instalador final; ⑤ verificar todas las firmas; ⑥ subir artifacts. Firmar `dist/win-unpacked` DESPUÉS del empaquetado no llega a los archivos embebidos.
+- **Limitación conocida:** los exes que GENERA electron-builder (InventarioPro.exe = electron, elevate.exe y `__uninstaller`) se firman con su hook `sign`/certs; sin credenciales quedan sin firma dentro del instalador. La cobertura total de esos 3 requiere el hook `sign` de electron-builder con el SDK de Artifact Signing (§9). El template firma el instalador final + los binarios del stack embebidos.
 
 ## 7. Validación posterior a la firma (en el mismo workflow)
 

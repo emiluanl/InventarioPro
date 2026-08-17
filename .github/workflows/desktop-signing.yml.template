@@ -1,17 +1,31 @@
 # =============================================================================
 # PLANTILLA — Microsoft Artifact Signing (DESHABILITADA)
 # =============================================================================
-# Este archivo es una PLANTILLA: termina en `.template` para que GitHub NO lo
-# ejecute. Para activarla: renombrar a `desktop-signing.yml`, configurar los
-# recursos de Azure y los secretos (ver docs/ARTIFACT-SIGNING.md) y dispararla
-# manualmente con un tag de prueba.
+# Termina en `.template` para que GitHub NO lo ejecute. Para activarla:
+# renombrar a `desktop-signing.yml`, crear los recursos de Azure y secretos
+# (ver docs/ARTIFACT-SIGNING.md), y dispararla MANUALMENTE (workflow_dispatch)
+# la primera vez — sin tags ni GitHub Release.
 #
-# Objetivo: firmar el instalador NSIS de 1.0.3+ y sus ejecutables internos con
-# Microsoft Artifact Signing desde CI/CD, sin PFX ni claves privadas en GitHub.
+# ORDEN CORRECTO de firma (validado en la revisión del release gate):
+#   1. Construir los binarios (win-unpacked SIN firmar).
+#   2. Firmar los binarios del stack que electron-builder copia tal cual a la
+#      instalación (resources/stack → schema-engine-windows.exe, etc.).
+#   3. Empaquetar (electron-builder NSIS) — así los binarios firmados QUEDAN
+#      dentro del instalador.
+#   4. Firmar el instalador final (exe).
+#   5. Verificar TODAS las firmas (instalador + binarios internos) y SHA-256.
+#   6. Subir instalador + checksums como artifacts (sin tag, sin release).
+#
+# LIMITACIÓN documentada: los exes que GENERA electron-builder (InventarioPro.exe
+# = electron, elevate.exe y el __uninstaller) se firman con su hook `sign`/certs;
+# sin credenciales quedan sin firma dentro del instalador. La cobertura total
+# (incluidos esos 3) requiere el hook `sign` de electron-builder con el SDK de
+# Artifact Signing (paso posterior documentado en §9 de ARTIFACT-SIGNING.md).
+# Este template firma el instalador final + los binarios del stack embebidos.
 #
 # Requiere (configurado manualmente por el propietario, NO automatizado):
 #   - Cuenta de Artifact Signing + validación de identidad + perfil Public Trust
-#   - Rol "Artifact Signing Certificate Profile Signer" asignado al App Registration
+#   - Rol "Artifact Signing Certificate Profile Signer" en el App Registration
 #   - App Registration + Federated Credential (OIDC) para este repo
 #   - Secrets:  AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
 #   - Variables: AS_ENDPOINT, AS_SIGNING_ACCOUNT, AS_CERT_PROFILE
@@ -23,30 +37,34 @@ name: Desktop Signing (Artifact Signing) — TEMPLATE
 on:
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: 'Tag de la release a firmar (ej: v1.0.3)'
+      # Modo PRUEBA por defecto: no crea tags ni GitHub Release. Solo sube
+      # artifacts con el instalador de prueba firmado.
+      mode:
+        description: 'test (default) | release'
         required: true
+        default: 'test'
+        type: choice
+        options: ['test', 'release']
+  # SOLO activar el trigger de tags cuando el modo test haya pasado.
   # push:
   #   tags: ['v*']
 
-# id-token: write es OBLIGATORIO para OIDC → Azure. Sin contents: write
-# (la firma no lo necesita; la GitHub Release la hace el workflow existente).
+# id-token: write es OBLIGATORIO para OIDC → Azure. contents: read es el mínimo.
+# Sin contents: write: este workflow JAMÁS crea releases.
 permissions:
   id-token: write
   contents: read
 
 concurrency:
-  group: signing-${{ inputs.release_tag || github.ref }}
+  group: signing-${{ github.event_name }}-${{ inputs.mode || github.ref }}
   cancel-in-progress: false
 
 jobs:
-  sign-release:
-    name: Firmar instalador con Artifact Signing
+  build:
+    name: 1. Construir binarios (sin firmar)
     runs-on: windows-2022
     timeout-minutes: 60
-    # Environment protegido: un PR jamás llega acá (solo dispatch manual o tag v*).
     environment: release
-
     steps:
       - uses: actions/checkout@v4
 
@@ -73,12 +91,46 @@ jobs:
 
       # build.sh SIN certificados en desktop/certs/ → empaqueta SIN firmar.
       # Los PNG del logo se generan desde SVG dentro del build (hook).
-      - name: Build stack + instalador (sin firma local)
+      - name: Build stack + win-unpacked (--dir, sin firma)
         working-directory: desktop
         shell: bash
-        run: bash scripts/build.sh --installer
+        run: bash scripts/build.sh
 
-      # Autenticación OIDC → Azure (sin client-secret).
+      # Los binarios firmados viven en win-unpacked/ → se conservan para el
+      # job de firma (upload/download entre jobs).
+      - name: Upload win-unpacked
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-unpacked-unsigned
+          path: desktop/dist/win-unpacked
+          retention-days: 1
+
+  sign:
+    name: 2-4. Firmar stack + instalador final
+    needs: build
+    runs-on: windows-2022
+    timeout-minutes: 60
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop deps
+        working-directory: desktop
+        run: npm ci
+
+      - name: Download win-unpacked (sin firmar)
+        uses: actions/download-artifact@v4
+        with:
+          name: win-unpacked-unsigned
+          path: desktop/dist/win-unpacked
+
+      # Autenticación OIDC → Azure (sin client-secret, sin PFX).
       - name: Azure login (OIDC)
         uses: azure/login@v3
         with:
@@ -86,22 +138,31 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # Firma el instalador + los exes de win-unpacked. Timestamp RFC3161
-      # OBLIGATORIO: los certificados de Artifact Signing valen ~3 días.
-      - name: Firmar instalador y ejecutables internos
+      # 2) FIRMAR PRIMERO los binarios del stack que viajan DENTRO del
+      # instalador (antes de empaquetar). Timestamp RFC3161 OBLIGATORIO
+      # (certificados de Artifact Signing valen ~3 días).
+      - name: Firmar binarios del stack (pre-empaquetado)
         uses: azure/artifact-signing-action@v2
         with:
           endpoint: ${{ vars.AS_ENDPOINT }}
           signing-account-name: ${{ vars.AS_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ vars.AS_CERT_PROFILE }}
-          files-folder: ${{ github.workspace }}\desktop\dist\win-unpacked
+          files-folder: ${{ github.workspace }}\desktop\dist\win-unpacked\resources\stack
           files-folder-filter: exe,dll
           files-folder-recurse: true
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
 
-      - name: Firmar instalador (exe)
+      # 3) Empaquetar NSIS: los binarios ya firmados quedan DENTRO del exe.
+      # Sin WIN_CSC_LINK (no hay PFX) → electron-builder no re-firma.
+      - name: Empaquetar instalador NSIS
+        working-directory: desktop
+        shell: bash
+        run: npx electron-builder --win nsis
+
+      # 4) Firmar el instalador final.
+      - name: Firmar instalador final
         uses: azure/artifact-signing-action@v2
         with:
           endpoint: ${{ vars.AS_ENDPOINT }}
@@ -112,23 +173,25 @@ jobs:
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
 
-      # Validación posterior a la firma: NotSigned o sin firmante = fallo.
-      # En un runner limpio Status puede ser UnknownError (no hay raíz de
-      # confianza local) — se valida el firmante, no el estatus local.
-      - name: Verificar firma tras firmar
+      # 5) Verificar TODAS las firmas (Status, Subject, timestamp) + SHA-256.
+      - name: Verificar firmas (instalador + binarios internos)
         shell: pwsh
         run: |
-          $files = @(Get-ChildItem "desktop/dist/InventarioPro-Setup-*.exe") +
-            @(Get-ChildItem "desktop/dist/win-unpacked/*.exe" -ErrorAction SilentlyContinue)
-          foreach ($f in $files) {
+          $targets = @()
+          $targets += Get-ChildItem "desktop/dist/InventarioPro-Setup-*.exe"
+          $targets += Get-ChildItem "desktop/dist/win-unpacked/resources/stack" -Recurse -Include *.exe,*.dll -ErrorAction SilentlyContinue
+          foreach ($f in $targets) {
             $sig = Get-AuthenticodeSignature $f.FullName
             if ($sig.Status -eq 'NotSigned' -or -not $sig.SignerCertificate) {
               throw "NO firmado: $($f.Name) (Status=$($sig.Status))"
             }
-            Write-Host "OK: $($f.Name) — $($sig.SignerCertificate.Subject) — timestamp=$([bool]$sig.TimeStamperCertificate)"
+            if (-not $sig.TimeStamperCertificate) {
+              throw "SIN TIMESTAMP: $($f.Name)"
+            }
+            Write-Host "OK: $($f.Name) | $($sig.SignerCertificate.Subject) | ts=$([bool]$sig.TimeStamperCertificate)"
           }
 
-      - name: Checksums del instalador firmado
+      - name: Generar SHA-256 del instalador
         shell: pwsh
         run: |
           $exe = Get-ChildItem "desktop/dist/InventarioPro-Setup-*.exe" |
@@ -137,7 +200,8 @@ jobs:
           "SHA256 ($($exe.Name)) = $hash" | Set-Content "desktop/dist/checksums.txt"
           Get-Content "desktop/dist/checksums.txt"
 
-      - name: Upload instalador firmado
+      # 6) Subir artifacts. SIN tags, SIN GitHub Release (contents: read).
+      - name: Upload instalador + checksums
         uses: actions/upload-artifact@v4
         with:
           name: InventarioPro-Setup-firmado

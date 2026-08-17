@@ -8,6 +8,12 @@ frontend/.next-e2e/
 frontend/.next-pwa/
 frontend/out/
 
+# Assets del logo GENERADOS desde los SVG fuente (frontend/public/logo/ se
+# versiona; los PNG y el favicon.ico se regeneran en cada build con
+# `npm run generate:logo-assets` — ver frontend/README.md).
+frontend/public/icons/
+frontend/app/favicon.ico
+
 # App de escritorio (desktop/): stack ensamblado, iconos e instaladores.
 # desktop/certs/ contiene la clave privada de firma (pfx) — nunca se commitea.
 desktop/dist/

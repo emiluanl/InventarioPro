@@ -154,6 +154,110 @@ describe('crear_producto consultivo — flujo real de dos turnos', () => {
     expect(data.lugar_compra).toBe('Falabella');
   });
 
+  // ===========================================================================
+  // Confirmar / cancelar DESPUÉS DE PODAR el historial: el historial se llena
+  // con intercambios grandes hasta que la poda inteligente (resumen histórico)
+  // recorta los antiguos; el intercambio consultivo pendiente y su
+  // confirmation_id deben sobrevivir para que el turno 2 funcione.
+  // ===========================================================================
+
+  function buildStackWithLongHistory() {
+    const full = buildFullStack();
+    const rows: Record<string, unknown>[] = [];
+    // 12 intercambios grandes (~1450 chars c/u en JSON) para forzar la poda.
+    for (let i = 0; i < 12; i++) {
+      rows.push({
+        id: `seed-u-${i}`,
+        role: 'USER',
+        content: `${'x'.repeat(700)}${i}`,
+        function_call: null,
+        function_result: null,
+      });
+      rows.push({
+        id: `seed-a-${i}`,
+        role: 'ASSISTANT',
+        content: `${'y'.repeat(700)}${i}`,
+        function_call: null,
+        function_result: null,
+      });
+    }
+    // Las filas creadas por el servicio se APPENDEN (findMany devuelve el
+    // historial real acumulado, como haría la BD).
+    full.prisma.chatMessage.findMany.mockImplementation(async () => [...rows]);
+    full.prisma.chatMessage.create.mockImplementation(async ({ data }: CreateData) => {
+      const row = { id: `m-${rows.length + 1}`, ...data };
+      rows.push(row);
+      return row;
+    });
+    full.prisma.product.findMany.mockResolvedValue(EXISTING);
+    return { ...full, rows };
+  }
+
+  it('confirmación real DESPUÉS de podar historial: el pendiente y su id sobreviven a la poda y crea con los originales', async () => {
+    const { prisma, deepSeek, service, rows } = buildStackWithLongHistory();
+
+    // Turno 1: duplicado → needs_confirmation + id opaco.
+    deepSeek.chatCompletion
+      .mockResolvedValueOnce(toolCall('crear_producto', ORIGINAL_ARGS))
+      .mockResolvedValueOnce(textAnswer('¿La creo igual?'));
+    const turn1 = await service.sendMessage('u1', undefined, 'Compré una licuadora Oster');
+    expect(turn1.message).toContain('¿La creo igual?');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+
+    const audit = [...rows].reverse().find((r) => r.function_result);
+    const confirmationId = JSON.parse(audit!.function_result as string).confirmation_id;
+
+    // Turno 2: el historial YA no cabe completo (poda + resumen) — pero la IA
+    // lee el confirmation_id del tool result sobreviviente y confirma.
+    deepSeek.chatCompletion
+      .mockResolvedValueOnce(
+        toolCall('confirmar_creacion_producto', { confirmation_id: confirmationId }),
+      )
+      .mockResolvedValueOnce(textAnswer('Listo, la creé.'));
+    const turn2 = await service.sendMessage('u1', 'c1', 'sí');
+    expect(turn2.message).toBe('Listo, la creé.');
+
+    // Se crea UNA vez con los argumentos ORIGINALES del turno 1.
+    expect(prisma.product.create).toHaveBeenCalledTimes(1);
+    const data = prisma.product.create.mock.calls[0][0].data;
+    expect(data.nombre).toBe('Licuadora Oster');
+    expect(data.fecha_compra).toEqual(new Date('2026-08-15T00:00:00Z'));
+    expect(data.precio.toString()).toBe('150');
+  });
+
+  it('cancelación real DESPUÉS de podar historial: no crea nada y el pendiente queda limpio', async () => {
+    const { prisma, deepSeek, service, rows } = buildStackWithLongHistory();
+
+    deepSeek.chatCompletion
+      .mockResolvedValueOnce(toolCall('crear_producto', ORIGINAL_ARGS))
+      .mockResolvedValueOnce(textAnswer('¿La creo igual?'));
+    await service.sendMessage('u1', undefined, 'Compré una licuadora Oster');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+
+    const audit = [...rows].reverse().find((r) => r.function_result);
+    const confirmationId = JSON.parse(audit!.function_result as string).confirmation_id;
+
+    // Turno 2: cancela (el historial podado no afecta la cancelación).
+    deepSeek.chatCompletion
+      .mockResolvedValueOnce(
+        toolCall('cancelar_creacion_producto', { confirmation_id: confirmationId }),
+      )
+      .mockResolvedValueOnce(textAnswer('Perfecto, no la creo.'));
+    const turn2 = await service.sendMessage('u1', 'c1', 'no');
+    expect(turn2.message).toBe('Perfecto, no la creo.');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+
+    // Un confirmar posterior con el mismo id queda rechazado (pendiente limpio).
+    deepSeek.chatCompletion
+      .mockResolvedValueOnce(
+        toolCall('confirmar_creacion_producto', { confirmation_id: confirmationId }),
+      )
+      .mockResolvedValueOnce(textAnswer('No pude crear el producto.'));
+    const after = await service.sendMessage('u1', 'c1', 'mejor sí');
+    expect(after.message).toBe('No pude crear el producto.');
+    expect(prisma.product.create).not.toHaveBeenCalled();
+  });
+
   it('turno 1: duplicado; turno 2 cancelar_creacion_producto → no crea y limpia el pendiente', async () => {
     const { prisma, deepSeek, service } = buildFullStack();
     prisma.product.findMany.mockResolvedValue(EXISTING);

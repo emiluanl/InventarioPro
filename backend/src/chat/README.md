@@ -34,10 +34,9 @@ Todos en `/api/chat/*`.
 1. El usuario envía un mensaje.
 2. El backend guarda el mensaje y construye el historial para la IA: último
    mensaje del usuario + las últimas **50 filas** de la conversación, con un
-   **presupuesto total de 16 000 caracteres** (recorta desde los más viejos,
-   conservando siempre el último) y **4 000 caracteres por mensaje** como tope
-   individual — el contexto no crece sin límite. Más el system prompt.
-3. Llama a la API de DeepSeek con el historial + las 4 tools definidas.
+   **presupuesto total de 16 000 caracteres** y **4 000 caracteres por mensaje**
+   como tope individual — el contexto no crece sin límite. Más el system prompt.
+3. Llama a la API de DeepSeek con el historial + las 6 tools definidas.
 4. Si la IA decide invocar una tool:
    - El backend la ejecuta contra la base de datos del propio usuario.
    - Devuelve el resultado a la IA.
@@ -45,7 +44,37 @@ Todos en `/api/chat/*`.
    - **Máximo 5 rondas** para evitar loops infinitos.
 5. Persiste la respuesta final del asistente.
 
-## Las 4 tools disponibles
+## Poda inteligente del historial (resumen histórico)
+
+Cuando el historial se acerca al presupuesto de 16 000 caracteres, se poda en
+**grupos atómicos** (intercambios) y se condensa lo más antiguo:
+
+- **Grupos atómicos**: un grupo es un mensaje del usuario (+ su respuesta), o
+  una RONDA completa de tools (assistant con todos sus `tool_calls` + todos sus
+  `tool` results + la respuesta final). Nunca se divide un `tool_calls` de sus
+  resultados, una ronda con varias tools, ni un intercambio consultivo.
+- **Prioridades**: (1) los **6 intercambios más recientes** — incluye SIEMPRE el
+  último mensaje del usuario; (2) el intercambio consultivo **pendiente**
+  (`needs_confirmation` sin confirmar/cancelar), aunque quede fuera de la
+  ventana reciente — su `confirmation_id` debe llegar al LLM para poder
+  confirmar o cancelar; (3) un **resumen histórico** de los grupos antiguos ya
+  finalizados; (4) el resto de grupos antiguos, solo con el espacio que sobre.
+- **El resumen** es determinista y LOCAL (sin DeepSeek, sin API key), acotado a
+  **1 500 caracteres**, y se coloca como un mensaje `system` después del prompt
+  y antes de los mensajes recientes. Solo contiene texto del usuario, respuestas
+  del asistente y nombres de herramientas: **nunca** `userId`, IDs internos de
+  productos, `confirmation_id` consumidos/expirados, tokens, SQL ni errores
+  internos (los results de las tools no se resumen).
+- **Reconstrucción de rondas**: las filas de auditoría guardan la **ronda**
+  interna (varias tools simultáneas de una misma respuesta del proveedor se
+  auditan con la misma ronda) y `buildHistory` las materializa como UN assistant
+  con todos los `tool_calls` + un `tool` result por llamada con su
+  `tool_call_id` correcto.
+- **Límites**: 50 filas de BD consultadas, 16 000 caracteres totales, 4 000 por
+  mensaje, 6 grupos recientes, 1 500 del resumen, último mensaje del usuario
+  siempre conservado.
+
+## Las 6 tools disponibles
 
 ### `buscar_productos`
 Criterios: `search`, `categoria_id`, `estado`, `warranty_status`, `fecha_desde`, `fecha_hasta`, `limit`. Devuelve lista resumida (nombre, categoría, fecha, precio, tiempo de posesión, estado de garantía).

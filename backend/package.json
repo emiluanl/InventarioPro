@@ -103,5 +103,8 @@
     "@prisma/engines@7.9.1": true,
     "argon2@0.41.1": true,
     "better-sqlite3@12.11.1": true
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.0"
   }
 }

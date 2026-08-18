@@ -223,12 +223,27 @@ jobs:
           NEXT_PUBLIC_API_URL: http://localhost:3001/api
         run: npm run build
 
-      - name: Smoke — .next/standalone/server.js responde
+      - name: Smoke — servidor standalone responde
         run: |
-          # El server standalone necesita .next/static junto al server.js
-          # (en el Dockerfile lo copia un COPY; acá se replica para el smoke).
-          cp -r .next/static .next/standalone/.next/static
-          PORT=3111 HOSTNAME=127.0.0.1 node .next/standalone/server.js > /tmp/next-standalone.log 2>&1 &
+          # El server standalone puede quedar en .next/standalone/server.js
+          # (root de tracing = la app) o bajo .next/standalone/frontend/server.js
+          # (root de tracing = raíz del monorepo, como en CI). Se resuelve
+          # dinámicamente y se copia .next/static junto al server, igual que
+          # el Dockerfile (COPY .next/static ./.next/static).
+          STANDALONE=".next/standalone"
+          if [ -f "$STANDALONE/server.js" ]; then
+            SERVER="$STANDALONE/server.js"
+            STATIC_DEST="$STANDALONE/.next/static"
+          elif [ -f "$STANDALONE/frontend/server.js" ]; then
+            SERVER="$STANDALONE/frontend/server.js"
+            STATIC_DEST="$STANDALONE/frontend/.next/static"
+          else
+            echo "No se encontró server.js bajo $STANDALONE" >&2
+            find .next/standalone -maxdepth 3 -name server.js 2>/dev/null || true
+            exit 1
+          fi
+          cp -r .next/static "$STATIC_DEST"
+          PORT=3111 HOSTNAME=127.0.0.1 node "$SERVER" > /tmp/next-standalone.log 2>&1 &
           PID=$!
           for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:3111/ >/dev/null 2>&1; then break; fi

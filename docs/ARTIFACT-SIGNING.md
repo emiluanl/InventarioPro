@@ -88,6 +88,7 @@ permissions:
 ```
 - En un runner limpio sin raíces de confianza, `Status` puede aparecer como `UnknownError` aunque la firma sea correcta; lo que no puede aparecer es `NotSigned` o ausencia de `SignerCertificate`.
 - **Hash de control:** comparar el SHA256 del artefacto firmado en CI con el de la descarga pública.
+- **Verificador reutilizable:** `scripts/verify-authenticode.ps1` (sección 12) reemplaza el bloque inline anterior; el template del workflow ya lo usa en su paso de verificación.
 
 ## 8. Comportamiento esperado de SmartScreen
 
@@ -113,3 +114,33 @@ permissions:
 ## 11. Costo
 
 Artifact Signing se factura por uso (precio por firma / suscripción según el tier vigente en el momento del alta; en preview puede cambiar). Ver la página oficial de precios de Artifact Signing antes de adoptarlo. No se recomienda un EV únicamente para "evitar SmartScreen".
+
+## 12. Verificador local de firmas (`scripts/verify-authenticode.ps1`)
+
+Script PowerShell reutilizable (solo lectura, sin secretos) que valida firmas Authenticode con `Get-AuthenticodeSignature`. Acepta `-Path` (un archivo, una lista, o directorios que se expanden a `*.exe`/`*.dll`) y los parámetros `-ExpectedSubject`, `-ExpectedIssuer`, `-ExpectedThumbprint`, `-RejectThumbprint`, `-RequireTimestamp`, `-RejectSelfSigned`. Muestra por archivo: Status, Subject, Issuer, Thumbprint, fecha de expiración y presencia de `TimeStamperCertificate`. Falla con exit code != 0 si: el archivo no existe, no es un PE válido (cabecera MZ), `Status` != `Valid`, falta timestamp cuando se exige, el thumbprint no coincide con `ExpectedThumbprint`, el thumbprint está en `RejectThumbprint`, `Subject`/`Issuer` no coinciden con los esperados (soporta wildcards `*`), o `RejectSelfSigned` detecta `Subject == Issuer`.
+
+### Modo local PFX (QA local — permite el certificado autofirmado)
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-authenticode.ps1 `
+  -Path desktop\dist\InventarioPro-Setup-1.0.3.exe -RequireTimestamp
+```
+
+### Modo Artifact Signing (CI — exige editor público, rechaza el autofirmado local)
+
+```powershell
+$targets = @()
+$targets += Get-ChildItem "desktop/dist/InventarioPro-Setup-*.exe" | Select-Object -ExpandProperty FullName
+$targets += Get-ChildItem "desktop/dist/win-unpacked\*.exe" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+$targets += Get-ChildItem "desktop/dist/win-unpacked\resources" -Recurse -Include *.exe | Select-Object -ExpandProperty FullName
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-authenticode.ps1 `
+  -Path $targets -RequireTimestamp -RejectSelfSigned `
+  -RejectThumbprint "885634401FAD34FC52D7FC16A38955D682DF456C" `
+  -ExpectedSubject "*CN=<EditorPublico>*"
+```
+
+### Pruebas (sin secretos)
+
+`scripts/test-verify-authenticode.ps1` — 13 casos: sintaxis del verificador, instalador local en modo PFX (Valid + timestamp, wildcards de Subject/Issuer, ExpectedThumbprint), rechazo del thumbprint autofirmado, rechazo de autofirmado, archivos inexistentes, no-PE y sin firmar. Requiere el instalador (`desktop/dist`) y la muestra sin firmar (`desktop/resources/…/schema-engine-windows.exe`) que produce el build desktop.
+
+> ⚠️ **Una firma PFX local válida NO demuestra que Artifact Signing funcione.** El verificador en modo local solo prueba el mecanismo de lectura de firmas; el certificado real de Azure (Subject/Issuer del editor público) solo se puede validar con el primer run del workflow en CI.

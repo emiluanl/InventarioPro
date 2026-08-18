@@ -169,29 +169,23 @@ jobs:
       # ------------------------------------------------------------------
       # Verificación posterior: TODOS los ejecutables (instalador, exes
       # internos, uninstaller) deben estar firmados, con timestamp, y el
-      # Subject NO debe ser el certificado autofirmado local.
+      # Subject NO debe ser el certificado autofirmado local. Se usa el
+      # verificador scripts/verify-authenticode.ps1 en modo Artifact Signing.
       # ------------------------------------------------------------------
       - name: Verificar firmas (instalador + binarios internos)
         shell: pwsh
         run: |
           $targets = @()
-          $targets += Get-ChildItem "desktop/dist/InventarioPro-Setup-*.exe"
-          $targets += Get-ChildItem "desktop/dist/win-unpacked\*.exe" -ErrorAction SilentlyContinue
-          $targets += Get-ChildItem "desktop/dist/win-unpacked\resources" -Recurse -Include *.exe -ErrorAction SilentlyContinue
-          $localThumb = "885634401FAD34FC52D7FC16A38955D682DF456C"
-          foreach ($f in $targets) {
-            $sig = Get-AuthenticodeSignature $f.FullName
-            if ($sig.Status -eq 'NotSigned' -or -not $sig.SignerCertificate) {
-              throw "NO firmado: $($f.Name) (Status=$($sig.Status))"
-            }
-            if (-not $sig.TimeStamperCertificate) {
-              throw "SIN TIMESTAMP: $($f.Name)"
-            }
-            if ($sig.SignerCertificate.Thumbprint -eq $localThumb) {
-              throw "FIRMA AUTOFIRMADA (no Artifact Signing): $($f.Name)"
-            }
-            Write-Host "OK: $($f.Name) | $($sig.SignerCertificate.Subject) | ts=True"
-          }
+          $targets += Get-ChildItem "desktop/dist/InventarioPro-Setup-*.exe" | Select-Object -ExpandProperty FullName
+          $targets += Get-ChildItem "desktop/dist/win-unpacked\*.exe" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+          $targets += Get-ChildItem "desktop/dist/win-unpacked\resources" -Recurse -Include *.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+          & "$env:GITHUB_WORKSPACE/scripts/verify-authenticode.ps1" `
+            -Path $targets `
+            -RequireTimestamp `
+            -RejectSelfSigned `
+            -RejectThumbprint "885634401FAD34FC52D7FC16A38955D682DF456C" `
+            -ExpectedSubject "*CN=<EditorPublico>*"
+          if ($LASTEXITCODE -ne 0) { throw "Verificacion de firmas fallida" }
 
       - name: Generar SHA-256 del instalador
         shell: pwsh

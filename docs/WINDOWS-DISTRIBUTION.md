@@ -59,12 +59,26 @@ El workflow `desktop.yml` (job `desktop-release`, solo manual o tag `v*`) verifi
 
 ### Variables del workflow (metadatos públicos, NO secretos)
 
-| Variable | Valor esperado (cert autofirmado actual) | Uso |
+| Variable | Valor (cert autofirmado actual) | Uso |
 |---|---|---|
 | `PFX_EXPECTED_SUBJECT` | `*CN=InventarioPro*` (subject de la sección 1) | `-ExpectedSubject` del verificador (soporta wildcards `*`) |
-| `PFX_EXPECTED_THUMBPRINT` | `885634401FAD34FC52D7FC16A38955D682DF456C` (sección 1) | `-ExpectedThumbprint` del verificador |
+| `PFX_EXPECTED_THUMBPRINT` | thumbprint de la sección 1 (cert autofirmado actual) | `-ExpectedThumbprint` del verificador |
 
-Se configuran como **variables** del repositorio (Settings → Secrets and variables → Actions → Variables), **no** como secretos: son identificadores públicos del certificado (Subject/Thumbprint), igual que el thumbprint que ya se muestra en cualquier verificación de firma. No contienen contraseñas ni claves privadas.
+> **Los valores NO están hardcodeados como permanentes.** El thumbprint y el subject corresponden al **certificado PFX actual** (sección 1) y deben re-obtenerse cada vez que el certificado se regenere (`desktop/scripts/create-cert.ps1`). No se necesitan la contraseña ni la clave privada: se leen del **artefacto firmado** con `Get-AuthenticodeSignature` (metadatos públicos).
+
+**Procedimiento de configuración (GitHub):**
+
+1. Verificar el firmante del último instalador firmado y anotar Subject y Thumbprint:
+   ```powershell
+   Get-AuthenticodeSignature <ruta-del-instalador-firmado> |
+     Select-Object -ExpandProperty SignerCertificate |
+     Select-Object Subject, Thumbprint
+   ```
+2. Repositorio → Settings → Secrets and variables → Actions → **Variables** → New repository variable (NO en Secrets):
+   - `PFX_EXPECTED_SUBJECT = *CN=InventarioPro*`
+   - `PFX_EXPECTED_THUMBPRINT = <thumbprint del paso 1>`
+3. El workflow `desktop.yml` las consume como `vars.PFX_EXPECTED_SUBJECT` / `vars.PFX_EXPECTED_THUMBPRINT` (metadatos públicos, no secretos; no contienen contraseñas ni claves privadas).
+4. **Confirmación real de consumo:** el job normal de CI usa un certificado efímero y **no** ejercita estas variables. Solo un `workflow_dispatch` de `desktop-release` con un PFX válido confirma que GitHub las inyecta (y que la identidad coincide).
 
 ### Semántica de la verificación
 

@@ -52,3 +52,32 @@ El instalador se firma con un certificado propio del proyecto (`desktop/certs/in
   - `Valid` + CA pública → apto para distribución pública.
   - `Valid` + autofirmado → técnicamente empaquetado; **no** apto para distribución pública sin reconocer el riesgo.
   - `NotSigned` / `HashMismatch` / `UnknownError` → no publicar.
+
+## 4. Verificación de firmas en CI (builds internos con PFX)
+
+El workflow `desktop.yml` (job `desktop-release`, solo manual o tag `v*`) verifica las firmas **después** de firmar y empaquetar con `scripts/verify-authenticode.ps1` (instalador + `InventarioPro.exe` + `resources/elevate.exe`), y luego genera `checksums.txt` con `scripts/generate-checksums.ps1` (SHA-256 determinista, falla si falta un archivo). Los artefactos firmados y el `checksums.txt` se publican juntos como artifact de CI.
+
+### Variables del workflow (metadatos públicos, NO secretos)
+
+| Variable | Valor esperado (cert autofirmado actual) | Uso |
+|---|---|---|
+| `PFX_EXPECTED_SUBJECT` | `*CN=InventarioPro*` (subject de la sección 1) | `-ExpectedSubject` del verificador (soporta wildcards `*`) |
+| `PFX_EXPECTED_THUMBPRINT` | `885634401FAD34FC52D7FC16A38955D682DF456C` (sección 1) | `-ExpectedThumbprint` del verificador |
+
+Se configuran como **variables** del repositorio (Settings → Secrets and variables → Actions → Variables), **no** como secretos: son identificadores públicos del certificado (Subject/Thumbprint), igual que el thumbprint que ya se muestra en cualquier verificación de firma. No contienen contraseñas ni claves privadas.
+
+### Semántica de la verificación
+
+- `Status = Valid` es el único estado aceptado **sin** excepciones.
+- En un runner de CI limpio, el certificado autofirmado **no está** en las raíces de confianza → `Get-AuthenticodeSignature` devuelve `UnknownError` aunque la firma sea criptográficamente correcta. `-AllowUnknownError` lo tolera **solo** cuando:
+  1. existe un firmante detectable (`SignerCertificate` presente, nunca `NotSigned`);
+  2. coincide al menos una identidad esperada (`PFX_EXPECTED_SUBJECT` o `PFX_EXPECTED_THUMBPRINT`);
+  3. el timestamp está presente (`-RequireTimestamp`).
+- **Thumbprint o Subject incorrectos → el job falla** (aunque el estado sea `Valid` o `UnknownError`).
+- **Si ambas variables quedan vacías y el estado es `UnknownError` → el job falla** a propósito: un firmante desconocido nunca se acepta. Con `Valid` local no es necesario tenerlas, pero se recomienda configurarlas para que CI valide también la identidad.
+- **Si el modo PFX no está activo** (no existe el secreto `WIN_CSC_BASE64`) el paso de verificación se **omite** sin fallar: no hay firma interna activa que verificar. El secreto `WIN_CSC_BASE64` solo se requiere en `desktop-release` (builds internos), no en el CI general.
+- El instalador de producción debe exigir firma + timestamp + publisher correcto: esta misma validación lo cubre cuando las variables están configuradas.
+
+### Artifact Signing sigue desactivado
+
+El flujo descrito aquí corresponde al **modo interno PFX**. Microsoft Artifact Signing (firma con identidad pública en CI/CD) sigue **sin activarse**: solo existe el diseño y el workflow plantilla deshabilitado en `docs/ARTIFACT-SIGNING.md` y `.github/workflows/desktop-signing.yml.template`. No se crearon recursos de Azure ni credenciales nuevas.

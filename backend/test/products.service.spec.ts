@@ -192,10 +192,15 @@ describe('ProductsService', () => {
 
       const call = prisma.product.findMany.mock.calls[0][0];
       expect(call.where.OR).toBeDefined();
-      expect(call.where.OR[0].nombre).toEqual({
-        contains: 'licuadora',
-        mode: 'insensitive',
-      });
+      // El servicio es provider-aware (prisma-filters.ts): en PostgreSQL emite
+      // mode: 'insensitive' (ILIKE); en SQLite lo omite a propósito porque ese
+      // argumento no existe en el cliente generado y el LIKE nativo ya es
+      // case-insensitive. La expectativa debe seguir al proveedor activo.
+      const expected =
+        process.env.DB_PROVIDER === 'sqlite'
+          ? { contains: 'licuadora' }
+          : { contains: 'licuadora', mode: 'insensitive' };
+      expect(call.where.OR[0].nombre).toEqual(expected);
     });
 
     // =========================================================================

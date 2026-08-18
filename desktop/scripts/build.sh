@@ -27,6 +27,15 @@ INSTALLER=false
 
 log() { printf '\033[1;34m[desktop-build]\033[0m %s\n' "$*"; }
 
+# copy_dir src dst — copia recursivamente con tolerancia a rutas largas de
+# Windows. cp -r de Git Bash falla con node_modules (path > 260 chars);
+# tar maneja correctamente rutas largas en todas las plataformas.
+copy_dir() {
+  local src="$1" dst="$2"
+  mkdir -p "$dst"
+  (cd "$src" && tar cf - .) | (cd "$dst" && tar xf -)
+}
+
 # ---------- 1. Backend: build con el cliente SQLite --------------------------
 log "Backend: generando cliente Prisma SQLite y compilando (nest build)…"
 (
@@ -62,9 +71,9 @@ mkdir -p "$RES/backend"
 # package.json mínimo: @electron/rebuild y electron-builder lo esperan al
 # escanear node_modules (el runtime del backend no lo lee).
 printf '{\n  "name": "inventariopro-backend-runtime",\n  "version": "1.0.0",\n  "private": true\n}\n' > "$RES/backend/package.json"
-cp -r "$ROOT/backend/dist" "$RES/backend/dist"
-cp -r "$TMP_STAGE/backend-deps/node_modules" "$RES/backend/node_modules"
-cp -r "$ROOT/backend/prisma" "$RES/backend/prisma"
+copy_dir "$ROOT/backend/dist" "$RES/backend/dist"
+copy_dir "$TMP_STAGE/backend-deps/node_modules" "$RES/backend/node_modules"
+copy_dir "$ROOT/backend/prisma" "$RES/backend/prisma"
 cp "$ROOT/backend/prisma.config.ts" "$RES/backend/prisma.config.ts"
 
 # ---------- 4. Frontend: build standalone ------------------------------------
@@ -80,13 +89,13 @@ mkdir -p "$RES/frontend"
 # en la raíz de resources/frontend (así lo espera main.js).
 STANDALONE="$ROOT/frontend/.next/standalone"
 if [ -f "$STANDALONE/server.js" ]; then
-  cp -r "$STANDALONE/." "$RES/frontend/"
+  copy_dir "$STANDALONE" "$RES/frontend"
 else
-  cp -r "$STANDALONE/frontend/." "$RES/frontend/"
+  copy_dir "$STANDALONE/frontend" "$RES/frontend"
 fi
 mkdir -p "$RES/frontend/.next"
-cp -r "$ROOT/frontend/.next/static" "$RES/frontend/.next/static"
-cp -r "$ROOT/frontend/public" "$RES/frontend/public"
+copy_dir "$ROOT/frontend/.next/static" "$RES/frontend/.next/static"
+copy_dir "$ROOT/frontend/public" "$RES/frontend/public"
 
 # ---------- 4b. Validación de assets del logo --------------------------------
 # El build del frontend (paso 4) ya generó los PNG/favicon (generate:logo-assets

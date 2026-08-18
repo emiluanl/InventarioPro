@@ -390,3 +390,23 @@ jobs:
       # aquí: queremos auditar también las devDependencies (build tooling).
       - name: Audit dependencies
         run: npm audit --audit-level=moderate
+
+  # =============================================================================
+  # Verificador de firmas Authenticode (autocontenido, sin secretos):
+  # ejecuta scripts/test-verify-authenticode.ps1, que genera un PE real (.NET
+  # vía Add-Type), un certificado autofirmado efímero (en memoria, PFX en TEMP
+  # con contraseña aleatoria) y firma la muestra con signtool si está
+  # disponible. No usa Azure, Artifact Signing, PFX real ni credenciales.
+  # =============================================================================
+  verify-authenticode:
+    name: Verify Authenticode (PowerShell, self-contained)
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run verifier tests
+        shell: pwsh
+        run: |
+          .\scripts\test-verify-authenticode.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Pruebas del verificador fallidas" }

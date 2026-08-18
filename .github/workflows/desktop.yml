@@ -167,41 +167,66 @@ jobs:
         shell: bash
         run: bash scripts/build.sh --installer
 
-      # En un runner limpio el cert autofirmado no está en raíces de confianza,
-      # así que Status NO será "Valid" (será UnknownError) aunque la firma esté.
-      # Verificamos que NO sea NotSigned y que exista el firmante.
-      - name: Verificar firma del instalador
+      # Verificación post-firma (modo interno PFX): instalador + binarios
+      # internos críticos (InventarioPro.exe, elevate.exe) mediante
+      # scripts/verify-authenticode.ps1. En un runner limpio el cert
+      # autofirmado NO está en raíces de confianza → Status será UnknownError:
+      # -AllowUnknownError lo tolera SOLO si existe firmante Y una identidad
+      # esperada coincide (PFX_EXPECTED_SUBJECT o PFX_EXPECTED_THUMBPRINT —
+      # variables del workflow, metadatos públicos, no secretos). Si ambas
+      # quedan vacías, UnknownError FALLA el job (firmante desconocido no se
+      # acepta). El instalador de producción exige firma + timestamp + publisher
+      # correcto (vars) en esta misma validación. Si el modo PFX no está activo
+      # (sin WIN_CSC_BASE64) este paso se omite sin fallar.
+      - name: Verificar firmas (instalador + binarios internos, modo PFX)
         shell: pwsh
         run: |
-          $exe = Get-ChildItem "desktop/dist/InventarioPro-Setup-*.exe" |
-            Sort-Object LastWriteTime -Descending | Select-Object -First 1
-          if (-not $exe) { throw "No se encontró el instalador en desktop/dist/" }
-          $sig = Get-AuthenticodeSignature $exe.FullName
-          if ($sig.Status -eq 'NotSigned' -or -not $sig.SignerCertificate) {
-            throw "El instalador NO está firmado (Status=$($sig.Status))"
+          if (-not $env:WIN_CSC_BASE64) {
+            Write-Host "Modo PFX no activo - se omite la verificacion de firmas."
+            exit 0
           }
-          Write-Host "Instalador firmado OK: $($exe.Name) — Status=$($sig.Status), Signer=$($sig.SignerCertificate.Subject)"
+          $installer = Get-ChildItem "desktop/dist/InventarioPro-Setup-*.exe" |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $installer) { throw "No se encontro el instalador en desktop/dist/" }
+          $targets = @($installer.FullName,
+            "desktop/dist/win-unpacked/InventarioPro.exe",
+            "desktop/dist/win-unpacked/resources/elevate.exe")
+          # Las variables vacias se omiten dentro del verificador (checks
+          # opcionales); -AllowUnknownError tolera el UnknownError del cert
+          # autofirmado fuera de raices de confianza en runners limpios.
+          & "$env:GITHUB_WORKSPACE/scripts/verify-authenticode.ps1" `
+            -Path $targets `
+            -RequireTimestamp `
+            -AllowUnknownError `
+            -ExpectedSubject $env:PFX_EXPECTED_SUBJECT `
+            -ExpectedThumbprint $env:PFX_EXPECTED_THUMBPRINT
+          if ($LASTEXITCODE -ne 0) { throw "Verificacion de firmas fallida (modo PFX)" }
+        env:
+          WIN_CSC_BASE64: ${{ secrets.WIN_CSC_BASE64 }}
+          PFX_EXPECTED_SUBJECT: ${{ vars.PFX_EXPECTED_SUBJECT }}
+          PFX_EXPECTED_THUMBPRINT: ${{ vars.PFX_EXPECTED_THUMBPRINT }}
 
-      - name: Upload installer
+      # Checksums SHA-256 (instalador, blockmap y binarios internos) generados
+      # DESPUÉS de firmar con scripts/generate-checksums.ps1 (determinista,
+      # orden estable, falla si falta un archivo obligatorio).
+      - name: Generar checksums (instalador + binarios)
+        shell: pwsh
+        run: |
+          & "$env:GITHUB_WORKSPACE/scripts/generate-checksums.ps1" `
+            -Path "desktop/dist/InventarioPro-Setup-*.exe,desktop/dist/InventarioPro-Setup-*.exe.blockmap,desktop/dist/win-unpacked/InventarioPro.exe,desktop/dist/win-unpacked/resources/elevate.exe" `
+            -Output "desktop/dist/checksums.txt" `
+            -BaseDir "desktop/dist"
+          if ($LASTEXITCODE -ne 0) { throw "Generacion de checksums fallida" }
+          Get-Content "desktop/dist/checksums.txt"
+
+      - name: Upload installer + checksums
         uses: actions/upload-artifact@v4
         with:
           name: InventarioPro-Setup
-          path: desktop/dist/InventarioPro-Setup-*.exe
+          path: |
+            desktop/dist/InventarioPro-Setup-*.exe
+            desktop/dist/checksums.txt
           retention-days: 14
-
-      # Checksum del instalador para verificar la integridad de descargas:
-      # se publica como checksums.txt junto al .exe en la GitHub Release
-      # (ver desktop/README.md → Verificación del instalador).
-      - name: Generar checksums del instalador
-        shell: pwsh
-        run: |
-          $exe = Get-ChildItem "desktop/dist/InventarioPro-Setup-*.exe" |
-            Sort-Object LastWriteTime -Descending | Select-Object -First 1
-          if (-not $exe) { throw "No se encontró el instalador en desktop/dist/" }
-          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
-          "SHA256 ($($exe.Name)) = $hash" | Set-Content "desktop/dist/checksums.txt"
-          Write-Host "checksums.txt generado:"
-          Get-Content "desktop/dist/checksums.txt"
 
       - name: GitHub Release (solo tags)
         if: startsWith(github.ref, 'refs/tags/')

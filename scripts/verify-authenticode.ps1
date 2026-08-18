@@ -14,6 +14,13 @@
       - ExpectedIssuer is set and Issuer does not match (wildcards supported via -like);
       - RejectSelfSigned is set and Subject equals Issuer (self-signed heuristic).
 
+    AllowUnknownError tolerates Status=UnknownError ONLY when a signer
+    certificate exists AND at least one identity expectation is provided
+    (ExpectedSubject, ExpectedIssuer or ExpectedThumbprint). This is the
+    controlled self-signed PFX case on CI runners without the cert in the
+    trust roots. It never accepts NotSigned, a missing signer, an unknown
+    signer, a wrong thumbprint/subject or a missing timestamp.
+
     Two intended modes:
       - Local PFX / QA:  -RequireTimestamp (self-signed cert is ALLOWED).
       - Artifact Signing CI: -RequireTimestamp -RejectSelfSigned
@@ -44,7 +51,14 @@ param(
     [string]$ExpectedThumbprint,
     [string[]]$RejectThumbprint,
     [switch]$RequireTimestamp,
-    [switch]$RejectSelfSigned
+    [switch]$RejectSelfSigned,
+
+    # Tolerates Status=UnknownError when a SignerCertificate exists. Needed
+    # for self-signed PFX builds on CI runners where the cert is NOT in the
+    # trust roots (Status would be UnknownError although the signature is
+    # cryptographically correct). All other checks still apply. Never used
+    # to accept NotSigned/HashMismatch/missing signer.
+    [switch]$AllowUnknownError
 )
 
 $ErrorActionPreference = 'Stop'
@@ -109,7 +123,12 @@ foreach ($file in $resolved) {
     $cert = $sig.SignerCertificate
 
     if ($sig.Status -ne 'Valid') {
-        Write-Fail "Status=$($sig.Status) ($($sig.StatusMessage))"
+        $hasIdentityExpectation = [bool]($ExpectedSubject -or $ExpectedIssuer -or $ExpectedThumbprint)
+        if ($AllowUnknownError -and $sig.Status -eq 'UnknownError' -and $cert -and $hasIdentityExpectation) {
+            Write-Host "  NOTA: Status=UnknownError tolerado (AllowUnknownError) SOLO con identidad esperada (cert autofirmado fuera de raices de confianza) - se validan firmante, timestamp e identidad."
+        } else {
+            Write-Fail "Status=$($sig.Status) ($($sig.StatusMessage))"
+        }
     }
     if (-not $cert) {
         Write-Fail "sin certificado de firma"

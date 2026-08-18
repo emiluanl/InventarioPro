@@ -410,3 +410,22 @@ jobs:
         run: |
           .\scripts\test-verify-authenticode.ps1
           if ($LASTEXITCODE -ne 0) { throw "Pruebas del verificador fallidas" }
+
+  # =============================================================================
+  # generate-checksums.ps1 (autocontenido, sin secretos): hashes esperados de
+  # archivos ficticios, determinismo, deteccion de cambio y fallo por archivo
+  # faltante. El caso de archivo faltante se captura y valida dentro del harness
+  # (exit 1 esperado), por lo que no falla el job.
+  # =============================================================================
+  checksums-tests:
+    name: Checksums (PowerShell, self-contained)
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run checksums tests
+        shell: pwsh
+        run: |
+          .\scripts\test-generate-checksums.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Pruebas de generate-checksums fallidas" }
